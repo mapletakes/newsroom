@@ -139,7 +139,7 @@ export async function PATCH(req: NextRequest) {
         publisher: sub.publisher,
         url: sub.url,
       });
-      if (coverage.length > 0) patch.related_coverage = JSON.stringify(coverage);
+      if (coverage.length > 0) patch.related_coverage = coverage;
     }
   }
 

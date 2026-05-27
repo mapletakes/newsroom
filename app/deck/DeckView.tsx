@@ -34,7 +34,17 @@ export function DeckView({ displayName }: { displayName: string }) {
     }
   }, [queue, activeId]);
 
-  const active = useMemo(() => queue.find((s) => s.id === activeId) || null, [queue, activeId]);
+  const active = useMemo(() => {
+    const found = queue.find((s) => s.id === activeId) || null;
+    if (found && found.related_coverage && !Array.isArray(found.related_coverage)) {
+      try {
+        found.related_coverage = JSON.parse(found.related_coverage as unknown as string);
+      } catch {
+        found.related_coverage = null;
+      }
+    }
+    return found;
+  }, [queue, activeId]);
 
   const markPlayed = async () => {
     if (!active) return;
