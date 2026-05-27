@@ -56,9 +56,6 @@ export default function Home() {
               Harvests every URL from chat in real time
             </li>
             <li className="border-l-2 border-rust pl-3">
-              Summarizes articles &amp; YouTube videos with Claude
-            </li>
-            <li className="border-l-2 border-rust pl-3">
               Tags publisher credibility &amp; political lean
             </li>
             <li className="border-l-2 border-rust pl-3">
