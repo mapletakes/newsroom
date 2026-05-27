@@ -21,17 +21,20 @@ export type Session = {
   role: 'streamer' | 'mod';
 };
 
-export async function setSession(s: Session) {
+export function buildSessionCookie(s: Session) {
   const payload = Buffer.from(JSON.stringify(s)).toString('base64url');
   const sig = sign(payload);
-  const value = `${payload}.${sig}`;
-  cookies().set(COOKIE, value, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 60 * 60 * 24 * 30, // 30 days
-  });
+  return {
+    name: COOKIE,
+    value: `${payload}.${sig}`,
+    options: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax' as const,
+      path: '/',
+      maxAge: 60 * 60 * 24 * 30, // 30 days
+    },
+  };
 }
 
 export async function getSession(): Promise<Session | null> {
@@ -44,6 +47,8 @@ export async function getSession(): Promise<Session | null> {
     return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
   } catch { return null; }
 }
+
+export const SESSION_COOKIE_NAME = COOKIE;
 
 export async function clearSession() {
   cookies().delete(COOKIE);

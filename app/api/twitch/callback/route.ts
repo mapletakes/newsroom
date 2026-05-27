@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { exchangeCode, fetchTwitchUser } from '@/lib/twitch-oauth';
 import { supabaseAdmin } from '@/lib/supabase';
-import { setSession } from '@/lib/session';
+import { buildSessionCookie } from '@/lib/session';
 
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get('code');
@@ -11,14 +11,12 @@ export async function GET(req: NextRequest) {
   if (!code || !state || !stored || state !== stored) {
     return NextResponse.redirect(new URL('/login?error=state', req.url));
   }
-  cookies().delete('newsroom_oauth_state');
 
   try {
     const tokens = await exchangeCode(code);
     const user = await fetchTwitchUser(tokens.access_token);
 
     const sb = supabaseAdmin();
-    // Upsert the stream row
     const { data: stream, error } = await sb
       .from('streams')
       .upsert(
@@ -33,7 +31,7 @@ export async function GET(req: NextRequest) {
       .single();
     if (error || !stream) throw error || new Error('No stream row');
 
-    await setSession({
+    const session = buildSessionCookie({
       streamId: stream.id,
       twitchUserId: user.id,
       twitchLogin: user.login,
@@ -41,7 +39,10 @@ export async function GET(req: NextRequest) {
       role: 'streamer',
     });
 
-    return NextResponse.redirect(new URL('/deck', req.url));
+    const response = NextResponse.redirect(new URL('/deck', req.url));
+    response.cookies.set(session.name, session.value, session.options);
+    response.cookies.delete('newsroom_oauth_state');
+    return response;
   } catch (err) {
     console.error(err);
     return NextResponse.redirect(new URL('/login?error=oauth', req.url));
