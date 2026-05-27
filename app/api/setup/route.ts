@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
     patch.submit_command = body.submit_command.trim() || null;
   }
   if (typeof body.allow_anyone === 'boolean') patch.allow_anyone = body.allow_anyone;
+  if (typeof body.allow_duplicates === 'boolean') patch.allow_duplicates = body.allow_duplicates;
   if (typeof body.auto_summarize === 'boolean') patch.auto_summarize = body.auto_summarize;
 
   const sb = supabaseAdmin();

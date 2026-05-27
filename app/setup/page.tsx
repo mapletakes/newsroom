@@ -22,6 +22,7 @@ export default async function SetupPage() {
       displayName={session.displayName}
       submitCommand={stream?.submit_command || '!submit'}
       allowAnyone={stream?.allow_anyone ?? true}
+      allowDuplicates={stream?.allow_duplicates ?? false}
     />
   );
 }

@@ -13,6 +13,7 @@ create table if not exists public.streams (
   -- Settings
   submit_command text default '!submit',
   allow_anyone boolean default true, -- if false, only subs/vips/mods
+  allow_duplicates boolean default false, -- if true, same URL can be submitted more than once
   auto_summarize boolean default true
 );
 
@@ -70,7 +71,7 @@ create index if not exists submissions_stream_status_idx
   on public.submissions(stream_id, status, position);
 create index if not exists submissions_stream_created_idx
   on public.submissions(stream_id, created_at desc);
-create unique index if not exists submissions_stream_url_unique
+create index if not exists submissions_stream_url_idx
   on public.submissions(stream_id, normalized_url);
 
 -- Show notes: persisted artifacts of what was reacted to

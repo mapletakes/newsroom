@@ -8,14 +8,17 @@ export function SetupForm({
   displayName,
   submitCommand,
   allowAnyone,
+  allowDuplicates,
 }: {
   streamId: string;
   displayName: string;
   submitCommand: string;
   allowAnyone: boolean;
+  allowDuplicates: boolean;
 }) {
   const [cmd, setCmd] = useState(submitCommand);
   const [open, setOpen] = useState(allowAnyone);
+  const [dupes, setDupes] = useState(allowDuplicates);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -24,7 +27,7 @@ export function SetupForm({
     const r = await fetch('/api/setup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ submit_command: cmd, allow_anyone: open }),
+      body: JSON.stringify({ submit_command: cmd, allow_anyone: open, allow_duplicates: dupes }),
     });
     setSaving(false);
     if (r.ok) {
@@ -77,6 +80,21 @@ export function SetupForm({
             <span className="font-mono text-xs uppercase tracking-widest">Allow anyone to submit</span>
             <span className="block text-xs text-ink/60 mt-0.5">
               If unchecked, only subscribers, VIPs, and moderators can add links.
+            </span>
+          </span>
+        </label>
+
+        <label className="flex items-start gap-3 mb-6 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={dupes}
+            onChange={(e) => setDupes(e.target.checked)}
+            className="mt-1"
+          />
+          <span>
+            <span className="font-mono text-xs uppercase tracking-widest">Allow duplicate links</span>
+            <span className="block text-xs text-ink/60 mt-0.5">
+              If checked, the same URL can be submitted more than once. Useful if you want to revisit links across streams.
             </span>
           </span>
         </label>

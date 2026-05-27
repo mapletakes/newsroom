@@ -15,38 +15,57 @@ export async function POST(req: NextRequest) {
   const kind = detectKind(url);
 
   const sb = supabaseAdmin();
-  const { data, error } = await sb
-    .from('submissions')
-    .upsert(
-      {
-        stream_id: session.streamId,
-        url,
-        normalized_url: normalized,
-        kind,
-        status: 'pending',
-        submitter_login: body.submitter || session.twitchLogin,
-        submitter_is_sub: !!body.isSub,
-        submitter_is_mod: !!body.isMod,
-        submitter_is_vip: !!body.isVip,
-        raw_message: body.message || null,
-      },
-      { onConflict: 'stream_id,normalized_url', ignoreDuplicates: true },
-    )
-    .select()
-    .maybeSingle();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const { data: stream } = await sb
+    .from('streams')
+    .select('allow_duplicates')
+    .eq('id', session.streamId)
+    .single();
+  const allowDuplicates = stream?.allow_duplicates ?? false;
 
-  // For duplicates the upsert returns null — look up the existing row
-  let submission = data;
-  if (!submission) {
+  const row = {
+    stream_id: session.streamId,
+    url,
+    normalized_url: normalized,
+    kind,
+    status: 'pending' as const,
+    submitter_login: body.submitter || session.twitchLogin,
+    submitter_is_sub: !!body.isSub,
+    submitter_is_mod: !!body.isMod,
+    submitter_is_vip: !!body.isVip,
+    raw_message: body.message || null,
+  };
+
+  let submission: Record<string, unknown> | null = null;
+
+  if (allowDuplicates) {
+    const { data, error } = await sb
+      .from('submissions')
+      .insert(row)
+      .select()
+      .single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    submission = data;
+  } else {
+    // Check for existing submission with same URL
     const { data: existing } = await sb
       .from('submissions')
       .select('*')
       .eq('stream_id', session.streamId)
       .eq('normalized_url', normalized)
       .maybeSingle();
-    submission = existing;
+
+    if (existing) {
+      submission = existing;
+    } else {
+      const { data, error } = await sb
+        .from('submissions')
+        .insert(row)
+        .select()
+        .single();
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      submission = data;
+    }
   }
 
   // Trigger extraction if submission has no enrichment yet
