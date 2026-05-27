@@ -8,6 +8,7 @@ type Submission = {
   title: string | null;
   thumbnail_url: string | null;
   publisher: string | null;
+  description: string | null;
   summary: string | null;
   credibility_tag: string | null;
   topics: string[] | null;
@@ -87,8 +88,10 @@ export function SubmissionCard({
             </>
           )}
         </div>
-        {!compact && s.summary && (
-          <p className="text-sm leading-relaxed mb-2">{s.summary}</p>
+        {!compact && (s.summary || s.description) && (
+          <p className="text-sm leading-relaxed mb-2 whitespace-pre-line">
+            {s.summary || s.description}
+          </p>
         )}
         {!compact && s.topics && s.topics.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-2">

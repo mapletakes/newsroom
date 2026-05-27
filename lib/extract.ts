@@ -1,6 +1,7 @@
 import { supabaseAdmin } from './supabase';
 import { extractArticle } from './extract-article';
 import { fetchYouTubeMeta, expandPlaylist } from './extract-youtube';
+import { extractTwitter } from './extract-twitter';
 import { enrichContent, hostDMCARisk } from './enrich';
 import { detectKind, normalizeUrl } from './url';
 
@@ -50,6 +51,13 @@ export async function runExtraction(submissionId: string) {
         mod_notes: `expanded into ${urls.length} item(s)`,
       }).eq('id', sub.id);
       return;
+    } else if (sub.kind === 'twitter') {
+      const meta = await extractTwitter(sub.url);
+      title = meta.title;
+      description = meta.description;
+      publisher = 'X / Twitter';
+      author = meta.author;
+      bodyText = meta.description;
     } else {
       const meta = await extractArticle(sub.url);
       title = meta.title;
