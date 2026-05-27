@@ -61,7 +61,8 @@ export async function POST(req: NextRequest) {
         mod_notes: `expanded into ${urls.length} item(s)`,
       }).eq('id', sub.id);
       return NextResponse.json({ ok: true, expanded: urls.length });
-    } else if (sub.kind === 'article' || sub.kind === 'unknown') {
+    } else {
+      // articles, twitter, twitch, tiktok, unknown — grab OG/SEO meta tags
       const meta = await extractArticle(sub.url);
       title = meta.title;
       description = meta.description;
@@ -69,14 +70,6 @@ export async function POST(req: NextRequest) {
       publisher = meta.publisher;
       author = meta.author;
       publishedAt = meta.publishedAt;
-      bodyText = meta.textContent;
-    } else {
-      // twitch/tiktok/twitter — try OpenGraph via article extractor
-      const meta = await extractArticle(sub.url);
-      title = meta.title;
-      description = meta.description;
-      thumbnail = meta.thumbnail;
-      publisher = meta.publisher;
       bodyText = meta.description;
     }
 
