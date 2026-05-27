@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { Submission } from '@/components/SubmissionCard';
 import { extractYouTubeId } from '@/lib/url';
+import { DarkModeToggle } from '@/components/DarkModeToggle';
 import {
   DndContext,
   closestCenter,
@@ -264,6 +265,7 @@ export function DeckView({ displayName }: { displayName: string }) {
             Export Notes
           </a>
           <span>{displayName}</span>
+          <DarkModeToggle />
         </div>
       </header>
 

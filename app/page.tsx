@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { DarkModeToggle } from '@/components/DarkModeToggle';
 
 export default function Home() {
   return (
@@ -9,8 +10,9 @@ export default function Home() {
           <div className="font-mono text-xs uppercase tracking-widest">
             Vol. I · No. 1 · est. 2026
           </div>
-          <div className="font-mono text-xs uppercase tracking-widest">
+          <div className="font-mono text-xs uppercase tracking-widest flex items-center gap-3">
             For streamers, by streamers
+            <DarkModeToggle />
           </div>
         </div>
         <h1 className="font-display text-6xl md:text-8xl font-black tracking-tight leading-none text-center my-4">

@@ -5,56 +5,65 @@
 @tailwind utilities;
 
 :root {
-  --ink: #0d0d0e;
-  --paper: #f5f1e8;
-  --rust: #c4451c;
-  --ochre: #d4a017;
-  --moss: #3d5c3a;
-  --slate: #2c3e50;
+  --ink: 13 13 14;
+  --paper: 245 241 232;
+  --rust: 196 69 28;
+  --ochre: 212 160 23;
+  --moss: 61 92 58;
+  --slate: 44 62 80;
+}
+
+html.dark {
+  --ink: 232 228 219;
+  --paper: 20 20 22;
+  --rust: 232 102 62;
+  --ochre: 232 183 48;
+  --moss: 90 138 85;
+  --slate: 107 143 170;
 }
 
 html, body {
-  background-color: var(--paper);
-  color: var(--ink);
+  background-color: rgb(var(--paper));
+  color: rgb(var(--ink));
   font-family: 'IBM Plex Sans', system-ui, sans-serif;
   font-feature-settings: 'ss01', 'ss02';
 }
 
 ::selection {
-  background-color: var(--ochre);
-  color: var(--ink);
+  background-color: rgb(var(--ochre));
+  color: rgb(var(--ink));
 }
 
 /* Newspaper-style rule */
 .rule-thick {
-  border-top: 3px solid var(--ink);
-  border-bottom: 1px solid var(--ink);
+  border-top: 3px solid rgb(var(--ink));
+  border-bottom: 1px solid rgb(var(--ink));
   height: 6px;
 }
 
 .rule-double {
-  border-top: 1px solid var(--ink);
-  border-bottom: 1px solid var(--ink);
+  border-top: 1px solid rgb(var(--ink));
+  border-bottom: 1px solid rgb(var(--ink));
   height: 4px;
 }
 
 /* Card hover with paper-grain feel */
 .card-paper {
   background:
-    radial-gradient(ellipse at top left, rgba(212,160,23,0.05), transparent 60%),
-    var(--paper);
-  border: 1px solid rgba(13,13,14,0.15);
+    radial-gradient(ellipse at top left, rgb(var(--ochre) / 0.05), transparent 60%),
+    rgb(var(--paper));
+  border: 1px solid rgb(var(--ink) / 0.15);
   transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }
 .card-paper:hover {
-  border-color: var(--ink);
-  box-shadow: 4px 4px 0 var(--ink);
+  border-color: rgb(var(--ink));
+  box-shadow: 4px 4px 0 rgb(var(--ink));
   transform: translate(-2px, -2px);
 }
 
-.dmca-high { color: var(--rust); }
-.dmca-medium { color: var(--ochre); }
-.dmca-low { color: var(--moss); }
+.dmca-high { color: rgb(var(--rust)); }
+.dmca-medium { color: rgb(var(--ochre)); }
+.dmca-low { color: rgb(var(--moss)); }
 
 /* Animated dot for "live" */
 @keyframes pulse-dot {

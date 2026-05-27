@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useChatListener } from '@/components/useChatListener';
 import { SubmissionCard, type Submission } from '@/components/SubmissionCard';
+import { DarkModeToggle } from '@/components/DarkModeToggle';
 
 export function ModView({
   channel,
@@ -94,6 +95,7 @@ export function ModView({
           <Link href="/choose" className="underline hover:text-rust">Switch Channel</Link>
           {!isMod && <Link href="/deck" className="underline hover:text-rust">Streamer Deck →</Link>}
           {!isMod && <Link href="/setup" className="underline hover:text-rust">Settings</Link>}
+          <DarkModeToggle />
         </div>
       </header>
 
