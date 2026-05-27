@@ -269,7 +269,7 @@ export function DeckView({ displayName }: { displayName: string }) {
         </div>
       </header>
 
-      <main className="flex-1 grid lg:grid-cols-[1fr_320px] gap-0">
+      <main className="flex-1 grid lg:grid-cols-[1fr_640px] gap-0">
         {/* Active card */}
         <section className="p-8 border-r border-ink/20">
           {!active && (
