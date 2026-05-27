@@ -80,7 +80,7 @@ function SortableQueueItem({
         aria-label="Remove"
         tabIndex={-1}
       >
-        &times;
+        <span className="material-icons text-base">delete</span>
       </button>
     </div>
   );
