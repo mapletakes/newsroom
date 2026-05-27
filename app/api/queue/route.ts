@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getSession } from '@/lib/session';
 import { detectKind, normalizeUrl } from '@/lib/url';
 import { runExtraction } from '@/lib/extract';
+import { searchRelatedCoverage } from '@/lib/search-coverage';
 
 export const maxDuration = 30;
 
@@ -124,6 +125,24 @@ export async function PATCH(req: NextRequest) {
   if (typeof body.duration_on_screen_s === 'number') patch.duration_on_screen_s = body.duration_on_screen_s;
 
   const sb = supabaseAdmin();
+
+  // On approval, fetch related coverage before writing
+  if (body.status === 'approved') {
+    const { data: sub } = await sb
+      .from('submissions')
+      .select('title, publisher, url, related_coverage')
+      .eq('id', id)
+      .single();
+    if (sub && !sub.related_coverage && sub.title) {
+      const coverage = await searchRelatedCoverage({
+        title: sub.title,
+        publisher: sub.publisher,
+        url: sub.url,
+      });
+      if (coverage.length > 0) patch.related_coverage = JSON.stringify(coverage);
+    }
+  }
+
   const { data, error } = await sb
     .from('submissions')
     .update(patch)

@@ -57,6 +57,8 @@ create table if not exists public.submissions (
   submitter_is_mod boolean default false,
   submitter_is_vip boolean default false,
   raw_message text,
+  -- Related coverage (populated on approval)
+  related_coverage jsonb,
   -- Mod actions
   mod_notes text,
   position int,

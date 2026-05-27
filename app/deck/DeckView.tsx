@@ -150,6 +150,39 @@ export function DeckView({ displayName }: { displayName: string }) {
                 </div>
               )}
 
+              {active.related_coverage && active.related_coverage.length > 0 && (
+                <div className="mb-6 max-w-3xl">
+                  <div className="rule-double mb-3" />
+                  <h2 className="font-mono text-xs uppercase tracking-widest text-ink/60 mb-3">
+                    Related coverage ({active.related_coverage.length})
+                  </h2>
+                  <div className="space-y-2">
+                    {active.related_coverage.map((c, i) => (
+                      <a
+                        key={i}
+                        href={c.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block card-paper p-3 hover:border-ink"
+                      >
+                        <div className="font-display text-sm font-bold leading-tight mb-1">
+                          {c.title}
+                        </div>
+                        <div className="font-mono text-[10px] uppercase tracking-widest text-ink/60 mb-1">
+                          {c.publisher}
+                        </div>
+                        {c.snippet && (
+                          <div className="text-xs text-ink/70 leading-relaxed line-clamp-2">
+                            {c.snippet}
+                          </div>
+                        )}
+                      </a>
+                    ))}
+                  </div>
+                  <div className="rule-double mt-3" />
+                </div>
+              )}
+
               <div className="flex gap-3 flex-wrap mb-6">
                 <a
                   href={active.url}
