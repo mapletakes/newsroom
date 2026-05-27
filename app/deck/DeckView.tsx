@@ -1,9 +1,80 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { Submission } from '@/components/SubmissionCard';
 import { extractYouTubeId } from '@/lib/url';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+function SortableQueueItem({
+  s,
+  onSelect,
+}: {
+  s: Submission;
+  onSelect: () => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: s.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-stretch gap-0">
+      <button
+        {...attributes}
+        {...listeners}
+        className="shrink-0 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing text-ink/25 hover:text-ink/50 select-none"
+        aria-label="Drag to reorder"
+        tabIndex={-1}
+      >
+        ⠿
+      </button>
+      <button
+        onClick={onSelect}
+        className="flex-1 text-left card-paper p-2 hover:bg-paper min-w-0"
+      >
+        <div className="font-mono text-[10px] uppercase tracking-widest text-ink/60 mb-1">
+          {s.kind.replace('_', ' ')}
+          {s.dmca_risk === 'high' && <span className="text-rust ml-1">⚠</span>}
+        </div>
+        <div className="font-display text-sm font-bold leading-tight line-clamp-2">
+          {s.title || s.url}
+        </div>
+        {s.publisher && (
+          <div className="font-mono text-[10px] text-ink/50 mt-1 truncate">
+            {s.publisher}
+          </div>
+        )}
+      </button>
+    </div>
+  );
+}
 
 export function DeckView({ displayName }: { displayName: string }) {
   const [queue, setQueue] = useState<Submission[]>([]);
@@ -11,7 +82,14 @@ export function DeckView({ displayName }: { displayName: string }) {
   const [takeaway, setTakeaway] = useState('');
   const [startedAt, setStartedAt] = useState<number | null>(null);
 
+  const [addUrl, setAddUrl] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [addStatus, setAddStatus] = useState('');
+
+  const suppressRefreshUntil = useRef(0);
+
   const refresh = useCallback(async () => {
+    if (Date.now() < suppressRefreshUntil.current) return;
     const r = await fetch('/api/queue?status=approved');
     if (r.ok) {
       const data = await r.json();
@@ -25,7 +103,6 @@ export function DeckView({ displayName }: { displayName: string }) {
     return () => clearInterval(id);
   }, [refresh]);
 
-  // Pick the first approved as active if none selected
   useEffect(() => {
     if (!activeId && queue.length > 0) {
       setActiveId(queue[0].id);
@@ -46,6 +123,11 @@ export function DeckView({ displayName }: { displayName: string }) {
     return found;
   }, [queue, activeId]);
 
+  const sidebarItems = useMemo(
+    () => queue.filter((s) => s.id !== activeId).slice(0, 30),
+    [queue, activeId],
+  );
+
   const markPlayed = async () => {
     if (!active) return;
     const duration = startedAt ? Math.round((Date.now() - startedAt) / 1000) : null;
@@ -59,8 +141,7 @@ export function DeckView({ displayName }: { displayName: string }) {
         duration_on_screen_s: duration,
       }),
     });
-    // Move to next
-    const next = queue.find((s) => s.id !== active.id);
+    const next = sidebarItems[0];
     setActiveId(next?.id || null);
     setStartedAt(next ? Date.now() : null);
     setTakeaway('');
@@ -69,26 +150,100 @@ export function DeckView({ displayName }: { displayName: string }) {
 
   const skip = async () => {
     if (!active) return;
-    // Move to back of queue by clearing position; easier MVP: just move active pointer
-    const next = queue.find((s) => s.id !== active.id);
+    const next = sidebarItems[0];
     setActiveId(next?.id || null);
     setStartedAt(next ? Date.now() : null);
     setTakeaway('');
   };
 
-  const embedYouTube = active && (active.kind === 'youtube' || active.kind === 'youtube_short')
-    ? extractYouTubeId(active.url) : null;
+  // --- Direct add ---
+  const handleAddLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const url = addUrl.trim();
+    if (!url || adding) return;
+    setAdding(true);
+    setAddStatus('');
+    try {
+      const r = await fetch('/api/deck/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      if (r.ok) {
+        const data = await r.json();
+        setAddUrl('');
+        if (data.expanded) {
+          setAddStatus(`Added ${data.count} videos from playlist`);
+        } else {
+          setAddStatus('Added');
+        }
+        refresh();
+        setTimeout(() => setAddStatus(''), 3000);
+      } else {
+        const err = await r.json().catch(() => ({}));
+        setAddStatus(err.error || 'Failed to add');
+      }
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  // --- Drag and drop ---
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const handleDragEnd = useCallback(
+    async (event: DragEndEvent) => {
+      const { active: dragged, over } = event;
+      if (!over || dragged.id === over.id) return;
+
+      const oldIndex = sidebarItems.findIndex((s) => s.id === dragged.id);
+      const newIndex = sidebarItems.findIndex((s) => s.id === over.id);
+      if (oldIndex === -1 || newIndex === -1) return;
+
+      const reordered = arrayMove(sidebarItems, oldIndex, newIndex);
+
+      // Optimistic local update — rebuild full queue with active first, then reordered sidebar
+      setQueue((prev) => {
+        const activeItem = prev.find((s) => s.id === activeId);
+        return activeItem ? [activeItem, ...reordered] : [...reordered];
+      });
+
+      suppressRefreshUntil.current = Date.now() + 5000;
+
+      await fetch('/api/queue/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: reordered.map((s) => s.id) }),
+      });
+    },
+    [sidebarItems, activeId],
+  );
+
+  const embedYouTube =
+    active && (active.kind === 'youtube' || active.kind === 'youtube_short')
+      ? extractYouTubeId(active.url)
+      : null;
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Bar */}
       <header className="border-b-2 border-ink px-6 py-3 flex items-center gap-6 flex-wrap">
-        <Link href="/" className="font-display text-2xl font-black">Newsroom</Link>
-        <span className="font-mono text-xs uppercase tracking-widest text-ink/60">/ streamer deck</span>
+        <Link href="/" className="font-display text-2xl font-black">
+          Newsroom
+        </Link>
+        <span className="font-mono text-xs uppercase tracking-widest text-ink/60">
+          / streamer deck
+        </span>
         <div className="ml-auto flex items-center gap-4 font-mono text-xs">
           <span className="uppercase tracking-widest">{queue.length} approved</span>
-          <Link href="/mod" className="underline hover:text-rust">Mod View →</Link>
-          <a href="/api/notes?format=markdown" className="underline hover:text-rust">Export Notes</a>
+          <Link href="/mod" className="underline hover:text-rust">
+            Mod View &rarr;
+          </Link>
+          <a href="/api/notes?format=markdown" className="underline hover:text-rust">
+            Export Notes
+          </a>
           <span>{displayName}</span>
         </div>
       </header>
@@ -101,15 +256,19 @@ export function DeckView({ displayName }: { displayName: string }) {
               <p className="font-display text-3xl mb-3">No approved items yet.</p>
               <p className="text-ink/60 font-mono text-sm mb-6">
                 Your mods need to approve submissions in the
-                <Link href="/mod" className="underline ml-1">Mod View</Link>.
+                <Link href="/mod" className="underline ml-1">
+                  Mod View
+                </Link>
+                , or add links directly from the sidebar.
               </p>
             </div>
           )}
           {active && (
             <article>
-              {/* Header */}
               <div className="flex items-center gap-2 mb-3 flex-wrap font-mono text-xs uppercase tracking-widest">
-                <span className="bg-ink text-paper px-2 py-1">{active.kind.replace('_', ' ')}</span>
+                <span className="bg-ink text-paper px-2 py-1">
+                  {active.kind.replace('_', ' ')}
+                </span>
                 {active.credibility_tag && (
                   <span className="border border-ink px-2 py-1">{active.credibility_tag}</span>
                 )}
@@ -117,7 +276,9 @@ export function DeckView({ displayName }: { displayName: string }) {
                   <span className="bg-rust text-paper px-2 py-1">⚠ High DMCA risk</span>
                 )}
                 {active.dmca_risk === 'medium' && (
-                  <span className="border-2 border-ochre text-ochre px-2 py-1">◐ Medium risk</span>
+                  <span className="border-2 border-ochre text-ochre px-2 py-1">
+                    ◐ Medium risk
+                  </span>
                 )}
                 {active.publisher && <span className="text-ink/60">· {active.publisher}</span>}
               </div>
@@ -130,7 +291,6 @@ export function DeckView({ displayName }: { displayName: string }) {
                 <p className="text-lg leading-relaxed mb-6 max-w-3xl">{active.summary}</p>
               )}
 
-              {/* Embed */}
               {embedYouTube && (
                 <div className="aspect-video bg-ink mb-6 max-w-3xl">
                   <iframe
@@ -153,45 +313,50 @@ export function DeckView({ displayName }: { displayName: string }) {
               {active.topics && active.topics.length > 0 && (
                 <div className="flex flex-wrap gap-1 mb-6">
                   {active.topics.map((t) => (
-                    <span key={t} className="font-mono text-xs uppercase bg-paper border border-ink/30 px-2 py-1">
+                    <span
+                      key={t}
+                      className="font-mono text-xs uppercase bg-paper border border-ink/30 px-2 py-1"
+                    >
                       #{t}
                     </span>
                   ))}
                 </div>
               )}
 
-              {active.related_coverage && active.related_coverage.length > 0 && (
-                <div className="mb-6 max-w-3xl">
-                  <div className="rule-double mb-3" />
-                  <h2 className="font-mono text-xs uppercase tracking-widest text-ink/60 mb-3">
-                    Related coverage ({active.related_coverage.length})
-                  </h2>
-                  <div className="space-y-2">
-                    {active.related_coverage.map((c, i) => (
-                      <a
-                        key={i}
-                        href={c.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block card-paper p-3 hover:border-ink"
-                      >
-                        <div className="font-display text-sm font-bold leading-tight mb-1">
-                          {c.title}
-                        </div>
-                        <div className="font-mono text-[10px] uppercase tracking-widest text-ink/60 mb-1">
-                          {c.publisher}
-                        </div>
-                        {c.snippet && (
-                          <div className="text-xs text-ink/70 leading-relaxed line-clamp-2">
-                            {c.snippet}
+              {active.related_coverage &&
+                Array.isArray(active.related_coverage) &&
+                active.related_coverage.length > 0 && (
+                  <div className="mb-6 max-w-3xl">
+                    <div className="rule-double mb-3" />
+                    <h2 className="font-mono text-xs uppercase tracking-widest text-ink/60 mb-3">
+                      Related coverage ({active.related_coverage.length})
+                    </h2>
+                    <div className="space-y-2">
+                      {active.related_coverage.map((c, i) => (
+                        <a
+                          key={i}
+                          href={c.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block card-paper p-3 hover:border-ink"
+                        >
+                          <div className="font-display text-sm font-bold leading-tight mb-1">
+                            {c.title}
                           </div>
-                        )}
-                      </a>
-                    ))}
+                          <div className="font-mono text-[10px] uppercase tracking-widest text-ink/60 mb-1">
+                            {c.publisher}
+                          </div>
+                          {c.snippet && (
+                            <div className="text-xs text-ink/70 leading-relaxed line-clamp-2">
+                              {c.snippet}
+                            </div>
+                          )}
+                        </a>
+                      ))}
+                    </div>
+                    <div className="rule-double mt-3" />
                   </div>
-                  <div className="rule-double mt-3" />
-                </div>
-              )}
+                )}
 
               <div className="flex gap-3 flex-wrap mb-6">
                 <a
@@ -216,7 +381,6 @@ export function DeckView({ displayName }: { displayName: string }) {
                 </button>
               </div>
 
-              {/* Takeaway */}
               <label className="block max-w-3xl">
                 <span className="font-mono text-xs uppercase tracking-widest text-ink/60">
                   Takeaway for show notes (optional)
@@ -226,37 +390,66 @@ export function DeckView({ displayName }: { displayName: string }) {
                   onChange={(e) => setTakeaway(e.target.value)}
                   rows={3}
                   className="w-full mt-1 border border-ink/30 bg-paper p-3 font-mono text-sm focus:outline-none focus:border-ink"
-                  placeholder="Add a one-liner about what you said about this on stream…"
+                  placeholder="Add a one-liner about what you said about this on stream..."
                 />
               </label>
             </article>
           )}
         </section>
 
-        {/* Sidebar queue */}
-        <aside className="p-4 bg-ink/5">
-          <div className="font-mono text-xs uppercase tracking-widest mb-3 text-ink/60">
-            Up next ({Math.max(queue.length - 1, 0)})
-          </div>
-          <div className="space-y-2">
-            {queue.filter((s) => s.id !== activeId).slice(0, 20).map((s) => (
+        {/* Sidebar */}
+        <aside className="p-4 bg-ink/5 flex flex-col">
+          {/* Add link */}
+          <form onSubmit={handleAddLink} className="mb-4">
+            <div className="flex gap-1">
+              <input
+                type="url"
+                value={addUrl}
+                onChange={(e) => setAddUrl(e.target.value)}
+                placeholder="Paste link or playlist URL..."
+                className="flex-1 min-w-0 font-mono text-xs border border-ink/30 bg-paper px-2 py-1.5 focus:outline-none focus:border-ink"
+                disabled={adding}
+              />
               <button
-                key={s.id}
-                onClick={() => { setActiveId(s.id); setStartedAt(Date.now()); setTakeaway(''); }}
-                className="block w-full text-left card-paper p-2 hover:bg-paper"
+                type="submit"
+                disabled={adding || !addUrl.trim()}
+                className="shrink-0 font-mono text-xs uppercase tracking-widest bg-ink text-paper px-3 py-1.5 hover:bg-rust transition-colors disabled:opacity-40"
               >
-                <div className="font-mono text-[10px] uppercase tracking-widest text-ink/60 mb-1">
-                  {s.kind.replace('_', ' ')}
-                  {s.dmca_risk === 'high' && <span className="text-rust ml-1">⚠</span>}
-                </div>
-                <div className="font-display text-sm font-bold leading-tight line-clamp-2">
-                  {s.title || s.url}
-                </div>
-                {s.publisher && (
-                  <div className="font-mono text-[10px] text-ink/50 mt-1 truncate">{s.publisher}</div>
-                )}
+                {adding ? '...' : 'Add'}
               </button>
-            ))}
+            </div>
+            {addStatus && (
+              <div className="font-mono text-[10px] mt-1 text-ink/60">{addStatus}</div>
+            )}
+          </form>
+
+          <div className="font-mono text-xs uppercase tracking-widest mb-3 text-ink/60">
+            Up next ({sidebarItems.length})
+          </div>
+
+          <div className="space-y-1 flex-1 overflow-y-auto">
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={sidebarItems.map((s) => s.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {sidebarItems.map((s) => (
+                  <SortableQueueItem
+                    key={s.id}
+                    s={s}
+                    onSelect={() => {
+                      setActiveId(s.id);
+                      setStartedAt(Date.now());
+                      setTakeaway('');
+                    }}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
           </div>
         </aside>
       </main>

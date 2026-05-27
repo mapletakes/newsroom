@@ -89,6 +89,53 @@ export async function fetchYouTubeMeta(url: string): Promise<YouTubeMeta> {
   return meta;
 }
 
+export type PlaylistItem = {
+  url: string;
+  title: string | null;
+  thumbnail: string | null;
+  publisher: string | null;
+};
+
+export async function expandPlaylistWithMeta(url: string): Promise<PlaylistItem[]> {
+  const apiKey = process.env.YOUTUBE_API_KEY;
+  if (!apiKey) return [];
+  let listId: string | null = null;
+  try {
+    const u = new URL(url);
+    listId = u.searchParams.get('list');
+  } catch { return []; }
+  if (!listId) return [];
+
+  const out: PlaylistItem[] = [];
+  let pageToken: string | undefined;
+  for (let i = 0; i < 5; i++) {
+    const u = new URL('https://www.googleapis.com/youtube/v3/playlistItems');
+    u.searchParams.set('playlistId', listId);
+    u.searchParams.set('part', 'snippet,contentDetails');
+    u.searchParams.set('maxResults', '50');
+    u.searchParams.set('key', apiKey);
+    if (pageToken) u.searchParams.set('pageToken', pageToken);
+    const r = await fetch(u);
+    if (!r.ok) break;
+    const data = await r.json();
+    for (const item of data.items || []) {
+      const vid = item?.contentDetails?.videoId;
+      if (vid) {
+        out.push({
+          url: `https://www.youtube.com/watch?v=${vid}`,
+          title: item?.snippet?.title || null,
+          thumbnail: item?.snippet?.thumbnails?.high?.url
+            || item?.snippet?.thumbnails?.default?.url || null,
+          publisher: item?.snippet?.videoOwnerChannelTitle || null,
+        });
+      }
+    }
+    pageToken = data.nextPageToken;
+    if (!pageToken) break;
+  }
+  return out;
+}
+
 export async function expandPlaylist(url: string): Promise<string[]> {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) return [];
