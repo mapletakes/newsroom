@@ -39,12 +39,18 @@ export async function GET(req: NextRequest) {
       role: 'streamer',
     });
 
-    const response = NextResponse.redirect(new URL('/deck', req.url));
+    const response = new NextResponse(null, {
+      status: 302,
+      headers: { Location: new URL('/deck', req.url).toString() },
+    });
     response.cookies.set(session.name, session.value, session.options);
-    response.cookies.delete('newsroom_oauth_state');
+    response.cookies.set('newsroom_oauth_state', '', { path: '/', maxAge: 0 });
     return response;
   } catch (err) {
     console.error(err);
-    return NextResponse.redirect(new URL('/login?error=oauth', req.url));
+    return new NextResponse(null, {
+      status: 302,
+      headers: { Location: new URL('/login?error=oauth', req.url).toString() },
+    });
   }
 }
