@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
   if (kind === 'youtube_playlist') {
     const videos = await expandPlaylistWithMeta(url);
     if (videos.length === 0) {
-      return NextResponse.json({ error: 'could not expand playlist (is YOUTUBE_API_KEY set?)' }, { status: 400 });
+      return NextResponse.json({ error: 'could not expand playlist' }, { status: 400 });
     }
 
     const { data: maxRow } = await sb

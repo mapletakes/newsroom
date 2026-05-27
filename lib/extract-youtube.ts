@@ -96,74 +96,66 @@ export type PlaylistItem = {
   publisher: string | null;
 };
 
-export async function expandPlaylistWithMeta(url: string): Promise<PlaylistItem[]> {
-  const apiKey = process.env.YOUTUBE_API_KEY;
-  if (!apiKey) return [];
-  let listId: string | null = null;
+const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
+
+function extractListId(url: string): string | null {
   try {
     const u = new URL(url);
-    listId = u.searchParams.get('list');
-  } catch { return []; }
-  if (!listId) return [];
+    return u.searchParams.get('list');
+  } catch { return null; }
+}
+
+function scrapePlaylistItems(html: string): PlaylistItem[] {
+  const marker = 'var ytInitialData = ';
+  const startIdx = html.indexOf(marker);
+  if (startIdx === -1) return [];
+  const jsonStart = startIdx + marker.length;
+  const endIdx = html.indexOf(';</script>', jsonStart);
+  if (endIdx === -1) return [];
+
+  let data: Record<string, unknown>;
+  try { data = JSON.parse(html.substring(jsonStart, endIdx)); } catch { return []; }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tabs = (data as any)?.contents?.twoColumnBrowseResultsRenderer?.tabs;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const section = tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents?.[0];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const items: any[] =
+    section?.itemSectionRenderer?.contents?.[0]?.playlistVideoListRenderer?.contents || [];
 
   const out: PlaylistItem[] = [];
-  let pageToken: string | undefined;
-  for (let i = 0; i < 5; i++) {
-    const u = new URL('https://www.googleapis.com/youtube/v3/playlistItems');
-    u.searchParams.set('playlistId', listId);
-    u.searchParams.set('part', 'snippet,contentDetails');
-    u.searchParams.set('maxResults', '50');
-    u.searchParams.set('key', apiKey);
-    if (pageToken) u.searchParams.set('pageToken', pageToken);
-    const r = await fetch(u);
-    if (!r.ok) break;
-    const data = await r.json();
-    for (const item of data.items || []) {
-      const vid = item?.contentDetails?.videoId;
-      if (vid) {
-        out.push({
-          url: `https://www.youtube.com/watch?v=${vid}`,
-          title: item?.snippet?.title || null,
-          thumbnail: item?.snippet?.thumbnails?.high?.url
-            || item?.snippet?.thumbnails?.default?.url || null,
-          publisher: item?.snippet?.videoOwnerChannelTitle || null,
-        });
-      }
-    }
-    pageToken = data.nextPageToken;
-    if (!pageToken) break;
+  for (const item of items) {
+    const v = item?.playlistVideoRenderer;
+    if (!v?.videoId) continue;
+    const thumbs = v.thumbnail?.thumbnails;
+    out.push({
+      url: `https://www.youtube.com/watch?v=${v.videoId}`,
+      title: v.title?.runs?.[0]?.text || null,
+      thumbnail: Array.isArray(thumbs) ? thumbs[thumbs.length - 1]?.url || null : null,
+      publisher: v.shortBylineText?.runs?.[0]?.text || null,
+    });
   }
   return out;
 }
 
-export async function expandPlaylist(url: string): Promise<string[]> {
-  const apiKey = process.env.YOUTUBE_API_KEY;
-  if (!apiKey) return [];
-  let listId: string | null = null;
-  try {
-    const u = new URL(url);
-    listId = u.searchParams.get('list');
-  } catch { return []; }
+export async function expandPlaylistWithMeta(url: string): Promise<PlaylistItem[]> {
+  const listId = extractListId(url);
   if (!listId) return [];
 
-  const out: string[] = [];
-  let pageToken: string | undefined;
-  for (let i = 0; i < 5; i++) { // cap at 250 items
-    const u = new URL('https://www.googleapis.com/youtube/v3/playlistItems');
-    u.searchParams.set('playlistId', listId);
-    u.searchParams.set('part', 'contentDetails');
-    u.searchParams.set('maxResults', '50');
-    u.searchParams.set('key', apiKey);
-    if (pageToken) u.searchParams.set('pageToken', pageToken);
-    const r = await fetch(u);
-    if (!r.ok) break;
-    const data = await r.json();
-    for (const item of data.items || []) {
-      const vid = item?.contentDetails?.videoId;
-      if (vid) out.push(`https://www.youtube.com/watch?v=${vid}`);
-    }
-    pageToken = data.nextPageToken;
-    if (!pageToken) break;
+  try {
+    const r = await fetch(`https://www.youtube.com/playlist?list=${listId}`, {
+      headers: { 'User-Agent': BROWSER_UA, 'Accept-Language': 'en-US,en;q=0.9' },
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!r.ok) return [];
+    return scrapePlaylistItems(await r.text());
+  } catch {
+    return [];
   }
-  return out;
+}
+
+export async function expandPlaylist(url: string): Promise<string[]> {
+  const items = await expandPlaylistWithMeta(url);
+  return items.map((i) => i.url);
 }
