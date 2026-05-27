@@ -39,7 +39,8 @@ export async function POST(req: NextRequest) {
 
   // Kick off enrichment in the background (fire and forget).
   if (data) {
-    fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/extract`, {
+    const origin = req.nextUrl.origin;
+    fetch(`${origin}/api/extract`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ submissionId: data.id }),

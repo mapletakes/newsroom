@@ -38,11 +38,22 @@ export function ModView({
   const onSubmission = useCallback(async (s: {
     url: string; submitter: string; isSub: boolean; isMod: boolean; isVip: boolean; message: string;
   }) => {
-    await fetch('/api/queue', {
+    const r = await fetch('/api/queue', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(s),
     });
+    if (r.ok) {
+      const data = await r.json();
+      const sub = data.submission;
+      if (sub && !sub.title) {
+        fetch('/api/extract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ submissionId: sub.id }),
+        }).catch(() => {});
+      }
+    }
     refresh();
   }, [refresh]);
 
