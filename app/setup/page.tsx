@@ -20,7 +20,7 @@ export default async function SetupPage() {
     <SetupForm
       streamId={session.streamId}
       displayName={session.displayName}
-      submitCommand={stream?.submit_command || '!submit'}
+      submitCommand={stream?.submit_command ?? ''}
       allowAnyone={stream?.allow_anyone ?? true}
       allowDuplicates={stream?.allow_duplicates ?? false}
     />
