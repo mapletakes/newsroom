@@ -12,6 +12,7 @@ export function buildAuthUrl(state: string): string {
   u.searchParams.set('response_type', 'code');
   u.searchParams.set('scope', SCOPES.join(' '));
   u.searchParams.set('state', state);
+  u.searchParams.set('force_verify', 'true');
   return u.toString();
 }
 
