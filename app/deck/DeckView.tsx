@@ -25,9 +25,11 @@ import { CSS } from '@dnd-kit/utilities';
 function SortableQueueItem({
   s,
   onSelect,
+  onRemove,
 }: {
   s: Submission;
   onSelect: () => void;
+  onRemove: () => void;
 }) {
   const {
     attributes,
@@ -71,6 +73,14 @@ function SortableQueueItem({
             {s.publisher}
           </div>
         )}
+      </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); onRemove(); }}
+        className="shrink-0 w-6 flex items-center justify-center text-ink/20 hover:text-rust transition-colors"
+        aria-label="Remove"
+        tabIndex={-1}
+      >
+        &times;
       </button>
     </div>
   );
@@ -154,6 +164,15 @@ export function DeckView({ displayName }: { displayName: string }) {
     setActiveId(next?.id || null);
     setStartedAt(next ? Date.now() : null);
     setTakeaway('');
+  };
+
+  const removeFromQueue = async (id: string) => {
+    setQueue((prev) => prev.filter((s) => s.id !== id));
+    await fetch('/api/queue', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, status: 'rejected' }),
+    });
   };
 
   // --- Direct add ---
@@ -446,6 +465,7 @@ export function DeckView({ displayName }: { displayName: string }) {
                       setStartedAt(Date.now());
                       setTakeaway('');
                     }}
+                    onRemove={() => removeFromQueue(s.id)}
                   />
                 ))}
               </SortableContext>
