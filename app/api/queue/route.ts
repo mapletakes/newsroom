@@ -37,17 +37,29 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Kick off enrichment in the background (fire and forget).
-  if (data) {
+  // For duplicates the upsert returns null — look up the existing row
+  let submission = data;
+  if (!submission) {
+    const { data: existing } = await sb
+      .from('submissions')
+      .select('*')
+      .eq('stream_id', session.streamId)
+      .eq('normalized_url', normalized)
+      .maybeSingle();
+    submission = existing;
+  }
+
+  // Trigger extraction if submission has no enrichment yet
+  if (submission && !submission.title) {
     const origin = req.nextUrl.origin;
     fetch(`${origin}/api/extract`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ submissionId: data.id }),
+      body: JSON.stringify({ submissionId: submission.id }),
     }).catch(() => {});
   }
 
-  return NextResponse.json({ submission: data });
+  return NextResponse.json({ submission });
 }
 
 export async function GET(req: NextRequest) {
