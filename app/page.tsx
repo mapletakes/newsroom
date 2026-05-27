@@ -40,12 +40,12 @@ export default function Home() {
             becomes timestamped show notes you can post to Substack or Discord the moment
             you go offline.
           </p>
-          <Link
+          <a
             href="/api/twitch/oauth"
             className="inline-block bg-ink text-paper px-8 py-4 font-mono text-sm uppercase tracking-widest hover:bg-rust transition-colors"
           >
             Connect Twitch →
-          </Link>
+          </a>
         </div>
 
         <aside className="border-l-2 border-ink pl-6 hidden md:block">

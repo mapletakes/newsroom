@@ -5,7 +5,7 @@ const SCOPES = ['user:read:email', 'chat:read', 'moderation:read'];
 
 export function buildAuthUrl(state: string): string {
   const clientId = process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID!;
-  const redirect = `${process.env.NEXT_PUBLIC_APP_URL}/api/twitch/callback`;
+  const redirect = `${(process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/+$/, '')}/api/twitch/callback`;
   const u = new URL('https://id.twitch.tv/oauth2/authorize');
   u.searchParams.set('client_id', clientId);
   u.searchParams.set('redirect_uri', redirect);
@@ -22,7 +22,7 @@ export async function exchangeCode(code: string): Promise<{
 }> {
   const clientId = process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID!;
   const clientSecret = process.env.TWITCH_CLIENT_SECRET!;
-  const redirect = `${process.env.NEXT_PUBLIC_APP_URL}/api/twitch/callback`;
+  const redirect = `${(process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/+$/, '')}/api/twitch/callback`;
   const body = new URLSearchParams({
     client_id: clientId,
     client_secret: clientSecret,

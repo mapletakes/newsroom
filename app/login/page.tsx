@@ -1,5 +1,3 @@
-import Link from 'next/link';
-
 export default function Login({ searchParams }: { searchParams: { error?: string } }) {
   const errorMap: Record<string, string> = {
     state: 'OAuth state mismatch — please try again.',
@@ -22,12 +20,12 @@ export default function Login({ searchParams }: { searchParams: { error?: string
             {errMsg}
           </div>
         )}
-        <Link
+        <a
           href="/api/twitch/oauth"
           className="block text-center bg-ink text-paper px-6 py-4 font-mono text-sm uppercase tracking-widest hover:bg-rust transition-colors"
         >
           Continue with Twitch
-        </Link>
+        </a>
       </div>
     </main>
   );
