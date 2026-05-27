@@ -1,7 +1,7 @@
 // Twitch OAuth Authorization Code flow (server-side).
 // Scopes: chat:read is the only one we need for MVP.
 
-const SCOPES = ['user:read:email', 'chat:read', 'moderation:read'];
+const SCOPES = ['user:read:email', 'chat:read', 'user:read:moderated_channels'];
 
 export function buildAuthUrl(state: string): string {
   const clientId = process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID!;
