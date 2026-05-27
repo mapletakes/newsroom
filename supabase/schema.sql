@@ -1,0 +1,108 @@
+-- ============================================================
+-- newsroom schema
+-- Run this in the Supabase SQL editor.
+-- ============================================================
+
+-- Stream sessions: one row per streamer's live session
+create table if not exists public.streams (
+  id uuid primary key default gen_random_uuid(),
+  twitch_user_id text unique not null,
+  twitch_login text not null,
+  display_name text,
+  created_at timestamptz default now(),
+  -- Settings
+  submit_command text default '!submit',
+  allow_anyone boolean default true, -- if false, only subs/vips/mods
+  auto_summarize boolean default true
+);
+
+-- Moderators on a stream
+create table if not exists public.moderators (
+  stream_id uuid references public.streams(id) on delete cascade,
+  twitch_user_id text not null,
+  twitch_login text not null,
+  added_at timestamptz default now(),
+  primary key (stream_id, twitch_user_id)
+);
+
+-- Submissions: every link harvested from chat
+-- Status flow:  pending -> approved -> played | pending -> rejected
+create type submission_status as enum ('pending', 'approved', 'rejected', 'played');
+create type media_kind as enum ('article', 'youtube', 'youtube_short', 'youtube_playlist', 'twitch_clip', 'twitch_vod', 'twitter', 'tiktok', 'unknown');
+
+create table if not exists public.submissions (
+  id uuid primary key default gen_random_uuid(),
+  stream_id uuid references public.streams(id) on delete cascade,
+  url text not null,
+  normalized_url text not null,
+  kind media_kind default 'unknown',
+  status submission_status default 'pending',
+  -- Preview metadata
+  title text,
+  description text,
+  thumbnail_url text,
+  publisher text,
+  author text,
+  duration_seconds int,
+  published_at timestamptz,
+  -- AI-generated
+  summary text,
+  credibility_tag text, -- 'mainstream' | 'partisan-left' | 'partisan-right' | 'tabloid' | 'blog' | 'social' | null
+  topics text[],
+  dmca_risk text, -- 'low' | 'medium' | 'high' | null
+  -- Submission context
+  submitter_login text,
+  submitter_is_sub boolean default false,
+  submitter_is_mod boolean default false,
+  submitter_is_vip boolean default false,
+  raw_message text,
+  -- Mod actions
+  mod_notes text,
+  position int,
+  -- Timing
+  created_at timestamptz default now(),
+  approved_at timestamptz,
+  played_at timestamptz,
+  duration_on_screen_s int
+);
+
+create index if not exists submissions_stream_status_idx
+  on public.submissions(stream_id, status, position);
+create index if not exists submissions_stream_created_idx
+  on public.submissions(stream_id, created_at desc);
+create unique index if not exists submissions_stream_url_unique
+  on public.submissions(stream_id, normalized_url);
+
+-- Show notes: persisted artifacts of what was reacted to
+create table if not exists public.show_notes (
+  id uuid primary key default gen_random_uuid(),
+  stream_id uuid references public.streams(id) on delete cascade,
+  submission_id uuid references public.submissions(id) on delete cascade,
+  played_at timestamptz not null,
+  stream_started_at timestamptz,
+  timestamp_offset_s int, -- seconds into the stream when played
+  title text,
+  url text,
+  summary text,
+  takeaway text, -- optional streamer's note
+  created_at timestamptz default now()
+);
+
+create index if not exists show_notes_stream_idx
+  on public.show_notes(stream_id, played_at);
+
+-- ============================================================
+-- Row Level Security
+-- ============================================================
+-- For MVP we use the service role on the server for writes
+-- and gate reads via signed session cookies. Enable RLS so
+-- direct client access is locked down.
+
+alter table public.streams enable row level security;
+alter table public.moderators enable row level security;
+alter table public.submissions enable row level security;
+alter table public.show_notes enable row level security;
+
+-- Public read of streams (for the deck/mod views via service-role queries)
+-- We do NOT grant anon any access; the API routes use the service role.
+-- If you want client-side reads later, add policies here.

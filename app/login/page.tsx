@@ -1,0 +1,34 @@
+import Link from 'next/link';
+
+export default function Login({ searchParams }: { searchParams: { error?: string } }) {
+  const errorMap: Record<string, string> = {
+    state: 'OAuth state mismatch — please try again.',
+    oauth: 'Twitch sign-in failed. Check your client ID/secret.',
+  };
+  const errMsg = searchParams.error && errorMap[searchParams.error];
+
+  return (
+    <main className="min-h-screen flex items-center justify-center px-6">
+      <div className="max-w-md w-full">
+        <h1 className="font-display text-4xl font-bold mb-2">Sign in</h1>
+        <div className="rule-double mb-6" />
+        <p className="mb-8 leading-relaxed">
+          Newsroom uses your Twitch account to read your chat. We request
+          <span className="font-mono"> chat:read </span>
+          only — we can&apos;t post, ban, or change anything.
+        </p>
+        {errMsg && (
+          <div className="border-2 border-rust text-rust px-4 py-3 mb-6 font-mono text-sm">
+            {errMsg}
+          </div>
+        )}
+        <Link
+          href="/api/twitch/oauth"
+          className="block text-center bg-ink text-paper px-6 py-4 font-mono text-sm uppercase tracking-widest hover:bg-rust transition-colors"
+        >
+          Continue with Twitch
+        </Link>
+      </div>
+    </main>
+  );
+}

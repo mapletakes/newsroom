@@ -1,0 +1,83 @@
+// Detect what kind of media a URL points to and normalize it for dedup.
+
+export type MediaKind =
+  | 'article'
+  | 'youtube'
+  | 'youtube_short'
+  | 'youtube_playlist'
+  | 'twitch_clip'
+  | 'twitch_vod'
+  | 'twitter'
+  | 'tiktok'
+  | 'unknown';
+
+const TRACKING_PARAMS = new Set([
+  'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+  'fbclid', 'gclid', 'mc_cid', 'mc_eid', 'ref', 'ref_src', 'ref_url',
+  's', 'si', 'feature', // youtube share params
+]);
+
+export function normalizeUrl(raw: string): string {
+  try {
+    const u = new URL(raw.trim());
+    // Strip tracking params
+    const params = new URLSearchParams();
+    for (const [k, v] of u.searchParams) {
+      if (!TRACKING_PARAMS.has(k.toLowerCase())) params.append(k, v);
+    }
+    u.search = params.toString();
+    // Lowercase host
+    u.hostname = u.hostname.toLowerCase();
+    // Strip trailing slash from path (but keep root)
+    if (u.pathname.length > 1 && u.pathname.endsWith('/')) {
+      u.pathname = u.pathname.slice(0, -1);
+    }
+    // Strip fragment unless it's a YouTube timestamp (t=)
+    if (!u.hash.startsWith('#t=')) u.hash = '';
+    return u.toString();
+  } catch {
+    return raw.trim();
+  }
+}
+
+export function detectKind(url: string): MediaKind {
+  let u: URL;
+  try { u = new URL(url); } catch { return 'unknown'; }
+  const h = u.hostname.replace(/^www\./, '');
+
+  if (h === 'youtube.com' || h === 'm.youtube.com' || h === 'music.youtube.com') {
+    if (u.searchParams.has('list') && !u.searchParams.has('v')) return 'youtube_playlist';
+    if (u.pathname.startsWith('/shorts/')) return 'youtube_short';
+    if (u.pathname.startsWith('/playlist')) return 'youtube_playlist';
+    return 'youtube';
+  }
+  if (h === 'youtu.be') return 'youtube';
+  if (h === 'twitch.tv' || h === 'clips.twitch.tv') {
+    if (h === 'clips.twitch.tv' || u.pathname.includes('/clip/')) return 'twitch_clip';
+    if (u.pathname.includes('/videos/')) return 'twitch_vod';
+    return 'twitch_vod';
+  }
+  if (h === 'twitter.com' || h === 'x.com' || h === 'nitter.net') return 'twitter';
+  if (h === 'tiktok.com' || h === 'vm.tiktok.com' || h === 'vt.tiktok.com') return 'tiktok';
+  // Everything else is treated as an article candidate
+  return 'article';
+}
+
+export function extractUrlsFromMessage(message: string): string[] {
+  // Match http(s) URLs. Conservative regex.
+  const regex = /https?:\/\/[^\s<>"'`]+/gi;
+  const matches = message.match(regex) || [];
+  return matches.map((m) => m.replace(/[.,;:!?)\]]+$/, ''));
+}
+
+export function extractYouTubeId(url: string): string | null {
+  try {
+    const u = new URL(url);
+    const h = u.hostname.replace(/^www\./, '');
+    if (h === 'youtu.be') return u.pathname.slice(1) || null;
+    if (u.pathname.startsWith('/shorts/')) return u.pathname.split('/')[2] || null;
+    if (u.pathname.startsWith('/watch')) return u.searchParams.get('v');
+    if (u.pathname.startsWith('/embed/')) return u.pathname.split('/')[2] || null;
+    return null;
+  } catch { return null; }
+}

@@ -1,0 +1,66 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,900&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ink: #0d0d0e;
+  --paper: #f5f1e8;
+  --rust: #c4451c;
+  --ochre: #d4a017;
+  --moss: #3d5c3a;
+  --slate: #2c3e50;
+}
+
+html, body {
+  background-color: var(--paper);
+  color: var(--ink);
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-feature-settings: 'ss01', 'ss02';
+}
+
+::selection {
+  background-color: var(--ochre);
+  color: var(--ink);
+}
+
+/* Newspaper-style rule */
+.rule-thick {
+  border-top: 3px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+  height: 6px;
+}
+
+.rule-double {
+  border-top: 1px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+  height: 4px;
+}
+
+/* Card hover with paper-grain feel */
+.card-paper {
+  background:
+    radial-gradient(ellipse at top left, rgba(212,160,23,0.05), transparent 60%),
+    var(--paper);
+  border: 1px solid rgba(13,13,14,0.15);
+  transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+.card-paper:hover {
+  border-color: var(--ink);
+  box-shadow: 4px 4px 0 var(--ink);
+  transform: translate(-2px, -2px);
+}
+
+.dmca-high { color: var(--rust); }
+.dmca-medium { color: var(--ochre); }
+.dmca-low { color: var(--moss); }
+
+/* Animated dot for "live" */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.live-dot {
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
