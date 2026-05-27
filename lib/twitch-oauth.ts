@@ -58,3 +58,27 @@ export async function fetchTwitchUser(accessToken: string): Promise<{
   if (!u) throw new Error('No user in Twitch response');
   return u;
 }
+
+export async function fetchModeratedChannels(
+  accessToken: string,
+  userId: string,
+): Promise<{ broadcaster_id: string; broadcaster_login: string; broadcaster_name: string }[]> {
+  const clientId = process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID!;
+  const out: { broadcaster_id: string; broadcaster_login: string; broadcaster_name: string }[] = [];
+  let cursor: string | undefined;
+  for (let i = 0; i < 5; i++) {
+    const u = new URL('https://api.twitch.tv/helix/moderation/channels');
+    u.searchParams.set('user_id', userId);
+    u.searchParams.set('first', '100');
+    if (cursor) u.searchParams.set('after', cursor);
+    const r = await fetch(u, {
+      headers: { Authorization: `Bearer ${accessToken}`, 'Client-Id': clientId },
+    });
+    if (!r.ok) break;
+    const data = await r.json();
+    for (const ch of data.data || []) out.push(ch);
+    cursor = data.pagination?.cursor;
+    if (!cursor) break;
+  }
+  return out;
+}

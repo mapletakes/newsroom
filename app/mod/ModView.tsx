@@ -8,13 +8,17 @@ import { SubmissionCard, type Submission } from '@/components/SubmissionCard';
 export function ModView({
   channel,
   displayName,
+  streamDisplayName,
   submitCommand,
   allowAnyone,
+  isMod = false,
 }: {
   channel: string;
   displayName: string;
+  streamDisplayName: string;
   submitCommand: string | null;
   allowAnyone: boolean;
+  isMod?: boolean;
 }) {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [filter, setFilter] = useState<'pending' | 'approved' | 'all'>('pending');
@@ -86,7 +90,9 @@ export function ModView({
       {/* Bar */}
       <header className="border-b-2 border-ink px-6 py-3 flex items-center gap-6 flex-wrap">
         <Link href="/" className="font-display text-2xl font-black">Newsroom</Link>
-        <span className="font-mono text-xs uppercase tracking-widest text-ink/60">/ mod triage</span>
+        <span className="font-mono text-xs uppercase tracking-widest text-ink/60">
+          / mod triage{isMod && <> · {streamDisplayName}</>}
+        </span>
         <div className="ml-auto flex items-center gap-4 font-mono text-xs">
           <span className="flex items-center gap-2">
             <span className={`live-dot inline-block w-2 h-2 rounded-full ${
@@ -96,8 +102,9 @@ export function ModView({
               {status === 'connected' ? `Listening to #${channel}` : status}
             </span>
           </span>
-          <Link href="/deck" className="underline hover:text-rust">Streamer Deck →</Link>
-          <Link href="/setup" className="underline hover:text-rust">Settings</Link>
+          <Link href="/choose" className="underline hover:text-rust">Switch Channel</Link>
+          {!isMod && <Link href="/deck" className="underline hover:text-rust">Streamer Deck →</Link>}
+          {!isMod && <Link href="/setup" className="underline hover:text-rust">Settings</Link>}
         </div>
       </header>
 
