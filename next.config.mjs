@@ -5,9 +5,7 @@ const nextConfig = {
       { protocol: 'https', hostname: '**' },
     ],
   },
-  experimental: {
-    serverComponentsExternalPackages: ['@mozilla/readability', 'jsdom'],
-  },
+  serverExternalPackages: ['@mozilla/readability', 'jsdom'],
 };
 
 export default nextConfig;
