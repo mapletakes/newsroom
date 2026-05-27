@@ -48,7 +48,22 @@ export async function getSession(): Promise<Session | null> {
   } catch { return null; }
 }
 
-export const SESSION_COOKIE_NAME = COOKIE;
+export function signOAuthState(): string {
+  const ts = Date.now().toString(36);
+  const nonce = crypto.randomBytes(8).toString('hex');
+  const payload = `${ts}.${nonce}`;
+  const sig = sign(payload);
+  return `${payload}.${sig}`;
+}
+
+export function verifyOAuthState(state: string): boolean {
+  const parts = state.split('.');
+  if (parts.length !== 3) return false;
+  const [ts, nonce, sig] = parts;
+  if (sign(`${ts}.${nonce}`) !== sig) return false;
+  const age = Date.now() - parseInt(ts, 36);
+  return age >= 0 && age < 600_000; // valid for 10 minutes
+}
 
 export async function clearSession() {
   cookies().delete(COOKIE);
