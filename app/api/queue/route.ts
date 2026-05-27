@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSession } from '@/lib/session';
 import { detectKind, normalizeUrl } from '@/lib/url';
+import { runExtraction } from '@/lib/extract';
+
+export const maxDuration = 30;
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -68,14 +71,16 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Trigger extraction if submission has no enrichment yet
+  // Run extraction inline if submission has no enrichment yet
   if (submission && !submission.title) {
-    const origin = req.nextUrl.origin;
-    fetch(`${origin}/api/extract`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ submissionId: submission.id }),
-    }).catch(() => {});
+    await runExtraction(submission.id as string);
+    // Re-fetch the enriched submission to return updated data
+    const { data: enriched } = await sb
+      .from('submissions')
+      .select('*')
+      .eq('id', submission.id)
+      .maybeSingle();
+    if (enriched) submission = enriched;
   }
 
   return NextResponse.json({ submission });
