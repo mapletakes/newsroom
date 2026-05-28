@@ -114,7 +114,7 @@ export function ModView({
         ))}
         <button
           onClick={async () => {
-            if (!window.confirm('Are you sure? This will reject all pending and approved submissions.')) return;
+            if (!window.confirm('Are you sure? This will reject all pending submissions. Items already approved for the streamer deck are not affected.')) return;
             await fetch('/api/queue/clear', { method: 'POST' });
             refresh();
           }}
