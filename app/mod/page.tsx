@@ -22,6 +22,7 @@ export default async function ModPage() {
       displayName={session.displayName}
       streamDisplayName={stream?.display_name || session.displayName}
       submitCommand={stream?.submit_command || null}
+      streamId={session.streamId}
       isMod={session.role === 'mod'}
     />
   );

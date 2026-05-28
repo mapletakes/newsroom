@@ -4,6 +4,7 @@ import { getSession } from '@/lib/session';
 import { detectKind, normalizeUrl } from '@/lib/url';
 import { runExtraction } from '@/lib/extract';
 import { expandPlaylistWithMeta } from '@/lib/extract-youtube';
+import { broadcastQueueChange } from '@/lib/realtime';
 
 export const maxDuration = 60;
 
@@ -60,6 +61,7 @@ export async function POST(req: NextRequest) {
       if (data) inserted.push(data);
     }
 
+    broadcastQueueChange(session.streamId);
     return NextResponse.json({ submissions: inserted, expanded: true, count: inserted.length });
   }
 
@@ -81,12 +83,14 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   if (submission) {
+    broadcastQueueChange(session.streamId);
     await runExtraction(submission.id);
     const { data: enriched } = await sb
       .from('submissions')
       .select('*')
       .eq('id', submission.id)
       .maybeSingle();
+    broadcastQueueChange(session.streamId);
     if (enriched) return NextResponse.json({ submission: enriched });
   }
 

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import type { Submission } from '@/components/SubmissionCard';
 import { extractYouTubeId } from '@/lib/url';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
+import { useQueueRealtime } from '@/lib/use-queue-realtime';
 import {
   DndContext,
   closestCenter,
@@ -87,7 +88,7 @@ function SortableQueueItem({
   );
 }
 
-export function DeckView({ displayName }: { displayName: string }) {
+export function DeckView({ displayName, streamId }: { displayName: string; streamId: string }) {
   const [queue, setQueue] = useState<Submission[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [takeaway, setTakeaway] = useState('');
@@ -109,8 +110,13 @@ export function DeckView({ displayName }: { displayName: string }) {
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  // Refetch instantly when the server broadcasts a queue change.
+  useQueueRealtime(streamId, refresh);
+
+  // Slow fallback poll in case a broadcast is missed or the socket drops.
   useEffect(() => {
-    const id = setInterval(refresh, 3000);
+    const id = setInterval(refresh, 30000);
     return () => clearInterval(id);
   }, [refresh]);
 

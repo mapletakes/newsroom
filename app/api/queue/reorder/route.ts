@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSession } from '@/lib/session';
+import { broadcastQueueChange } from '@/lib/realtime';
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -21,5 +22,6 @@ export async function POST(req: NextRequest) {
     ),
   );
 
+  broadcastQueueChange(session.streamId);
   return NextResponse.json({ ok: true });
 }

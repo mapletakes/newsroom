@@ -4,18 +4,21 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { SubmissionCard, type Submission } from '@/components/SubmissionCard';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
+import { useQueueRealtime } from '@/lib/use-queue-realtime';
 
 export function ModView({
   channel,
   displayName,
   streamDisplayName,
   submitCommand,
+  streamId,
   isMod = false,
 }: {
   channel: string;
   displayName: string;
   streamDisplayName: string;
   submitCommand: string | null;
+  streamId: string;
   isMod?: boolean;
 }) {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -31,8 +34,13 @@ export function ModView({
   }, [filter]);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  // Refetch instantly when the server broadcasts a queue change.
+  useQueueRealtime(streamId, refresh);
+
+  // Slow fallback poll in case a broadcast is missed or the socket drops.
   useEffect(() => {
-    const id = setInterval(refresh, 4000);
+    const id = setInterval(refresh, 30000);
     return () => clearInterval(id);
   }, [refresh]);
 

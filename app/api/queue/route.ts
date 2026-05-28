@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getSession } from '@/lib/session';
 import { searchRelatedCoverage } from '@/lib/search-coverage';
 import { submitUrlToQueue } from '@/lib/submit-url';
+import { broadcastQueueChange } from '@/lib/realtime';
 
 export const maxDuration = 30;
 
@@ -112,5 +113,6 @@ export async function PATCH(req: NextRequest) {
     });
   }
 
+  broadcastQueueChange(session.streamId);
   return NextResponse.json({ submission: data });
 }

@@ -7,5 +7,5 @@ export const dynamic = 'force-dynamic';
 export default async function DeckPage() {
   const session = await getSession();
   if (!session) redirect('/login');
-  return <DeckView displayName={session.displayName} />;
+  return <DeckView displayName={session.displayName} streamId={session.streamId} />;
 }

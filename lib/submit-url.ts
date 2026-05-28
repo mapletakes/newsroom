@@ -4,6 +4,7 @@
 import { supabaseAdmin } from './supabase';
 import { detectKind, normalizeUrl } from './url';
 import { runExtraction } from './extract';
+import { broadcastQueueChange } from './realtime';
 
 export type SubmitUrlParams = {
   streamId: string;
@@ -107,6 +108,9 @@ export async function submitUrlToQueue(params: SubmitUrlParams): Promise<SubmitU
     }
   }
 
+  // Ping open views so the new row appears immediately (before enrichment).
+  if (submission) broadcastQueueChange(streamId);
+
   // ── AI extraction (title, summary, credibility, etc.) ─────────
   if (submission && !(submission as Record<string, unknown>).title) {
     await runExtraction(submission.id as string);
@@ -116,6 +120,8 @@ export async function submitUrlToQueue(params: SubmitUrlParams): Promise<SubmitU
       .eq('id', submission.id)
       .maybeSingle();
     if (enriched) submission = enriched;
+    // Ping again so enriched data (title, summary) refreshes in place.
+    broadcastQueueChange(streamId);
   }
 
   return { submission };
