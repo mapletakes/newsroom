@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { Submission } from '@/components/SubmissionCard';
-import { extractYouTubeId } from '@/lib/url';
+import { extractYouTubeId, formatDuration } from '@/lib/url';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { useQueueRealtime } from '@/lib/use-queue-realtime';
 import {
@@ -65,6 +65,7 @@ function SortableQueueItem({
       >
         <div className="font-mono text-[10px] uppercase tracking-widest text-ink/60 mb-1">
           {s.kind.replace('_', ' ')}
+          {s.duration_seconds ? ` · ${formatDuration(s.duration_seconds)}` : ''}
           {s.dmca_risk === 'high' && <span className="text-rust ml-1">⚠</span>}
         </div>
         <div className="font-display text-sm font-bold leading-tight line-clamp-2">

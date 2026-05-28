@@ -1,5 +1,7 @@
 'use client';
 
+import { formatDuration } from '@/lib/url';
+
 type Submission = {
   id: string;
   url: string;
@@ -8,6 +10,7 @@ type Submission = {
   title: string | null;
   thumbnail_url: string | null;
   publisher: string | null;
+  duration_seconds: number | null;
   description: string | null;
   summary: string | null;
   credibility_tag: string | null;
@@ -68,6 +71,11 @@ export function SubmissionCard({
           <span className="font-mono text-[10px] uppercase tracking-widest bg-ink text-paper px-1.5 py-0.5">
             {KIND_LABELS[s.kind] || s.kind}
           </span>
+          {s.duration_seconds ? (
+            <span className="font-mono text-[10px] uppercase tracking-widest text-ink/60">
+              {formatDuration(s.duration_seconds)}
+            </span>
+          ) : null}
           {s.credibility_tag && (
             <span className="font-mono text-[10px] uppercase tracking-widest border border-ink/40 px-1.5 py-0.5">
               {s.credibility_tag}

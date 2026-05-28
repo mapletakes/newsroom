@@ -53,6 +53,7 @@ export async function POST(req: NextRequest) {
           title: v.title,
           thumbnail_url: v.thumbnail,
           publisher: v.publisher,
+          duration_seconds: v.durationSeconds,
           position: pos++,
           submitter_login: session.twitchLogin,
         })

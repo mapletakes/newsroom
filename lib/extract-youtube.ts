@@ -94,6 +94,7 @@ export type PlaylistItem = {
   title: string | null;
   thumbnail: string | null;
   publisher: string | null;
+  durationSeconds: number | null;
 };
 
 const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
@@ -129,11 +130,13 @@ function scrapePlaylistItems(html: string): PlaylistItem[] {
     const v = item?.playlistVideoRenderer;
     if (!v?.videoId) continue;
     const thumbs = v.thumbnail?.thumbnails;
+    const lenSecs = v.lengthSeconds ? parseInt(v.lengthSeconds, 10) : NaN;
     out.push({
       url: `https://www.youtube.com/watch?v=${v.videoId}`,
       title: v.title?.runs?.[0]?.text || null,
       thumbnail: Array.isArray(thumbs) ? thumbs[thumbs.length - 1]?.url || null : null,
       publisher: v.shortBylineText?.runs?.[0]?.text || null,
+      durationSeconds: Number.isFinite(lenSecs) ? lenSecs : null,
     });
   }
   return out;
