@@ -264,6 +264,9 @@ export function DeckView({ displayName }: { displayName: string }) {
           <a href="/api/notes?format=markdown" className="underline hover:text-rust">
             Export Notes
           </a>
+          <Link href="/setup" className="underline hover:text-rust">
+            Settings
+          </Link>
           <span>{displayName}</span>
           <DarkModeToggle />
         </div>
