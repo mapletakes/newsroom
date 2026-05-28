@@ -1,8 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useChatListener } from '@/components/useChatListener';
 import { SubmissionCard, type Submission } from '@/components/SubmissionCard';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 
@@ -11,14 +10,12 @@ export function ModView({
   displayName,
   streamDisplayName,
   submitCommand,
-  allowAnyone,
   isMod = false,
 }: {
   channel: string;
   displayName: string;
   streamDisplayName: string;
   submitCommand: string | null;
-  allowAnyone: boolean;
   isMod?: boolean;
 }) {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -34,29 +31,10 @@ export function ModView({
   }, [filter]);
 
   useEffect(() => { refresh(); }, [refresh]);
-  // Poll every 4s so AI summaries pop in
   useEffect(() => {
     const id = setInterval(refresh, 4000);
     return () => clearInterval(id);
   }, [refresh]);
-
-  const onSubmission = useCallback(async (s: {
-    url: string; submitter: string; isSub: boolean; isMod: boolean; isVip: boolean; message: string;
-  }) => {
-    await fetch('/api/queue', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(s),
-    });
-    refresh();
-  }, [refresh]);
-
-  const { status } = useChatListener({
-    channel,
-    submitCommand: submitCommand || undefined,
-    allowAnyone,
-    onSubmission,
-  });
 
   const mutate = async (id: string, patch: Record<string, unknown>) => {
     await fetch('/api/queue', {
@@ -84,14 +62,7 @@ export function ModView({
           / mod triage{isMod && <> · {streamDisplayName}</>}
         </span>
         <div className="ml-auto flex items-center gap-4 font-mono text-xs">
-          <span className="flex items-center gap-2">
-            <span className={`live-dot inline-block w-2 h-2 rounded-full ${
-              status === 'connected' ? 'bg-moss' : status === 'connecting' ? 'bg-ochre' : 'bg-rust'
-            }`} />
-            <span className="uppercase tracking-widest">
-              {status === 'connected' ? `Listening to #${channel}` : status}
-            </span>
-          </span>
+          <span className="uppercase tracking-widest">#{channel}</span>
           <Link href="/choose" className="underline hover:text-rust">Switch Channel</Link>
           {!isMod && <Link href="/deck" className="underline hover:text-rust">Streamer Deck →</Link>}
           {!isMod && <Link href="/setup" className="underline hover:text-rust">Settings</Link>}
@@ -124,7 +95,6 @@ export function ModView({
         </button>
         <span className="ml-auto text-ink/60">
           {displayName} · {submitCommand ? `command: ${submitCommand}` : 'any URL'}
-          {!allowAnyone && ' · subs/vips/mods only'}
         </span>
       </div>
 

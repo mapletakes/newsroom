@@ -8,10 +8,27 @@ import { searchRelatedCoverage } from '@/lib/search-coverage';
 export const maxDuration = 30;
 
 export async function POST(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
-
   const body = await req.json();
+
+  // Authenticate: session cookie (browser) or worker API key (server)
+  let streamId: string;
+  let defaultLogin: string;
+
+  const workerKey = req.headers.get('x-worker-key');
+  if (workerKey) {
+    if (!process.env.WORKER_API_KEY || workerKey !== process.env.WORKER_API_KEY) {
+      return NextResponse.json({ error: 'invalid worker key' }, { status: 401 });
+    }
+    if (!body.stream_id) return NextResponse.json({ error: 'missing stream_id' }, { status: 400 });
+    streamId = body.stream_id;
+    defaultLogin = body.submitter || 'worker';
+  } else {
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
+    streamId = session.streamId;
+    defaultLogin = session.twitchLogin;
+  }
+
   const url = String(body.url || '').trim();
   if (!url) return NextResponse.json({ error: 'missing url' }, { status: 400 });
 
@@ -23,23 +40,23 @@ export async function POST(req: NextRequest) {
   const { data: stream } = await sb
     .from('streams')
     .select('allow_duplicates, ignored_users')
-    .eq('id', session.streamId)
+    .eq('id', streamId)
     .single();
   const allowDuplicates = stream?.allow_duplicates ?? false;
   const ignoredUsers: string[] = stream?.ignored_users ?? [];
 
-  const submitter = String(body.submitter || session.twitchLogin).toLowerCase();
+  const submitter = String(body.submitter || defaultLogin).toLowerCase();
   if (ignoredUsers.includes(submitter)) {
     return NextResponse.json({ ignored: true });
   }
 
   const row = {
-    stream_id: session.streamId,
+    stream_id: streamId,
     url,
     normalized_url: normalized,
     kind,
     status: 'pending' as const,
-    submitter_login: body.submitter || session.twitchLogin,
+    submitter_login: body.submitter || defaultLogin,
     submitter_is_sub: !!body.isSub,
     submitter_is_mod: !!body.isMod,
     submitter_is_vip: !!body.isVip,
@@ -74,7 +91,7 @@ export async function POST(req: NextRequest) {
     const { data: all } = await sb
       .from('submissions')
       .select('id')
-      .eq('stream_id', session.streamId)
+      .eq('stream_id', streamId)
       .eq('normalized_url', normalized)
       .order('created_at', { ascending: true })
       .order('id', { ascending: true });
