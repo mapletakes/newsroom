@@ -315,6 +315,15 @@ export function DeckView({ displayName }: { displayName: string }) {
                 <p className="text-lg leading-relaxed mb-6 max-w-3xl">{active.summary}</p>
               )}
 
+              {active.mod_notes && (
+                <div className="max-w-3xl mb-6 border-l-4 border-ochre bg-ochre/10 px-4 py-3">
+                  <span className="font-mono text-xs uppercase tracking-widest text-ochre block mb-1">
+                    Mod note
+                  </span>
+                  <span className="text-sm">{active.mod_notes}</span>
+                </div>
+              )}
+
               {embedYouTube && (
                 <div className="aspect-video bg-ink mb-6 max-w-3xl">
                   <iframe

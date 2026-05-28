@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useChatListener } from '@/components/useChatListener';
 import { SubmissionCard, type Submission } from '@/components/SubmissionCard';
@@ -146,25 +146,19 @@ export function ModView({
               actions={
                 <>
                   {s.status === 'pending' && (
-                    <>
-                      <button
-                        onClick={() => mutate(s.id, { status: 'approved' })}
-                        className="font-mono text-xs uppercase tracking-widest bg-moss text-paper px-3 py-1.5 hover:opacity-90"
-                      >
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => mutate(s.id, { status: 'rejected' })}
-                        className="font-mono text-xs uppercase tracking-widest border border-ink/40 px-3 py-1.5 hover:bg-ink hover:text-paper"
-                      >
-                        Reject
-                      </button>
-                    </>
+                    <ModActions id={s.id} mutate={mutate} />
                   )}
                   {s.status === 'approved' && (
-                    <span className="font-mono text-xs uppercase tracking-widest text-moss">
-                      ✓ approved · waiting for streamer
-                    </span>
+                    <div className="flex flex-col gap-1 w-full">
+                      <span className="font-mono text-xs uppercase tracking-widest text-moss">
+                        ✓ approved · waiting for streamer
+                      </span>
+                      {s.mod_notes && (
+                        <span className="font-mono text-xs text-ink/60">
+                          Note: {s.mod_notes}
+                        </span>
+                      )}
+                    </div>
                   )}
                   {s.status === 'rejected' && (
                     <button
@@ -188,6 +182,50 @@ export function ModView({
           ))}
         </div>
       </main>
+    </div>
+  );
+}
+
+function ModActions({
+  id,
+  mutate,
+}: {
+  id: string;
+  mutate: (id: string, patch: Record<string, unknown>) => Promise<void>;
+}) {
+  const [note, setNote] = useState('');
+  const [showNote, setShowNote] = useState(false);
+
+  return (
+    <div className="flex flex-col gap-2 w-full">
+      <div className="flex gap-2 flex-wrap items-center">
+        <button
+          onClick={() => mutate(id, { status: 'approved', mod_notes: note || null })}
+          className="font-mono text-xs uppercase tracking-widest bg-moss text-paper px-3 py-1.5 hover:opacity-90"
+        >
+          Approve
+        </button>
+        <button
+          onClick={() => mutate(id, { status: 'rejected' })}
+          className="font-mono text-xs uppercase tracking-widest border border-ink/40 px-3 py-1.5 hover:bg-ink hover:text-paper"
+        >
+          Reject
+        </button>
+        <button
+          onClick={() => setShowNote(!showNote)}
+          className="font-mono text-xs uppercase tracking-widest text-ink/50 hover:text-ink"
+        >
+          {showNote ? '− hide note' : '+ add note'}
+        </button>
+      </div>
+      {showNote && (
+        <input
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="e.g. skip to 4:32, check the replies, paywalled..."
+          className="w-full border border-ink/30 bg-paper px-2 py-1.5 font-mono text-xs focus:outline-none focus:border-ink"
+        />
+      )}
     </div>
   );
 }

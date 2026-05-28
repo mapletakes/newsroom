@@ -14,6 +14,7 @@ type Submission = {
   topics: string[] | null;
   dmca_risk: string | null;
   related_coverage: { title: string; url: string; publisher: string; snippet: string }[] | null;
+  mod_notes: string | null;
   submitter_login: string | null;
   submitter_is_sub: boolean | null;
   submitter_is_mod: boolean | null;
