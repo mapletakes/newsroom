@@ -14,7 +14,8 @@ create table if not exists public.streams (
   submit_command text default '!submit',
   allow_anyone boolean default true, -- if false, only subs/vips/mods
   allow_duplicates boolean default false, -- if true, same URL can be submitted more than once
-  auto_summarize boolean default true
+  auto_summarize boolean default true,
+  ignored_users text[] default '{}'::text[] -- usernames whose links are silently dropped
 );
 
 -- Moderators on a stream

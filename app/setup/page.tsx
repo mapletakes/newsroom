@@ -23,6 +23,7 @@ export default async function SetupPage() {
       submitCommand={stream?.submit_command ?? ''}
       allowAnyone={stream?.allow_anyone ?? true}
       allowDuplicates={stream?.allow_duplicates ?? false}
+      ignoredUsers={stream?.ignored_users ?? []}
     />
   );
 }

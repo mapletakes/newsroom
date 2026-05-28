@@ -9,16 +9,20 @@ export function SetupForm({
   submitCommand,
   allowAnyone,
   allowDuplicates,
+  ignoredUsers,
 }: {
   streamId: string;
   displayName: string;
   submitCommand: string;
   allowAnyone: boolean;
   allowDuplicates: boolean;
+  ignoredUsers: string[];
 }) {
   const [cmd, setCmd] = useState(submitCommand);
   const [open, setOpen] = useState(allowAnyone);
   const [dupes, setDupes] = useState(allowDuplicates);
+  const [ignored, setIgnored] = useState<string[]>(ignoredUsers);
+  const [ignoreInput, setIgnoreInput] = useState('');
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -27,7 +31,7 @@ export function SetupForm({
     const r = await fetch('/api/setup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ submit_command: cmd, allow_anyone: open, allow_duplicates: dupes }),
+      body: JSON.stringify({ submit_command: cmd, allow_anyone: open, allow_duplicates: dupes, ignored_users: ignored }),
     });
     setSaving(false);
     if (r.ok) {
@@ -98,6 +102,62 @@ export function SetupForm({
             </span>
           </span>
         </label>
+
+        <div className="mb-6">
+          <span className="font-mono text-xs uppercase tracking-widest text-ink/60 block mb-2">
+            Ignored usernames
+          </span>
+          <span className="block text-xs text-ink/60 mb-2">
+            Links from these users (e.g. bots) will be silently dropped.
+          </span>
+          <div className="flex gap-1 mb-2">
+            <input
+              value={ignoreInput}
+              onChange={(e) => setIgnoreInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  const name = ignoreInput.trim().toLowerCase();
+                  if (name && !ignored.includes(name)) setIgnored([...ignored, name]);
+                  setIgnoreInput('');
+                }
+              }}
+              placeholder="nightbot"
+              className="flex-1 border border-ink/30 bg-paper p-2 font-mono text-sm focus:outline-none focus:border-ink"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const name = ignoreInput.trim().toLowerCase();
+                if (name && !ignored.includes(name)) setIgnored([...ignored, name]);
+                setIgnoreInput('');
+              }}
+              className="font-mono text-xs uppercase tracking-widest bg-ink text-paper px-3 py-2 hover:bg-rust"
+            >
+              Add
+            </button>
+          </div>
+          {ignored.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {ignored.map((u) => (
+                <span
+                  key={u}
+                  className="inline-flex items-center gap-1 font-mono text-xs bg-ink/10 border border-ink/20 px-2 py-1"
+                >
+                  {u}
+                  <button
+                    type="button"
+                    onClick={() => setIgnored(ignored.filter((x) => x !== u))}
+                    className="text-ink/40 hover:text-rust"
+                    aria-label={`Remove ${u}`}
+                  >
+                    &times;
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
 
         <button
           onClick={save}

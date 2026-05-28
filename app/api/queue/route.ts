@@ -22,10 +22,16 @@ export async function POST(req: NextRequest) {
 
   const { data: stream } = await sb
     .from('streams')
-    .select('allow_duplicates')
+    .select('allow_duplicates, ignored_users')
     .eq('id', session.streamId)
     .single();
   const allowDuplicates = stream?.allow_duplicates ?? false;
+  const ignoredUsers: string[] = stream?.ignored_users ?? [];
+
+  const submitter = String(body.submitter || session.twitchLogin).toLowerCase();
+  if (ignoredUsers.includes(submitter)) {
+    return NextResponse.json({ ignored: true });
+  }
 
   const row = {
     stream_id: session.streamId,
