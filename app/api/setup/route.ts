@@ -19,6 +19,11 @@ export async function POST(req: NextRequest) {
       .map((u: string) => String(u).trim().toLowerCase())
       .filter(Boolean);
   }
+  if (Array.isArray(body.preferred_sources)) {
+    patch.preferred_sources = body.preferred_sources
+      .map((s: string) => String(s).trim().toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, ''))
+      .filter(Boolean);
+  }
 
   const sb = supabaseAdmin();
   const { error } = await sb.from('streams').update(patch).eq('id', session.streamId);

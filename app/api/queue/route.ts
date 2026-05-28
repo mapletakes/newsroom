@@ -140,10 +140,16 @@ export async function PATCH(req: NextRequest) {
       .eq('id', id)
       .single();
     if (sub && !sub.related_coverage && sub.title) {
+      const { data: streamSettings } = await sb
+        .from('streams')
+        .select('preferred_sources')
+        .eq('id', session.streamId)
+        .single();
       const coverage = await searchRelatedCoverage({
         title: sub.title,
         publisher: sub.publisher,
         url: sub.url,
+        preferredSources: streamSettings?.preferred_sources ?? [],
       });
       if (coverage.length > 0) patch.related_coverage = coverage;
     }

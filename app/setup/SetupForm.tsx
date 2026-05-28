@@ -10,6 +10,7 @@ export function SetupForm({
   allowAnyone,
   allowDuplicates,
   ignoredUsers,
+  preferredSources,
 }: {
   streamId: string;
   displayName: string;
@@ -17,12 +18,15 @@ export function SetupForm({
   allowAnyone: boolean;
   allowDuplicates: boolean;
   ignoredUsers: string[];
+  preferredSources: string[];
 }) {
   const [cmd, setCmd] = useState(submitCommand);
   const [open, setOpen] = useState(allowAnyone);
   const [dupes, setDupes] = useState(allowDuplicates);
   const [ignored, setIgnored] = useState<string[]>(ignoredUsers);
   const [ignoreInput, setIgnoreInput] = useState('');
+  const [sources, setSources] = useState<string[]>(preferredSources);
+  const [sourceInput, setSourceInput] = useState('');
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -31,7 +35,7 @@ export function SetupForm({
     const r = await fetch('/api/setup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ submit_command: cmd, allow_anyone: open, allow_duplicates: dupes, ignored_users: ignored }),
+      body: JSON.stringify({ submit_command: cmd, allow_anyone: open, allow_duplicates: dupes, ignored_users: ignored, preferred_sources: sources }),
     });
     setSaving(false);
     if (r.ok) {
@@ -150,6 +154,66 @@ export function SetupForm({
                     onClick={() => setIgnored(ignored.filter((x) => x !== u))}
                     className="text-ink/40 hover:text-rust"
                     aria-label={`Remove ${u}`}
+                  >
+                    &times;
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rule-double my-8" />
+
+        <h2 className="font-display text-2xl font-bold mb-4">Related coverage</h2>
+
+        <div className="mb-6">
+          <span className="font-mono text-xs uppercase tracking-widest text-ink/60 block mb-2">
+            Preferred sources
+          </span>
+          <span className="block text-xs text-ink/60 mb-2">
+            Domains to prioritise when searching for related articles (e.g. reuters.com, apnews.com). Results from these sites will appear first in the streamer deck.
+          </span>
+          <div className="flex gap-1 mb-2">
+            <input
+              value={sourceInput}
+              onChange={(e) => setSourceInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  const domain = sourceInput.trim().toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '');
+                  if (domain && !sources.includes(domain)) setSources([...sources, domain]);
+                  setSourceInput('');
+                }
+              }}
+              placeholder="reuters.com"
+              className="flex-1 border border-ink/30 bg-paper p-2 font-mono text-sm focus:outline-none focus:border-ink"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const domain = sourceInput.trim().toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '');
+                if (domain && !sources.includes(domain)) setSources([...sources, domain]);
+                setSourceInput('');
+              }}
+              className="font-mono text-xs uppercase tracking-widest bg-ink text-paper px-3 py-2 hover:bg-rust"
+            >
+              Add
+            </button>
+          </div>
+          {sources.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {sources.map((s) => (
+                <span
+                  key={s}
+                  className="inline-flex items-center gap-1 font-mono text-xs bg-ink/10 border border-ink/20 px-2 py-1"
+                >
+                  {s}
+                  <button
+                    type="button"
+                    onClick={() => setSources(sources.filter((x) => x !== s))}
+                    className="text-ink/40 hover:text-rust"
+                    aria-label={`Remove ${s}`}
                   >
                     &times;
                   </button>
