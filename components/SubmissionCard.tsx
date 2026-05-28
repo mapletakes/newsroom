@@ -18,6 +18,8 @@ type Submission = {
   dmca_risk: string | null;
   related_coverage: { title: string; url: string; publisher: string; snippet: string }[] | null;
   mod_notes: string | null;
+  segment_id: string | null;
+  position: number | null;
   submitter_login: string | null;
   submitter_is_sub: boolean | null;
   submitter_is_mod: boolean | null;

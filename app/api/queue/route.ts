@@ -92,6 +92,24 @@ export async function PATCH(req: NextRequest) {
 
   const sb = supabaseAdmin();
 
+  // Assign to a segment (or back to ungrouped). Append to the end of the
+  // target group so it lands at the bottom of that segment.
+  if ('segment_id' in body) {
+    const targetSeg: string | null = body.segment_id || null;
+    patch.segment_id = targetSeg;
+    let posQ = sb
+      .from('submissions')
+      .select('position')
+      .eq('stream_id', session.streamId)
+      .eq('status', 'approved');
+    posQ = targetSeg ? posQ.eq('segment_id', targetSeg) : posQ.is('segment_id', null);
+    const { data: last } = await posQ
+      .order('position', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    patch.position = (last?.position ?? 0) + 1;
+  }
+
   // On approval, fetch related coverage before writing
   if (body.status === 'approved') {
     const { data: sub } = await sb
