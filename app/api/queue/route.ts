@@ -57,24 +57,26 @@ export async function POST(req: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     submission = data;
   } else {
-    // Check for existing submission with same URL
-    const { data: existing } = await sb
+    // Use upsert to avoid race conditions when multiple listeners
+    // submit the same URL simultaneously. ON CONFLICT does nothing,
+    // then we fetch the existing row.
+    const { data, error } = await sb
       .from('submissions')
-      .select('*')
-      .eq('stream_id', session.streamId)
-      .eq('normalized_url', normalized)
-      .maybeSingle();
+      .upsert(row, { onConflict: 'stream_id,normalized_url', ignoreDuplicates: true })
+      .select()
+      .single();
 
-    if (existing) {
-      submission = existing;
-    } else {
-      const { data, error } = await sb
-        .from('submissions')
-        .insert(row)
-        .select()
-        .single();
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (data) {
       submission = data;
+    } else {
+      // ignoreDuplicates returns no rows on conflict — fetch existing
+      const { data: existing } = await sb
+        .from('submissions')
+        .select('*')
+        .eq('stream_id', session.streamId)
+        .eq('normalized_url', normalized)
+        .maybeSingle();
+      submission = existing;
     }
   }
 

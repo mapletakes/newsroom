@@ -27,9 +27,21 @@ export type ChatListenerOptions = {
 export class ChatListener {
   private client: tmi.Client | null = null;
   private opts: ChatListenerOptions;
+  private recentUrls = new Map<string, number>(); // normalized URL → timestamp
 
   constructor(opts: ChatListenerOptions) {
     this.opts = opts;
+  }
+
+  private isDuplicate(normalizedUrl: string): boolean {
+    const now = Date.now();
+    // Clean entries older than 60 seconds
+    for (const [k, t] of this.recentUrls) {
+      if (now - t > 60_000) this.recentUrls.delete(k);
+    }
+    if (this.recentUrls.has(normalizedUrl)) return true;
+    this.recentUrls.set(normalizedUrl, now);
+    return false;
   }
 
   async start() {
@@ -63,6 +75,7 @@ export class ChatListener {
       const urls = extractUrlsFromMessage(payload);
       for (const u of urls) {
         const normalized = normalizeUrl(u);
+        if (this.isDuplicate(normalized)) continue;
         this.opts.onSubmission({
           url: u,
           normalizedUrl: normalized,
