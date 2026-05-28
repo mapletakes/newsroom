@@ -7,10 +7,12 @@ export async function POST() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
 
+  // Permanently remove pending items so the "all" tab doesn't accumulate
+  // hundreds of dead links. Approved/played items are untouched.
   const sb = supabaseAdmin();
   const { error } = await sb
     .from('submissions')
-    .update({ status: 'rejected' })
+    .delete()
     .eq('stream_id', session.streamId)
     .eq('status', 'pending');
 

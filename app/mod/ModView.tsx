@@ -23,6 +23,11 @@ export function ModView({
 }) {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [filter, setFilter] = useState<'pending' | 'approved' | 'all'>('pending');
+  const [counts, setCounts] = useState<{ pending: number; approved: number; total: number }>({
+    pending: 0,
+    approved: 0,
+    total: 0,
+  });
 
   const refresh = useCallback(async () => {
     const url = filter === 'all' ? '/api/queue' : `/api/queue?status=${filter}`;
@@ -30,6 +35,7 @@ export function ModView({
     if (r.ok) {
       const data = await r.json();
       setSubmissions(data.submissions || []);
+      if (data.counts) setCounts(data.counts);
     }
   }, [filter]);
 
@@ -53,13 +59,8 @@ export function ModView({
     refresh();
   };
 
-  const counts = submissions.reduce(
-    (acc, s) => {
-      acc[s.status] = (acc[s.status] || 0) + 1;
-      return acc;
-    },
-    {} as Record<string, number>,
-  );
+  const tabCount = (k: 'pending' | 'approved' | 'all') =>
+    k === 'pending' ? counts.pending : k === 'approved' ? counts.approved : counts.total;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -88,12 +89,12 @@ export function ModView({
               filter === k ? 'bg-ink text-paper border-ink' : 'border-ink/30 hover:border-ink'
             }`}
           >
-            {k} ({k === 'all' ? submissions.length : counts[k] || 0})
+            {k} ({tabCount(k)})
           </button>
         ))}
         <button
           onClick={async () => {
-            if (!window.confirm('Are you sure? This will reject all pending submissions. Items already approved for the streamer deck are not affected.')) return;
+            if (!window.confirm('Clear all pending submissions? This permanently removes them from the queue. Items already approved for the streamer deck are not affected.')) return;
             await fetch('/api/queue/clear', { method: 'POST' });
             refresh();
           }}

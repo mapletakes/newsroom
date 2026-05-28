@@ -45,7 +45,25 @@ export async function GET(req: NextRequest) {
   if (status) q = q.eq('status', status);
   const { data, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ submissions: data || [] });
+
+  // Accurate status counts for the tab labels, independent of the active filter.
+  const [pending, approved, total] = await Promise.all([
+    sb.from('submissions').select('*', { count: 'exact', head: true })
+      .eq('stream_id', session.streamId).eq('status', 'pending'),
+    sb.from('submissions').select('*', { count: 'exact', head: true })
+      .eq('stream_id', session.streamId).eq('status', 'approved'),
+    sb.from('submissions').select('*', { count: 'exact', head: true })
+      .eq('stream_id', session.streamId),
+  ]);
+
+  return NextResponse.json({
+    submissions: data || [],
+    counts: {
+      pending: pending.count ?? 0,
+      approved: approved.count ?? 0,
+      total: total.count ?? 0,
+    },
+  });
 }
 
 export async function PATCH(req: NextRequest) {
