@@ -22,10 +22,11 @@ export function ModView({
   isMod?: boolean;
 }) {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
-  const [filter, setFilter] = useState<'pending' | 'approved' | 'all'>('pending');
-  const [counts, setCounts] = useState<{ pending: number; approved: number; rejected: number; total: number }>({
+  const [filter, setFilter] = useState<'pending' | 'approved' | 'played' | 'all'>('pending');
+  const [counts, setCounts] = useState<{ pending: number; approved: number; played: number; rejected: number; total: number }>({
     pending: 0,
     approved: 0,
+    played: 0,
     rejected: 0,
     total: 0,
   });
@@ -60,12 +61,18 @@ export function ModView({
     refresh();
   };
 
-  const tabCount = (k: 'pending' | 'approved' | 'all') =>
-    k === 'pending' ? counts.pending : k === 'approved' ? counts.approved : counts.total;
+  const tabCount = (k: 'pending' | 'approved' | 'played' | 'all') =>
+    k === 'all' ? counts.total : counts[k];
 
-  const clear = async (status: 'pending' | 'rejected') => {
-    const label = status === 'pending' ? 'pending submissions' : 'rejected links';
-    if (!window.confirm(`Permanently delete all ${label}? This can't be undone. Approved deck items are not affected.`)) return;
+  const clear = async (status: 'pending' | 'rejected' | 'played') => {
+    const label =
+      status === 'pending' ? 'pending submissions' :
+      status === 'rejected' ? 'rejected links' :
+      'played items';
+    const extra = status === 'played'
+      ? ' Your exported show notes are kept.'
+      : ' Approved deck items are not affected.';
+    if (!window.confirm(`Permanently delete all ${label}? This can't be undone.${extra}`)) return;
     await fetch('/api/queue/clear', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -93,7 +100,7 @@ export function ModView({
 
       {/* Filter tabs */}
       <div className="px-6 py-3 border-b border-ink/20 flex items-center gap-1 flex-wrap font-mono text-xs uppercase">
-        {(['pending', 'approved', 'all'] as const).map((k) => (
+        {(['pending', 'approved', 'played', 'all'] as const).map((k) => (
           <button
             key={k}
             onClick={() => setFilter(k)}
@@ -116,6 +123,14 @@ export function ModView({
             className="px-3 py-1.5 tracking-widest border border-rust/50 text-rust hover:bg-rust hover:text-paper transition-colors"
           >
             Clear rejected ({counts.rejected})
+          </button>
+        )}
+        {counts.played > 0 && (
+          <button
+            onClick={() => clear('played')}
+            className="px-3 py-1.5 tracking-widest border border-rust/50 text-rust hover:bg-rust hover:text-paper transition-colors"
+          >
+            Clear played ({counts.played})
           </button>
         )}
         <span className="ml-auto text-ink/60">
@@ -162,6 +177,11 @@ export function ModView({
                     >
                       Unreject
                     </button>
+                  )}
+                  {s.status === 'played' && (
+                    <span className="font-mono text-xs uppercase tracking-widest text-ink/50">
+                      ▶ played on air
+                    </span>
                   )}
                   <a
                     href={s.url}

@@ -3,9 +3,10 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getSession } from '@/lib/session';
 import { broadcastQueueChange } from '@/lib/realtime';
 
-// Only these statuses can be bulk-cleared. Approved/played are protected
-// (they're the streamer deck and show-notes history).
-const CLEARABLE = new Set(['pending', 'rejected']);
+// Only these statuses can be bulk-cleared. Approved is protected (it's the
+// live streamer deck). Played submissions can be cleared — the show-notes
+// export lives in a separate table and is preserved.
+const CLEARABLE = new Set(['pending', 'rejected', 'played']);
 
 export async function POST(req: NextRequest) {
   const session = await getSession();

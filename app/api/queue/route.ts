@@ -47,11 +47,13 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Accurate status counts for the tab labels, independent of the active filter.
-  const [pending, approved, rejected, total] = await Promise.all([
+  const [pending, approved, played, rejected, total] = await Promise.all([
     sb.from('submissions').select('*', { count: 'exact', head: true })
       .eq('stream_id', session.streamId).eq('status', 'pending'),
     sb.from('submissions').select('*', { count: 'exact', head: true })
       .eq('stream_id', session.streamId).eq('status', 'approved'),
+    sb.from('submissions').select('*', { count: 'exact', head: true })
+      .eq('stream_id', session.streamId).eq('status', 'played'),
     sb.from('submissions').select('*', { count: 'exact', head: true })
       .eq('stream_id', session.streamId).eq('status', 'rejected'),
     sb.from('submissions').select('*', { count: 'exact', head: true })
@@ -63,6 +65,7 @@ export async function GET(req: NextRequest) {
     counts: {
       pending: pending.count ?? 0,
       approved: approved.count ?? 0,
+      played: played.count ?? 0,
       rejected: rejected.count ?? 0,
       total: total.count ?? 0,
     },
