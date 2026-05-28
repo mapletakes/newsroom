@@ -31,15 +31,16 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const name = (typeof body.name === 'string' && body.name.trim()) || 'New segment';
 
+  // Place new segments at the top (lowest position) so they're easy to find.
   const sb = supabaseAdmin();
-  const { data: last } = await sb
+  const { data: first } = await sb
     .from('segments')
     .select('position')
     .eq('stream_id', session.streamId)
-    .order('position', { ascending: false })
+    .order('position', { ascending: true })
     .limit(1)
     .maybeSingle();
-  const position = (last?.position ?? 0) + 1;
+  const position = (first?.position ?? 1) - 1;
 
   const { data, error } = await sb
     .from('segments')
