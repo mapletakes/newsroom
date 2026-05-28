@@ -11,9 +11,8 @@ export default function Login({ searchParams }: { searchParams: { error?: string
         <h1 className="font-display text-4xl font-bold mb-2">Sign in</h1>
         <div className="rule-double mb-6" />
         <p className="mb-8 leading-relaxed">
-          Newsroom uses your Twitch account to read your chat. We request
-          <span className="font-mono"> chat:read </span>
-          only — we can&apos;t post, ban, or change anything.
+          Newsroom connects to your Twitch chat to capture links. We request
+          read-only access — we can&apos;t post, ban, or change anything.
         </p>
         {errMsg && (
           <div className="border-2 border-rust text-rust px-4 py-3 mb-6 font-mono text-sm">
