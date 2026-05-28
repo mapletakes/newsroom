@@ -23,9 +23,10 @@ export function ModView({
 }) {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [filter, setFilter] = useState<'pending' | 'approved' | 'all'>('pending');
-  const [counts, setCounts] = useState<{ pending: number; approved: number; total: number }>({
+  const [counts, setCounts] = useState<{ pending: number; approved: number; rejected: number; total: number }>({
     pending: 0,
     approved: 0,
+    rejected: 0,
     total: 0,
   });
 
@@ -62,6 +63,17 @@ export function ModView({
   const tabCount = (k: 'pending' | 'approved' | 'all') =>
     k === 'pending' ? counts.pending : k === 'approved' ? counts.approved : counts.total;
 
+  const clear = async (status: 'pending' | 'rejected') => {
+    const label = status === 'pending' ? 'pending submissions' : 'rejected links';
+    if (!window.confirm(`Permanently delete all ${label}? This can't be undone. Approved deck items are not affected.`)) return;
+    await fetch('/api/queue/clear', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    refresh();
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       {/* Bar */}
@@ -93,15 +105,19 @@ export function ModView({
           </button>
         ))}
         <button
-          onClick={async () => {
-            if (!window.confirm('Clear all pending submissions? This permanently removes them from the queue. Items already approved for the streamer deck are not affected.')) return;
-            await fetch('/api/queue/clear', { method: 'POST' });
-            refresh();
-          }}
+          onClick={() => clear('pending')}
           className="px-3 py-1.5 tracking-widest border border-rust/50 text-rust hover:bg-rust hover:text-paper transition-colors"
         >
-          Clear queue
+          Clear pending
         </button>
+        {counts.rejected > 0 && (
+          <button
+            onClick={() => clear('rejected')}
+            className="px-3 py-1.5 tracking-widest border border-rust/50 text-rust hover:bg-rust hover:text-paper transition-colors"
+          >
+            Clear rejected ({counts.rejected})
+          </button>
+        )}
         <span className="ml-auto text-ink/60">
           {displayName} · {submitCommand ? `command: ${submitCommand}` : 'any URL'}
         </span>
