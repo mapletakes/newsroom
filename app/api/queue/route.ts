@@ -75,6 +75,29 @@ export async function POST(req: NextRequest) {
         .single();
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
       submission = data;
+
+      // Race-condition cleanup: if multiple listeners inserted the same
+      // URL simultaneously, keep the oldest and delete the rest.
+      const { data: dupes } = await sb
+        .from('submissions')
+        .select('id')
+        .eq('stream_id', session.streamId)
+        .eq('normalized_url', normalized)
+        .order('created_at', { ascending: true });
+
+      if (dupes && dupes.length > 1) {
+        const keepId = dupes[0].id;
+        const deleteIds = dupes.slice(1).map((d) => d.id);
+        await sb.from('submissions').delete().in('id', deleteIds);
+        if (data.id !== keepId) {
+          const { data: kept } = await sb
+            .from('submissions')
+            .select('*')
+            .eq('id', keepId)
+            .maybeSingle();
+          submission = kept;
+        }
+      }
     }
   }
 
