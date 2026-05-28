@@ -21,11 +21,15 @@ export async function POST(req: NextRequest) {
   const msgSig = req.headers.get('twitch-eventsub-message-signature') || '';
   const msgType = req.headers.get('twitch-eventsub-message-type') || '';
 
+  console.log('EventSub webhook hit:', { msgType, msgId, hasBody: rawBody.length > 0 });
+
   // ── Verify signature ──────────────────────────────────────────
   if (!verifySignature(msgId, msgTs, rawBody, msgSig)) {
+    console.error('EventSub signature verification FAILED');
     return new NextResponse('invalid signature', { status: 403 });
   }
   if (!isTimestampFresh(msgTs)) {
+    console.error('EventSub stale timestamp:', msgTs);
     return new NextResponse('stale timestamp', { status: 403 });
   }
 
@@ -33,6 +37,7 @@ export async function POST(req: NextRequest) {
 
   // ── Verification challenge (subscription creation handshake) ──
   if (msgType === VERIFICATION) {
+    console.log('EventSub verification challenge received, responding with challenge');
     return new NextResponse(body.challenge, {
       status: 200,
       headers: { 'Content-Type': 'text/plain' },
