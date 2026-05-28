@@ -57,12 +57,24 @@ export function signOAuthState(): string {
 }
 
 export function verifyOAuthState(state: string): boolean {
+  return verifyOAuthStateDetailed(state).valid;
+}
+
+/** Same as verifyOAuthState but returns the failure reason for diagnostics. */
+export function verifyOAuthStateDetailed(state: string): {
+  valid: boolean;
+  reason: 'ok' | 'bad-parts' | 'bad-sig' | 'future' | 'expired';
+  ageMs?: number;
+} {
   const parts = state.split('.');
-  if (parts.length !== 3) return false;
+  if (parts.length !== 3) return { valid: false, reason: 'bad-parts' };
   const [ts, nonce, sig] = parts;
-  if (sign(`${ts}.${nonce}`) !== sig) return false;
+  if (sign(`${ts}.${nonce}`) !== sig) return { valid: false, reason: 'bad-sig' };
   const age = Date.now() - parseInt(ts, 36);
-  return age >= 0 && age < 600_000; // valid for 10 minutes
+  // Allow small negative skew across regions; reject anything clearly from the future.
+  if (age < -30_000) return { valid: false, reason: 'future', ageMs: age };
+  if (age >= 1_800_000) return { valid: false, reason: 'expired', ageMs: age }; // 30 min
+  return { valid: true, reason: 'ok', ageMs: age };
 }
 
 export async function clearSession() {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { exchangeCode, fetchTwitchUser, fetchModeratedChannels } from '@/lib/twitch-oauth';
 import { createChatSubscription } from '@/lib/twitch-eventsub';
 import { supabaseAdmin } from '@/lib/supabase';
-import { buildSessionCookie, verifyOAuthState } from '@/lib/session';
+import { buildSessionCookie, verifyOAuthStateDetailed } from '@/lib/session';
 
 export async function GET(req: NextRequest) {
   // Twitch redirects with ?error=... when authorization fails (e.g. denied, invalid scope)
@@ -18,8 +18,14 @@ export async function GET(req: NextRequest) {
 
   const code = req.nextUrl.searchParams.get('code');
   const state = req.nextUrl.searchParams.get('state');
-  if (!code || !state || !verifyOAuthState(state)) {
-    console.error('OAuth state check failed:', { hasCode: !!code, hasState: !!state, stateValid: state ? verifyOAuthState(state) : false });
+  const stateCheck = state ? verifyOAuthStateDetailed(state) : { valid: false, reason: 'bad-parts' as const };
+  if (!code || !state || !stateCheck.valid) {
+    console.error('OAuth state check failed:', {
+      hasCode: !!code,
+      hasState: !!state,
+      reason: stateCheck.reason,
+      ageMs: 'ageMs' in stateCheck ? stateCheck.ageMs : undefined,
+    });
     return new NextResponse(null, {
       status: 302,
       headers: { Location: new URL('/login?error=state', req.url).toString() },
