@@ -269,17 +269,21 @@ export function SetupForm({
 // ── EventSub status widget ──────────────────────────────────────
 
 function EventSubStatus() {
-  const [status, setStatus] = useState<'loading' | 'connected' | 'disconnected' | 'error'>('loading');
+  const [status, setStatus] = useState<’loading’ | ‘connected’ | ‘disconnected’ | ‘error’>(‘loading’);
+  const [detail, setDetail] = useState<string | null>(null);
   const [reconnecting, setReconnecting] = useState(false);
 
   const check = async () => {
     try {
-      const r = await fetch('/api/twitch/eventsub/status');
-      if (!r.ok) { setStatus('error'); return; }
+      const r = await fetch(‘/api/twitch/eventsub/status’);
+      if (!r.ok) { setStatus(‘error’); setDetail(`HTTP ${r.status}`); return; }
       const data = await r.json();
-      setStatus(data.connected ? 'connected' : 'disconnected');
+      setStatus(data.connected ? ‘connected’ : ‘disconnected’);
+      if (!data.connected && data.status && data.status !== ‘none’) {
+        setDetail(`Subscription status: ${data.status}`);
+      }
     } catch {
-      setStatus('error');
+      setStatus(‘error’);
     }
   };
 
@@ -287,37 +291,54 @@ function EventSubStatus() {
 
   const reconnect = async () => {
     setReconnecting(true);
+    setDetail(null);
     try {
-      await fetch('/api/twitch/eventsub/status', { method: 'POST' });
-      await new Promise((r) => setTimeout(r, 2000)); // give Twitch a moment
-      await check();
+      const r = await fetch(‘/api/twitch/eventsub/status’, { method: ‘POST’ });
+      const data = await r.json();
+      if (data.error) {
+        setDetail(data.error);
+        setStatus(‘error’);
+      } else if (data.ok) {
+        setDetail(`Callback: ${data.callbackUrl}`);
+        // Give Twitch time to verify the webhook
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        await check();
+      }
+    } catch (err) {
+      setDetail(String(err));
+      setStatus(‘error’);
     } finally {
       setReconnecting(false);
     }
   };
 
   const dot =
-    status === 'connected' ? 'bg-moss' :
-    status === 'loading' ? 'bg-ochre animate-pulse' :
-    'bg-rust';
+    status === ‘connected’ ? ‘bg-moss’ :
+    status === ‘loading’ ? ‘bg-ochre animate-pulse’ :
+    ‘bg-rust’;
 
   return (
-    <div className="flex items-center gap-3 flex-wrap">
-      <span className={`inline-block w-2.5 h-2.5 rounded-full ${dot}`} />
-      <span className="font-mono text-sm">
-        {status === 'loading' && 'Checking…'}
-        {status === 'connected' && 'Twitch chat connected via EventSub'}
-        {status === 'disconnected' && 'Not connected — chat links won’t be captured'}
-        {status === 'error' && 'Unable to check status'}
-      </span>
-      {(status === 'disconnected' || status === 'error') && (
-        <button
-          onClick={reconnect}
-          disabled={reconnecting}
-          className="font-mono text-xs uppercase tracking-widest border border-ink/40 px-3 py-1.5 hover:bg-ink hover:text-paper disabled:opacity-50"
-        >
-          {reconnecting ? 'Connecting…' : 'Reconnect'}
-        </button>
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-3 flex-wrap">
+        <span className={`inline-block w-2.5 h-2.5 rounded-full ${dot}`} />
+        <span className="font-mono text-sm">
+          {status === ‘loading’ && ‘Checking…’}
+          {status === ‘connected’ && ‘Twitch chat connected via EventSub’}
+          {status === ‘disconnected’ && ‘Not connected — chat links won’t be captured’}
+          {status === ‘error’ && ‘Unable to connect’}
+        </span>
+        {(status === ‘disconnected’ || status === ‘error’) && (
+          <button
+            onClick={reconnect}
+            disabled={reconnecting}
+            className="font-mono text-xs uppercase tracking-widest border border-ink/40 px-3 py-1.5 hover:bg-ink hover:text-paper disabled:opacity-50"
+          >
+            {reconnecting ? ‘Connecting…’ : ‘Reconnect’}
+          </button>
+        )}
+      </div>
+      {detail && (status === ‘error’ || status === ‘disconnected’) && (
+        <div className="font-mono text-xs text-rust/80 break-all">{detail}</div>
       )}
     </div>
   );

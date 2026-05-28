@@ -47,6 +47,20 @@ export async function POST() {
     return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   }
 
+  // Pre-flight: check required env vars
+  const missing: string[] = [];
+  if (!process.env.NEXT_PUBLIC_APP_URL) missing.push('NEXT_PUBLIC_APP_URL');
+  if (!process.env.EVENTSUB_SECRET) missing.push('EVENTSUB_SECRET');
+  if (!process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID) missing.push('NEXT_PUBLIC_TWITCH_CLIENT_ID');
+  if (!process.env.TWITCH_CLIENT_SECRET) missing.push('TWITCH_CLIENT_SECRET');
+  if (missing.length > 0) {
+    return NextResponse.json({
+      ok: false,
+      error: `Missing env vars: ${missing.join(', ')}`,
+      callbackUrl: null,
+    });
+  }
+
   const sb = supabaseAdmin();
   const { data: stream } = await sb
     .from('streams')
@@ -55,11 +69,24 @@ export async function POST() {
     .single();
   if (!stream) return NextResponse.json({ error: 'stream not found' }, { status: 404 });
 
+  const callbackUrl = `${(process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/+$/, '')}/api/twitch/eventsub`;
+
   try {
     const id = await createChatSubscription(stream.twitch_user_id);
-    return NextResponse.json({ ok: !!id, subscriptionId: id });
-  } catch (err) {
-    console.error('EventSub reconnect failed:', err);
-    return NextResponse.json({ error: 'failed to create subscription' }, { status: 500 });
+    return NextResponse.json({
+      ok: !!id,
+      subscriptionId: id,
+      callbackUrl,
+      twitchUserId: stream.twitch_user_id,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('EventSub reconnect failed:', message);
+    return NextResponse.json({
+      ok: false,
+      error: message,
+      callbackUrl,
+      twitchUserId: stream.twitch_user_id,
+    });
   }
 }
