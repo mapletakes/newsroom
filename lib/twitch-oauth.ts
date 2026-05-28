@@ -20,6 +20,7 @@ export async function exchangeCode(code: string): Promise<{
   access_token: string;
   refresh_token: string;
   expires_in: number;
+  scope: string[];
 }> {
   const clientId = process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID!;
   const clientSecret = process.env.TWITCH_CLIENT_SECRET!;
@@ -37,7 +38,9 @@ export async function exchangeCode(code: string): Promise<{
     body,
   });
   if (!r.ok) throw new Error(`Twitch token exchange failed: ${r.status}`);
-  return r.json();
+  const data = await r.json();
+  console.log('Twitch OAuth scopes granted:', data.scope);
+  return data;
 }
 
 export async function fetchTwitchUser(accessToken: string): Promise<{

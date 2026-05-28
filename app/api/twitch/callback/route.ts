@@ -81,10 +81,16 @@ export async function GET(req: NextRequest) {
     const hasModChannels = modRows && modRows.length > 0;
 
     // Register EventSub webhook so Twitch pushes chat messages to us.
-    // Idempotent — Twitch returns 409 if the subscription already exists.
-    createChatSubscription(user.id).catch((err) =>
-      console.error('EventSub subscription failed:', err),
-    );
+    // Only attempt if the required scope was actually granted.
+    const grantedScopes = tokens.scope || [];
+    console.log('OAuth granted scopes:', grantedScopes, 'for user:', user.id, user.login);
+    if (grantedScopes.includes('user:read:chat')) {
+      createChatSubscription(user.id).catch((err) =>
+        console.error('EventSub subscription failed:', err),
+      );
+    } else {
+      console.warn('user:read:chat scope NOT granted. Got:', grantedScopes);
+    }
 
     // Default session: logged in as streamer on their own channel
     const session = buildSessionCookie({
