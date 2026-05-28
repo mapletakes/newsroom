@@ -228,9 +228,9 @@ export function SetupForm({
           disabled={saving}
           className="font-mono text-sm uppercase tracking-widest bg-ink text-paper px-6 py-3 hover:bg-rust disabled:opacity-50"
         >
-          {saving ? 'Saving…' : 'Save'}
+          {saving ? 'Saving...' : 'Save'}
         </button>
-        {saved && <span className="ml-3 font-mono text-xs text-moss">✓ saved</span>}
+        {saved && <span className="ml-3 font-mono text-xs text-moss">Saved</span>}
       </section>
 
       <section className="mb-10">
@@ -257,33 +257,35 @@ export function SetupForm({
       <section>
         <h2 className="font-display text-2xl font-bold mb-4">Quick links</h2>
         <div className="space-y-2 font-mono text-sm">
-          <div><Link href="/deck" className="underline hover:text-rust">→ Streamer Deck</Link></div>
-          <div><Link href="/mod" className="underline hover:text-rust">→ Mod Triage</Link></div>
-          <div><a href="/api/notes?format=markdown" className="underline hover:text-rust">→ Export show notes (Markdown)</a></div>
+          <div><Link href="/deck" className="underline hover:text-rust">-&gt; Streamer Deck</Link></div>
+          <div><Link href="/mod" className="underline hover:text-rust">-&gt; Mod Triage</Link></div>
+          <div><a href="/api/notes?format=markdown" className="underline hover:text-rust">-&gt; Export show notes (Markdown)</a></div>
         </div>
       </section>
     </div>
   );
 }
 
-// ── EventSub status widget ──────────────────────────────────────
+// -- EventSub status widget --
+
+type ESStatus = 'loading' | 'connected' | 'disconnected' | 'error';
 
 function EventSubStatus() {
-  const [status, setStatus] = useState<’loading’ | ‘connected’ | ‘disconnected’ | ‘error’>(‘loading’);
+  const [status, setStatus] = useState<ESStatus>('loading');
   const [detail, setDetail] = useState<string | null>(null);
   const [reconnecting, setReconnecting] = useState(false);
 
   const check = async () => {
     try {
-      const r = await fetch(‘/api/twitch/eventsub/status’);
-      if (!r.ok) { setStatus(‘error’); setDetail(`HTTP ${r.status}`); return; }
+      const r = await fetch('/api/twitch/eventsub/status');
+      if (!r.ok) { setStatus('error'); setDetail('HTTP ' + r.status); return; }
       const data = await r.json();
-      setStatus(data.connected ? ‘connected’ : ‘disconnected’);
-      if (!data.connected && data.status && data.status !== ‘none’) {
-        setDetail(`Subscription status: ${data.status}`);
+      setStatus(data.connected ? 'connected' : 'disconnected');
+      if (!data.connected && data.status && data.status !== 'none') {
+        setDetail('Subscription status: ' + data.status);
       }
     } catch {
-      setStatus(‘error’);
+      setStatus('error');
     }
   };
 
@@ -293,51 +295,50 @@ function EventSubStatus() {
     setReconnecting(true);
     setDetail(null);
     try {
-      const r = await fetch(‘/api/twitch/eventsub/status’, { method: ‘POST’ });
+      const r = await fetch('/api/twitch/eventsub/status', { method: 'POST' });
       const data = await r.json();
       if (data.error) {
         setDetail(data.error);
-        setStatus(‘error’);
+        setStatus('error');
       } else if (data.ok) {
-        setDetail(`Callback: ${data.callbackUrl}`);
-        // Give Twitch time to verify the webhook
+        setDetail('Callback: ' + data.callbackUrl);
         await new Promise((resolve) => setTimeout(resolve, 3000));
         await check();
       }
     } catch (err) {
       setDetail(String(err));
-      setStatus(‘error’);
+      setStatus('error');
     } finally {
       setReconnecting(false);
     }
   };
 
   const dot =
-    status === ‘connected’ ? ‘bg-moss’ :
-    status === ‘loading’ ? ‘bg-ochre animate-pulse’ :
-    ‘bg-rust’;
+    status === 'connected' ? 'bg-moss' :
+    status === 'loading' ? 'bg-ochre animate-pulse' :
+    'bg-rust';
 
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-3 flex-wrap">
-        <span className={`inline-block w-2.5 h-2.5 rounded-full ${dot}`} />
+        <span className={['inline-block w-2.5 h-2.5 rounded-full', dot].join(' ')} />
         <span className="font-mono text-sm">
-          {status === ‘loading’ && ‘Checking…’}
-          {status === ‘connected’ && ‘Twitch chat connected via EventSub’}
-          {status === ‘disconnected’ && ‘Not connected — chat links won’t be captured’}
-          {status === ‘error’ && ‘Unable to connect’}
+          {status === 'loading' && 'Checking...'}
+          {status === 'connected' && 'Twitch chat connected via EventSub'}
+          {status === 'disconnected' && 'Not connected -- chat links will not be captured'}
+          {status === 'error' && 'Unable to connect'}
         </span>
-        {(status === ‘disconnected’ || status === ‘error’) && (
+        {(status === 'disconnected' || status === 'error') && (
           <button
             onClick={reconnect}
             disabled={reconnecting}
             className="font-mono text-xs uppercase tracking-widest border border-ink/40 px-3 py-1.5 hover:bg-ink hover:text-paper disabled:opacity-50"
           >
-            {reconnecting ? ‘Connecting…’ : ‘Reconnect’}
+            {reconnecting ? 'Connecting...' : 'Reconnect'}
           </button>
         )}
       </div>
-      {detail && (status === ‘error’ || status === ‘disconnected’) && (
+      {detail && (status === 'error' || status === 'disconnected') && (
         <div className="font-mono text-xs text-rust/80 break-all">{detail}</div>
       )}
     </div>
