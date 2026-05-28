@@ -5,9 +5,21 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { buildSessionCookie, verifyOAuthState } from '@/lib/session';
 
 export async function GET(req: NextRequest) {
+  // Twitch redirects with ?error=... when authorization fails (e.g. denied, invalid scope)
+  const twitchError = req.nextUrl.searchParams.get('error');
+  if (twitchError) {
+    const desc = req.nextUrl.searchParams.get('error_description') || twitchError;
+    console.error('Twitch OAuth error:', twitchError, desc);
+    return new NextResponse(null, {
+      status: 302,
+      headers: { Location: new URL(`/login?error=oauth&detail=${encodeURIComponent(desc)}`, req.url).toString() },
+    });
+  }
+
   const code = req.nextUrl.searchParams.get('code');
   const state = req.nextUrl.searchParams.get('state');
   if (!code || !state || !verifyOAuthState(state)) {
+    console.error('OAuth state check failed:', { hasCode: !!code, hasState: !!state, stateValid: state ? verifyOAuthState(state) : false });
     return new NextResponse(null, {
       status: 302,
       headers: { Location: new URL('/login?error=state', req.url).toString() },

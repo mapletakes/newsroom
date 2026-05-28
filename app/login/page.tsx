@@ -1,9 +1,10 @@
-export default function Login({ searchParams }: { searchParams: { error?: string } }) {
+export default function Login({ searchParams }: { searchParams: { error?: string; detail?: string } }) {
   const errorMap: Record<string, string> = {
     state: 'OAuth state mismatch — please try again.',
-    oauth: 'Twitch sign-in failed. Check your client ID/secret.',
+    oauth: 'Twitch sign-in failed.',
   };
-  const errMsg = searchParams.error && errorMap[searchParams.error];
+  const errMsg = searchParams.error && (errorMap[searchParams.error] || searchParams.error);
+  const detail = searchParams.detail;
 
   return (
     <main className="min-h-screen flex items-center justify-center px-6">
@@ -17,6 +18,7 @@ export default function Login({ searchParams }: { searchParams: { error?: string
         {errMsg && (
           <div className="border-2 border-rust text-rust px-4 py-3 mb-6 font-mono text-sm">
             {errMsg}
+            {detail && <div className="mt-1 text-xs opacity-75">{detail}</div>}
           </div>
         )}
         <a
