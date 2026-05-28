@@ -112,6 +112,16 @@ export function ModView({
             {k} ({k === 'all' ? submissions.length : counts[k] || 0})
           </button>
         ))}
+        <button
+          onClick={async () => {
+            if (!window.confirm('Are you sure? This will reject all pending and approved submissions.')) return;
+            await fetch('/api/queue/clear', { method: 'POST' });
+            refresh();
+          }}
+          className="px-3 py-1.5 tracking-widest border border-rust/50 text-rust hover:bg-rust hover:text-paper transition-colors"
+        >
+          Clear queue
+        </button>
         <span className="ml-auto text-ink/60">
           {displayName} · {submitCommand ? `command: ${submitCommand}` : 'any URL'}
           {!allowAnyone && ' · subs/vips/mods only'}
