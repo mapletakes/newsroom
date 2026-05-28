@@ -4,6 +4,9 @@ import { createChatSubscription } from '@/lib/twitch-eventsub';
 import { supabaseAdmin } from '@/lib/supabase';
 import { buildSessionCookie, verifyOAuthStateDetailed } from '@/lib/session';
 
+// Auth callback must never be cached.
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   // Twitch redirects with ?error=... when authorization fails (e.g. denied, invalid scope)
   const twitchError = req.nextUrl.searchParams.get('error');
