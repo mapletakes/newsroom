@@ -1,7 +1,7 @@
 // Twitch OAuth Authorization Code flow (server-side).
 // user:read:chat is required for EventSub channel.chat.message webhooks.
 
-const SCOPES = ['user:read:email', 'user:read:chat', 'user:read:moderated_channels'];
+const SCOPES = ['user:read:email', 'user:read:chat', 'user:bot', 'user:read:moderated_channels'];
 
 export function buildAuthUrl(state: string): string {
   const clientId = process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID!;
