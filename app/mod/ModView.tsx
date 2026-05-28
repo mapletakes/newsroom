@@ -22,7 +22,7 @@ export function ModView({
   isMod?: boolean;
 }) {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
-  const [filter, setFilter] = useState<'pending' | 'approved' | 'played' | 'all'>('pending');
+  const [filter, setFilter] = useState<'pending' | 'approved' | 'played' | 'rejected'>('pending');
   const [counts, setCounts] = useState<{ pending: number; approved: number; played: number; rejected: number; total: number }>({
     pending: 0,
     approved: 0,
@@ -32,8 +32,7 @@ export function ModView({
   });
 
   const refresh = useCallback(async () => {
-    const url = filter === 'all' ? '/api/queue' : `/api/queue?status=${filter}`;
-    const r = await fetch(url);
+    const r = await fetch(`/api/queue?status=${filter}`);
     if (r.ok) {
       const data = await r.json();
       setSubmissions(data.submissions || []);
@@ -61,8 +60,7 @@ export function ModView({
     refresh();
   };
 
-  const tabCount = (k: 'pending' | 'approved' | 'played' | 'all') =>
-    k === 'all' ? counts.total : counts[k];
+  const tabCount = (k: 'pending' | 'approved' | 'played' | 'rejected') => counts[k];
 
   const clear = async (status: 'pending' | 'rejected' | 'played') => {
     const label =
@@ -100,7 +98,7 @@ export function ModView({
 
       {/* Filter tabs */}
       <div className="px-6 py-3 border-b border-ink/20 flex items-center gap-1 flex-wrap font-mono text-xs uppercase">
-        {(['pending', 'approved', 'played', 'all'] as const).map((k) => (
+        {(['pending', 'approved', 'played', 'rejected'] as const).map((k) => (
           <button
             key={k}
             onClick={() => setFilter(k)}
@@ -142,9 +140,17 @@ export function ModView({
       <main className="px-6 py-6 max-w-5xl mx-auto w-full">
         {submissions.length === 0 && (
           <div className="text-center py-24">
-            <p className="font-display text-2xl mb-2">Waiting for the firehose…</p>
+            <p className="font-display text-2xl mb-2">
+              {filter === 'pending' && 'Waiting for the firehose…'}
+              {filter === 'approved' && 'Nothing approved yet.'}
+              {filter === 'played' && 'Nothing played yet.'}
+              {filter === 'rejected' && 'No rejected links.'}
+            </p>
             <p className="text-ink/60 font-mono text-sm">
-              When chat posts a link, it&apos;ll appear here in seconds.
+              {filter === 'pending' && "When chat posts a link, it'll appear here in seconds."}
+              {filter === 'approved' && 'Approve pending links to send them to the streamer deck.'}
+              {filter === 'played' && 'Items the streamer marks played show up here.'}
+              {filter === 'rejected' && 'Rejected links land here — you can unreject any of them.'}
             </p>
           </div>
         )}
