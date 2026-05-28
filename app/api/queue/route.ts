@@ -57,46 +57,39 @@ export async function POST(req: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     submission = data;
   } else {
-    // Check for existing submission with same URL
-    const { data: existing } = await sb
+    // Insert first, then deduplicate — no pre-check needed.
+    // This eliminates the race window where concurrent listeners
+    // all pass a SELECT check before any INSERT commits.
+    const { data, error } = await sb
       .from('submissions')
-      .select('*')
+      .insert(row)
+      .select()
+      .single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    submission = data;
+
+    // Keep only the oldest row for this URL. All concurrent requests
+    // agree on which row to keep (oldest by created_at, tie-broken by id),
+    // so even 3+ simultaneous inserts converge to a single surviving row.
+    const { data: all } = await sb
+      .from('submissions')
+      .select('id')
       .eq('stream_id', session.streamId)
       .eq('normalized_url', normalized)
-      .maybeSingle();
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true });
 
-    if (existing) {
-      submission = existing;
-    } else {
-      const { data, error } = await sb
-        .from('submissions')
-        .insert(row)
-        .select()
-        .single();
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      submission = data;
-
-      // Race-condition cleanup: if multiple listeners inserted the same
-      // URL simultaneously, keep the oldest and delete the rest.
-      const { data: dupes } = await sb
-        .from('submissions')
-        .select('id')
-        .eq('stream_id', session.streamId)
-        .eq('normalized_url', normalized)
-        .order('created_at', { ascending: true });
-
-      if (dupes && dupes.length > 1) {
-        const keepId = dupes[0].id;
-        const deleteIds = dupes.slice(1).map((d) => d.id);
-        await sb.from('submissions').delete().in('id', deleteIds);
-        if (data.id !== keepId) {
-          const { data: kept } = await sb
-            .from('submissions')
-            .select('*')
-            .eq('id', keepId)
-            .maybeSingle();
-          submission = kept;
-        }
+    if (all && all.length > 1) {
+      const keepId = all[0].id;
+      const deleteIds = all.slice(1).map((d) => d.id);
+      await sb.from('submissions').delete().in('id', deleteIds);
+      if (data.id !== keepId) {
+        const { data: kept } = await sb
+          .from('submissions')
+          .select('*')
+          .eq('id', keepId)
+          .maybeSingle();
+        submission = kept;
       }
     }
   }
