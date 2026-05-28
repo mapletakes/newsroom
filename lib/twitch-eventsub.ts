@@ -1,0 +1,178 @@
+// Twitch EventSub webhook helpers.
+// Twitch pushes chat messages to our /api/twitch/eventsub endpoint
+// via HTTP — no persistent connection or separate worker needed.
+
+import crypto from 'crypto';
+
+const HMAC_PREFIX = 'sha256=';
+
+// ── App Access Token (client credentials) ──────────────────────
+
+let cachedToken: { token: string; expiresAt: number } | null = null;
+
+/** Get a Twitch App Access Token (client credentials flow). Cached in memory. */
+export async function getAppAccessToken(): Promise<string> {
+  if (cachedToken && Date.now() < cachedToken.expiresAt) {
+    return cachedToken.token;
+  }
+
+  const clientId = process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID!;
+  const clientSecret = process.env.TWITCH_CLIENT_SECRET!;
+
+  const r = await fetch('https://id.twitch.tv/oauth2/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      grant_type: 'client_credentials',
+    }),
+  });
+
+  if (!r.ok) throw new Error(`App access token failed: ${r.status}`);
+  const data = await r.json();
+  cachedToken = {
+    token: data.access_token,
+    expiresAt: Date.now() + (data.expires_in - 300) * 1000, // refresh 5 min early
+  };
+  return data.access_token;
+}
+
+// ── Signature verification ─────────────────────────────────────
+
+export function getEventSubSecret(): string {
+  return process.env.EVENTSUB_SECRET || '';
+}
+
+/** Verify the HMAC-SHA256 signature on an incoming EventSub webhook. */
+export function verifySignature(
+  messageId: string,
+  timestamp: string,
+  rawBody: string,
+  signature: string,
+): boolean {
+  const secret = getEventSubSecret();
+  if (!secret) return false;
+
+  const hmacMessage = messageId + timestamp + rawBody;
+  const expected =
+    HMAC_PREFIX +
+    crypto.createHmac('sha256', secret).update(hmacMessage).digest('hex');
+
+  // Constant-time comparison
+  if (expected.length !== signature.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+}
+
+/** Reject messages older than 10 minutes (replay protection). */
+export function isTimestampFresh(timestamp: string): boolean {
+  const diff = Math.abs(Date.now() - new Date(timestamp).getTime());
+  return diff < 10 * 60 * 1000;
+}
+
+// ── Subscription management ────────────────────────────────────
+
+/**
+ * Create an EventSub subscription for `channel.chat.message`.
+ * Uses broadcaster's user ID as both broadcaster_user_id and user_id
+ * (the broadcaster must have granted `user:read:chat` via OAuth).
+ *
+ * Returns the subscription ID, or null on failure.
+ * If the subscription already exists, Twitch returns 409 — we treat that as success.
+ */
+export async function createChatSubscription(
+  broadcasterUserId: string,
+): Promise<string | null> {
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/+$/, '');
+  const secret = getEventSubSecret();
+  if (!appUrl || !secret) {
+    console.error('Missing NEXT_PUBLIC_APP_URL or EVENTSUB_SECRET');
+    return null;
+  }
+
+  const token = await getAppAccessToken();
+  const clientId = process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID!;
+
+  const r = await fetch('https://api.twitch.tv/helix/eventsub/subscriptions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Client-Id': clientId,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      type: 'channel.chat.message',
+      version: '1',
+      condition: {
+        broadcaster_user_id: broadcasterUserId,
+        user_id: broadcasterUserId,
+      },
+      transport: {
+        method: 'webhook',
+        callback: `${appUrl}/api/twitch/eventsub`,
+        secret,
+      },
+    }),
+  });
+
+  // 409 = duplicate subscription — that's fine
+  if (r.status === 409) {
+    console.log(`EventSub chat sub already exists for user ${broadcasterUserId}`);
+    return 'existing';
+  }
+
+  if (!r.ok) {
+    const text = await r.text();
+    console.error(`EventSub create failed ${r.status}: ${text}`);
+    return null;
+  }
+
+  const data = await r.json();
+  const sub = data.data?.[0];
+  if (sub) {
+    console.log(`EventSub chat sub created: ${sub.id} (${sub.status})`);
+    return sub.id;
+  }
+  return null;
+}
+
+/**
+ * List active EventSub subscriptions for our app.
+ * Optionally filter by type.
+ */
+export async function listSubscriptions(type?: string) {
+  const token = await getAppAccessToken();
+  const clientId = process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID!;
+
+  const u = new URL('https://api.twitch.tv/helix/eventsub/subscriptions');
+  if (type) u.searchParams.set('type', type);
+
+  const r = await fetch(u, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Client-Id': clientId,
+    },
+  });
+
+  if (!r.ok) return [];
+  const data = await r.json();
+  return data.data || [];
+}
+
+/** Delete an EventSub subscription by ID. */
+export async function deleteSubscription(subscriptionId: string): Promise<boolean> {
+  const token = await getAppAccessToken();
+  const clientId = process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID!;
+
+  const r = await fetch(
+    `https://api.twitch.tv/helix/eventsub/subscriptions?id=${subscriptionId}`,
+    {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Client-Id': clientId,
+      },
+    },
+  );
+  return r.ok || r.status === 404;
+}

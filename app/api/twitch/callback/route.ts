@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { exchangeCode, fetchTwitchUser, fetchModeratedChannels } from '@/lib/twitch-oauth';
+import { createChatSubscription } from '@/lib/twitch-eventsub';
 import { supabaseAdmin } from '@/lib/supabase';
 import { buildSessionCookie, verifyOAuthState } from '@/lib/session';
 
@@ -66,6 +67,12 @@ export async function GET(req: NextRequest) {
       .select('stream_id')
       .eq('twitch_user_id', user.id);
     const hasModChannels = modRows && modRows.length > 0;
+
+    // Register EventSub webhook so Twitch pushes chat messages to us.
+    // Idempotent — Twitch returns 409 if the subscription already exists.
+    createChatSubscription(user.id).catch((err) =>
+      console.error('EventSub subscription failed:', err),
+    );
 
     // Default session: logged in as streamer on their own channel
     const session = buildSessionCookie({

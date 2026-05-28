@@ -1,129 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSession } from '@/lib/session';
-import { detectKind, normalizeUrl } from '@/lib/url';
-import { runExtraction } from '@/lib/extract';
 import { searchRelatedCoverage } from '@/lib/search-coverage';
+import { submitUrlToQueue } from '@/lib/submit-url';
 
 export const maxDuration = 30;
 
 export async function POST(req: NextRequest) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
+
   const body = await req.json();
-
-  // Authenticate: session cookie (browser) or worker API key (server)
-  let streamId: string;
-  let defaultLogin: string;
-
-  const workerKey = req.headers.get('x-worker-key');
-  if (workerKey) {
-    if (!process.env.WORKER_API_KEY || workerKey !== process.env.WORKER_API_KEY) {
-      return NextResponse.json({ error: 'invalid worker key' }, { status: 401 });
-    }
-    if (!body.stream_id) return NextResponse.json({ error: 'missing stream_id' }, { status: 400 });
-    streamId = body.stream_id;
-    defaultLogin = body.submitter || 'worker';
-  } else {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
-    streamId = session.streamId;
-    defaultLogin = session.twitchLogin;
-  }
-
   const url = String(body.url || '').trim();
   if (!url) return NextResponse.json({ error: 'missing url' }, { status: 400 });
 
-  const normalized = normalizeUrl(url);
-  const kind = detectKind(url);
-
-  const sb = supabaseAdmin();
-
-  const { data: stream } = await sb
-    .from('streams')
-    .select('allow_duplicates, ignored_users')
-    .eq('id', streamId)
-    .single();
-  const allowDuplicates = stream?.allow_duplicates ?? false;
-  const ignoredUsers: string[] = stream?.ignored_users ?? [];
-
-  const submitter = String(body.submitter || defaultLogin).toLowerCase();
-  if (ignoredUsers.includes(submitter)) {
-    return NextResponse.json({ ignored: true });
-  }
-
-  const row = {
-    stream_id: streamId,
+  const result = await submitUrlToQueue({
+    streamId: session.streamId,
     url,
-    normalized_url: normalized,
-    kind,
-    status: 'pending' as const,
-    submitter_login: body.submitter || defaultLogin,
-    submitter_is_sub: !!body.isSub,
-    submitter_is_mod: !!body.isMod,
-    submitter_is_vip: !!body.isVip,
-    raw_message: body.message || null,
-  };
+    submitter: body.submitter || session.twitchLogin,
+    isSub: !!body.isSub,
+    isMod: !!body.isMod,
+    isVip: !!body.isVip,
+    message: body.message,
+  });
 
-  let submission: Record<string, unknown> | null = null;
-
-  if (allowDuplicates) {
-    const { data, error } = await sb
-      .from('submissions')
-      .insert(row)
-      .select()
-      .single();
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    submission = data;
-  } else {
-    // Insert first, then deduplicate — no pre-check needed.
-    // This eliminates the race window where concurrent listeners
-    // all pass a SELECT check before any INSERT commits.
-    const { data, error } = await sb
-      .from('submissions')
-      .insert(row)
-      .select()
-      .single();
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    submission = data;
-
-    // Keep only the oldest row for this URL. All concurrent requests
-    // agree on which row to keep (oldest by created_at, tie-broken by id),
-    // so even 3+ simultaneous inserts converge to a single surviving row.
-    const { data: all } = await sb
-      .from('submissions')
-      .select('id')
-      .eq('stream_id', streamId)
-      .eq('normalized_url', normalized)
-      .order('created_at', { ascending: true })
-      .order('id', { ascending: true });
-
-    if (all && all.length > 1) {
-      const keepId = all[0].id;
-      const deleteIds = all.slice(1).map((d) => d.id);
-      await sb.from('submissions').delete().in('id', deleteIds);
-      if (data.id !== keepId) {
-        const { data: kept } = await sb
-          .from('submissions')
-          .select('*')
-          .eq('id', keepId)
-          .maybeSingle();
-        submission = kept;
-      }
-    }
-  }
-
-  // Run extraction inline if submission has no enrichment yet
-  if (submission && !submission.title) {
-    await runExtraction(submission.id as string);
-    // Re-fetch the enriched submission to return updated data
-    const { data: enriched } = await sb
-      .from('submissions')
-      .select('*')
-      .eq('id', submission.id)
-      .maybeSingle();
-    if (enriched) submission = enriched;
-  }
-
-  return NextResponse.json({ submission });
+  if (result.ignored) return NextResponse.json({ ignored: true });
+  return NextResponse.json({ submission: result.submission });
 }
 
 export async function GET(req: NextRequest) {
