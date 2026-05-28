@@ -6,7 +6,21 @@ import { buildSessionCookie, verifyOAuthState } from '@/lib/session';
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get('code');
   const state = req.nextUrl.searchParams.get('state');
-  if (!code || !state || !verifyOAuthState(state)) {
+  if (!code || !state) {
+    console.error('[oauth callback] missing code or state', { code: !!code, state: !!state });
+    return new NextResponse(null, {
+      status: 302,
+      headers: { Location: new URL('/login?error=state', req.url).toString() },
+    });
+  }
+  if (!verifyOAuthState(state)) {
+    // Log details so we can diagnose the mismatch
+    const parts = state.split('.');
+    console.error('[oauth callback] state verification failed', {
+      partsCount: parts.length,
+      rawState: state.slice(0, 60),
+      secretKeyPrefix: (process.env.TWITCH_CLIENT_SECRET || '').slice(0, 4) + '...',
+    });
     return new NextResponse(null, {
       status: 302,
       headers: { Location: new URL('/login?error=state', req.url).toString() },
