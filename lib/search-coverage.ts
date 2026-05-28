@@ -68,7 +68,7 @@ export async function searchRelatedCoverage(input: {
     }
     merged.push(...preferredGeneral, ...otherGeneral);
 
-    return merged.slice(0, 8);
+    return merged.slice(0, 3);
   } catch {
     return [];
   }

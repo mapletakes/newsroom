@@ -182,6 +182,18 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
     });
   };
 
+  // Remove the active item entirely (without marking it played) and advance.
+  // Lets the streamer clear the last item instead of skipping it forever.
+  const rejectActive = async () => {
+    if (!active) return;
+    const removedId = active.id;
+    const next = sidebarItems[0];
+    setActiveId(next?.id || null);
+    setStartedAt(next ? Date.now() : null);
+    setTakeaway('');
+    await removeFromQueue(removedId);
+  };
+
   // --- Direct add ---
   const handleAddLink = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -417,6 +429,14 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
                   className="font-mono text-sm uppercase tracking-widest border border-ink/40 px-4 py-2 hover:bg-ink hover:text-paper"
                 >
                   Skip
+                </button>
+                <button
+                  onClick={rejectActive}
+                  className="font-mono text-sm uppercase tracking-widest border border-rust/50 text-rust px-4 py-2 hover:bg-rust hover:text-paper transition-colors inline-flex items-center gap-1"
+                  title="Remove from deck without playing"
+                >
+                  <span className="material-icons text-base">delete</span>
+                  Remove
                 </button>
               </div>
 
