@@ -12,14 +12,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'missing ids array' }, { status: 400 });
   }
 
+  // The ungrouped block participates in ordering via a sentinel id so
+  // segments can be moved above or below it.
   const sb = supabaseAdmin();
   await Promise.all(
-    ids.map((id: string, i: number) =>
-      sb.from('segments')
+    ids.map((id: string, i: number) => {
+      if (id === 'ungrouped') {
+        return sb.from('streams')
+          .update({ ungrouped_position: i + 1 })
+          .eq('id', session.streamId);
+      }
+      return sb.from('segments')
         .update({ position: i + 1 })
         .eq('id', id)
-        .eq('stream_id', session.streamId),
-    ),
+        .eq('stream_id', session.streamId);
+    }),
   );
 
   broadcastQueueChange(session.streamId);

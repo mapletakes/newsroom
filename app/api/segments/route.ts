@@ -19,8 +19,20 @@ export async function GET() {
     .order('created_at', { ascending: true });
 
   // Degrade gracefully if the migration hasn't been run yet.
-  if (error) return NextResponse.json({ segments: [] });
-  return NextResponse.json({ segments: data || [] });
+  if (error) return NextResponse.json({ segments: [], ungroupedPosition: 0 });
+
+  // Position of the "ungrouped" block among the segments.
+  let ungroupedPosition = 0;
+  const { data: stream, error: streamErr } = await sb
+    .from('streams')
+    .select('ungrouped_position')
+    .eq('id', session.streamId)
+    .maybeSingle();
+  if (!streamErr && stream && typeof stream.ungrouped_position === 'number') {
+    ungroupedPosition = stream.ungrouped_position;
+  }
+
+  return NextResponse.json({ segments: data || [], ungroupedPosition });
 }
 
 // POST — create a segment, appended to the end.
@@ -31,7 +43,8 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const name = (typeof body.name === 'string' && body.name.trim()) || 'New segment';
 
-  // Place new segments at the top (lowest position) so they're easy to find.
+  // Place new segments above everything — including the ungrouped block —
+  // so a freshly created segment is easy to find at the very top.
   const sb = supabaseAdmin();
   const { data: first } = await sb
     .from('segments')
@@ -40,7 +53,14 @@ export async function POST(req: NextRequest) {
     .order('position', { ascending: true })
     .limit(1)
     .maybeSingle();
-  const position = (first?.position ?? 1) - 1;
+  const { data: stream } = await sb
+    .from('streams')
+    .select('ungrouped_position')
+    .eq('id', session.streamId)
+    .maybeSingle();
+  const candidates: number[] = [stream?.ungrouped_position ?? 0];
+  if (first?.position != null) candidates.push(first.position);
+  const position = Math.min(...candidates) - 1;
 
   const { data, error } = await sb
     .from('segments')

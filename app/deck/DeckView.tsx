@@ -118,7 +118,9 @@ function SortableQueueItem({
 }
 
 function SegmentBlock({
-  segment,
+  title,
+  editable,
+  collapsed,
   items,
   segments,
   sensors,
@@ -133,7 +135,9 @@ function SegmentBlock({
   onMoveDown,
   onDelete,
 }: {
-  segment: Segment | null;
+  title: string | null; // null → no header (render items flat)
+  editable: boolean;
+  collapsed: boolean;
   items: Submission[];
   segments: Segment[];
   sensors: ReturnType<typeof useSensors>;
@@ -148,11 +152,9 @@ function SegmentBlock({
   onMoveDown?: () => void;
   onDelete?: () => void;
 }) {
-  const collapsed = segment?.collapsed ?? false;
-
   return (
     <div className="mb-2">
-      {segment && (
+      {title !== null && (
         <div className="flex items-center gap-1 mb-1 bg-ink/10 px-1 py-1">
           <button
             onClick={onToggleCollapse}
@@ -161,19 +163,27 @@ function SegmentBlock({
           >
             {collapsed ? '▸' : '▾'}
           </button>
-          <input
-            value={segment.name}
-            onChange={(e) => onRenameLocal?.(e.target.value)}
-            onBlur={() => onRenameCommit?.()}
-            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-            className="flex-1 min-w-0 bg-transparent font-mono text-xs uppercase tracking-widest font-bold focus:outline-none focus:bg-paper px-1 py-0.5"
-          />
+          {editable ? (
+            <input
+              value={title}
+              onChange={(e) => onRenameLocal?.(e.target.value)}
+              onBlur={() => onRenameCommit?.()}
+              onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+              className="flex-1 min-w-0 bg-transparent font-mono text-xs uppercase tracking-widest font-bold focus:outline-none focus:bg-paper px-1 py-0.5"
+            />
+          ) : (
+            <span className="flex-1 min-w-0 font-mono text-xs uppercase tracking-widest font-bold text-ink/50 px-1 py-0.5 truncate">
+              {title}
+            </span>
+          )}
           <span className="shrink-0 font-mono text-[10px] text-ink/50">({items.length})</span>
-          <button onClick={onMoveUp} className="shrink-0 w-5 text-ink/40 hover:text-ink" aria-label="Move segment up">↑</button>
-          <button onClick={onMoveDown} className="shrink-0 w-5 text-ink/40 hover:text-ink" aria-label="Move segment down">↓</button>
-          <button onClick={onDelete} className="shrink-0 w-5 flex items-center justify-center text-ink/30 hover:text-rust" aria-label="Delete segment">
-            <span className="material-icons text-sm">delete</span>
-          </button>
+          <button onClick={onMoveUp} className="shrink-0 w-5 text-ink/40 hover:text-ink" aria-label="Move up">↑</button>
+          <button onClick={onMoveDown} className="shrink-0 w-5 text-ink/40 hover:text-ink" aria-label="Move down">↓</button>
+          {onDelete && (
+            <button onClick={onDelete} className="shrink-0 w-5 flex items-center justify-center text-ink/30 hover:text-rust" aria-label="Delete segment">
+              <span className="material-icons text-sm">delete</span>
+            </button>
+          )}
         </div>
       )}
       {!collapsed && (
@@ -190,7 +200,7 @@ function SegmentBlock({
                   onMove={(seg) => onMoveItem(s.id, seg)}
                 />
               ))}
-              {segment && items.length === 0 && (
+              {title !== null && items.length === 0 && (
                 <div className="font-mono text-[10px] text-ink/40 px-6 py-1 italic">
                   empty — assign items with their dropdown
                 </div>
@@ -206,6 +216,8 @@ function SegmentBlock({
 export function DeckView({ displayName, streamId }: { displayName: string; streamId: string }) {
   const [queue, setQueue] = useState<Submission[]>([]);
   const [segments, setSegments] = useState<Segment[]>([]);
+  const [ungroupedPosition, setUngroupedPosition] = useState(0);
+  const [ungroupedCollapsed, setUngroupedCollapsed] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [takeaway, setTakeaway] = useState('');
   const [startedAt, setStartedAt] = useState<number | null>(null);
@@ -229,6 +241,7 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
     if (sr.ok) {
       const data = await sr.json();
       setSegments(data.segments || []);
+      if (typeof data.ungroupedPosition === 'number') setUngroupedPosition(data.ungroupedPosition);
     }
   }, []);
 
@@ -243,18 +256,35 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
     return () => clearInterval(id);
   }, [refresh]);
 
-  // Flattened play order: ungrouped first, then each segment in order.
+  // Ordered list of blocks (ungrouped + segments), sorted by position.
+  // The ungrouped block participates via a sentinel id so segments can sit
+  // above or below it.
+  const blocks = useMemo(() => {
+    const arr: { id: string; segment: Segment | null; position: number }[] = [
+      { id: 'ungrouped', segment: null, position: ungroupedPosition },
+      ...segments.map((s) => ({ id: s.id, segment: s, position: s.position })),
+    ];
+    arr.sort((a, b) => a.position - b.position);
+    return arr;
+  }, [segments, ungroupedPosition]);
+
+  // Flattened play order follows the block order.
   const orderedQueue = useMemo(() => {
     const known = new Set(segments.map((s) => s.id));
     const flat: Submission[] = [];
-    flat.push(...queue.filter((s) => !s.segment_id).sort(byPosition));
-    for (const seg of segments) {
-      flat.push(...queue.filter((s) => s.segment_id === seg.id).sort(byPosition));
+    for (const b of blocks) {
+      if (b.segment === null) {
+        flat.push(
+          ...queue
+            .filter((s) => !s.segment_id || !known.has(s.segment_id))
+            .sort(byPosition),
+        );
+      } else {
+        flat.push(...queue.filter((s) => s.segment_id === b.segment!.id).sort(byPosition));
+      }
     }
-    // Orphans (segment_id pointing at a since-deleted segment) → treat as ungrouped tail.
-    flat.push(...queue.filter((s) => s.segment_id && !known.has(s.segment_id)).sort(byPosition));
     return flat;
-  }, [queue, segments]);
+  }, [blocks, queue, segments]);
 
   // Auto-select the first item in play order when nothing is active.
   useEffect(() => {
@@ -384,17 +414,23 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
     suppressRefreshUntil.current = 0;
   };
 
-  const moveSegment = async (index: number, dir: -1 | 1) => {
+  // Move a block (ungrouped or a segment) up/down among all blocks.
+  const moveBlock = async (index: number, dir: -1 | 1) => {
     const next = index + dir;
-    if (next < 0 || next >= segments.length) return;
-    const reordered = [...segments];
+    if (next < 0 || next >= blocks.length) return;
+    const reordered = [...blocks];
     [reordered[index], reordered[next]] = [reordered[next], reordered[index]];
-    setSegments(reordered.map((s, i) => ({ ...s, position: i + 1 })));
+
+    // Optimistic: assign positions 1..N across all blocks.
+    const pos = new Map(reordered.map((b, i) => [b.id, i + 1]));
+    setSegments((prev) => prev.map((s) => ({ ...s, position: pos.get(s.id) ?? s.position })));
+    if (pos.has('ungrouped')) setUngroupedPosition(pos.get('ungrouped')!);
+
     suppressRefreshUntil.current = Date.now() + 3000;
     await fetch('/api/segments/reorder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids: reordered.map((s) => s.id) }),
+      body: JSON.stringify({ ids: reordered.map((b) => b.id) }),
     });
     suppressRefreshUntil.current = 0;
   };
@@ -717,38 +753,54 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            {/* Ungrouped items */}
-            <SegmentBlock
-              segment={null}
-              items={ungroupedItems}
-              segments={segments}
-              sensors={sensors}
-              onReorder={reorderGroup(ungroupedItems)}
-              onSelectItem={selectItem}
-              onRemoveItem={removeFromQueue}
-              onMoveItem={moveItemToSegment}
-            />
-
-            {/* Named segments */}
-            {segments.map((seg, i) => (
-              <SegmentBlock
-                key={seg.id}
-                segment={seg}
-                items={itemsForSegment(seg.id)}
-                segments={segments}
-                sensors={sensors}
-                onReorder={reorderGroup(itemsForSegment(seg.id))}
-                onSelectItem={selectItem}
-                onRemoveItem={removeFromQueue}
-                onMoveItem={moveItemToSegment}
-                onRenameLocal={(name) => renameSegmentLocal(seg.id, name)}
-                onRenameCommit={() => commitRename(seg.id)}
-                onToggleCollapse={() => toggleCollapse(seg)}
-                onMoveUp={() => moveSegment(i, -1)}
-                onMoveDown={() => moveSegment(i, 1)}
-                onDelete={() => deleteSegment(seg.id)}
-              />
-            ))}
+            {blocks.map((b, i) => {
+              if (b.segment === null) {
+                // Ungrouped block. Only gets a header (and reorder controls)
+                // once at least one segment exists; otherwise renders flat.
+                const hasSegments = segments.length > 0;
+                return (
+                  <SegmentBlock
+                    key="ungrouped"
+                    title={hasSegments ? 'Ungrouped' : null}
+                    editable={false}
+                    collapsed={ungroupedCollapsed}
+                    items={ungroupedItems}
+                    segments={segments}
+                    sensors={sensors}
+                    onReorder={reorderGroup(ungroupedItems)}
+                    onSelectItem={selectItem}
+                    onRemoveItem={removeFromQueue}
+                    onMoveItem={moveItemToSegment}
+                    onToggleCollapse={hasSegments ? () => setUngroupedCollapsed((c) => !c) : undefined}
+                    onMoveUp={hasSegments ? () => moveBlock(i, -1) : undefined}
+                    onMoveDown={hasSegments ? () => moveBlock(i, 1) : undefined}
+                  />
+                );
+              }
+              const seg = b.segment;
+              const items = itemsForSegment(seg.id);
+              return (
+                <SegmentBlock
+                  key={seg.id}
+                  title={seg.name}
+                  editable
+                  collapsed={seg.collapsed}
+                  items={items}
+                  segments={segments}
+                  sensors={sensors}
+                  onReorder={reorderGroup(items)}
+                  onSelectItem={selectItem}
+                  onRemoveItem={removeFromQueue}
+                  onMoveItem={moveItemToSegment}
+                  onRenameLocal={(name) => renameSegmentLocal(seg.id, name)}
+                  onRenameCommit={() => commitRename(seg.id)}
+                  onToggleCollapse={() => toggleCollapse(seg)}
+                  onMoveUp={() => moveBlock(i, -1)}
+                  onMoveDown={() => moveBlock(i, 1)}
+                  onDelete={() => deleteSegment(seg.id)}
+                />
+              );
+            })}
           </div>
         </aside>
       </main>
