@@ -8,9 +8,10 @@ import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { useQueueRealtime } from '@/lib/use-queue-realtime';
 import {
   DndContext,
-  closestCenter,
+  closestCorners,
   KeyboardSensor,
   PointerSensor,
+  useDroppable,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -33,18 +34,14 @@ const byPosition = (a: Submission, b: Submission) =>
 
 function SortableQueueItem({
   s,
-  segments,
   isActive,
   onSelect,
   onRemove,
-  onMove,
 }: {
   s: Submission;
-  segments: Segment[];
   isActive: boolean;
   onSelect: () => void;
   onRemove: () => void;
-  onMove: (segmentId: string | null) => void;
 }) {
   const {
     attributes,
@@ -103,37 +100,19 @@ function SortableQueueItem({
           <span className="material-icons text-base">delete</span>
         </button>
       </div>
-      {segments.length > 0 && (
-        <div className="pl-6 pb-1 pt-0.5">
-          <select
-            value={s.segment_id || ''}
-            onChange={(e) => onMove(e.target.value || null)}
-            onClick={(e) => e.stopPropagation()}
-            className="w-full font-mono text-[10px] uppercase tracking-widest bg-paper border border-ink/20 px-1 py-0.5 text-ink/60 focus:outline-none focus:border-ink"
-          >
-            <option value="">— Ungrouped —</option>
-            {segments.map((seg) => (
-              <option key={seg.id} value={seg.id}>{seg.name}</option>
-            ))}
-          </select>
-        </div>
-      )}
     </div>
   );
 }
 
 function SegmentBlock({
+  containerId,
   title,
   editable,
   collapsed,
   items,
-  segments,
   activeId,
-  sensors,
-  onReorder,
   onSelectItem,
   onRemoveItem,
-  onMoveItem,
   onRenameLocal,
   onRenameCommit,
   onToggleCollapse,
@@ -141,17 +120,14 @@ function SegmentBlock({
   onMoveDown,
   onDelete,
 }: {
+  containerId: string; // 'ungrouped' or a segment id — the drop target id
   title: string | null; // null → no header (render items flat)
   editable: boolean;
   collapsed: boolean;
   items: Submission[];
-  segments: Segment[];
   activeId: string | null;
-  sensors: ReturnType<typeof useSensors>;
-  onReorder: (e: DragEndEvent) => void;
   onSelectItem: (id: string) => void;
   onRemoveItem: (id: string) => void;
-  onMoveItem: (id: string, segmentId: string | null) => void;
   onRenameLocal?: (name: string) => void;
   onRenameCommit?: () => void;
   onToggleCollapse?: () => void;
@@ -159,6 +135,10 @@ function SegmentBlock({
   onMoveDown?: () => void;
   onDelete?: () => void;
 }) {
+  // Make the whole block a drop target so items can be dragged into it
+  // (including empty segments).
+  const { setNodeRef, isOver } = useDroppable({ id: containerId });
+
   return (
     <div className="mb-2">
       {title !== null && (
@@ -194,28 +174,29 @@ function SegmentBlock({
         </div>
       )}
       {!collapsed && (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onReorder}>
-          <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
-            <div className="space-y-1">
-              {items.map((s) => (
-                <SortableQueueItem
-                  key={s.id}
-                  s={s}
-                  segments={segments}
-                  isActive={s.id === activeId}
-                  onSelect={() => onSelectItem(s.id)}
-                  onRemove={() => onRemoveItem(s.id)}
-                  onMove={(seg) => onMoveItem(s.id, seg)}
-                />
-              ))}
-              {title !== null && items.length === 0 && (
-                <div className="font-mono text-[10px] text-ink/40 px-6 py-1 italic">
-                  empty — assign items with their dropdown
-                </div>
-              )}
-            </div>
-          </SortableContext>
-        </DndContext>
+        <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+          <div
+            ref={setNodeRef}
+            className={`space-y-1 min-h-[2rem] rounded-sm transition-colors ${
+              isOver ? 'bg-rust/10 outline-dashed outline-1 outline-rust/40' : ''
+            }`}
+          >
+            {items.map((s) => (
+              <SortableQueueItem
+                key={s.id}
+                s={s}
+                isActive={s.id === activeId}
+                onSelect={() => onSelectItem(s.id)}
+                onRemove={() => onRemoveItem(s.id)}
+              />
+            ))}
+            {title !== null && items.length === 0 && (
+              <div className="font-mono text-[10px] text-ink/40 px-6 py-2 italic">
+                empty — drag items here
+              </div>
+            )}
+          </div>
+        </SortableContext>
       )}
     </div>
   );
@@ -459,9 +440,11 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
     refresh();
   };
 
+  // Move an item into a segment (or back to ungrouped), landing at the bottom.
   const moveItemToSegment = async (id: string, segmentId: string | null) => {
     suppressRefreshUntil.current = Date.now() + 3000;
-    setQueue((prev) => prev.map((s) => (s.id === id ? { ...s, segment_id: segmentId } : s)));
+    // Optimistic: reassign segment and sort to the bottom of the target group.
+    setQueue((prev) => prev.map((s) => (s.id === id ? { ...s, segment_id: segmentId, position: 1e6 } : s)));
     await fetch('/api/queue', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -471,25 +454,62 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
     refresh();
   };
 
-  // Reorder items within a single group (ungrouped or one segment).
-  const reorderGroup = (groupItems: Submission[]) => async (event: DragEndEvent) => {
-    const { active: dragged, over } = event;
-    if (!over || dragged.id === over.id) return;
-    const oldIndex = groupItems.findIndex((s) => s.id === dragged.id);
-    const newIndex = groupItems.findIndex((s) => s.id === over.id);
-    if (oldIndex === -1 || newIndex === -1) return;
-
-    const reordered = arrayMove(groupItems, oldIndex, newIndex);
+  // Persist a new within-group order (positions 1..N).
+  const persistGroupOrder = (reordered: Submission[]) => {
     suppressRefreshUntil.current = Date.now() + 5000;
     setQueue((prev) => {
       const pos = new Map(reordered.map((s, i) => [s.id, i + 1]));
       return prev.map((s) => (pos.has(s.id) ? { ...s, position: pos.get(s.id)! } : s));
     });
-    await fetch('/api/queue/reorder', {
+    return fetch('/api/queue/reorder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ids: reordered.map((s) => s.id) }),
     });
+  };
+
+  // Which block holds a given item id ('ungrouped' or a segment id).
+  const containerOf = useCallback(
+    (itemId: string): string => {
+      const item = queue.find((s) => s.id === itemId);
+      if (item?.segment_id && knownSegmentIds.has(item.segment_id)) return item.segment_id;
+      return 'ungrouped';
+    },
+    [queue, knownSegmentIds],
+  );
+
+  const containerItems = useCallback(
+    (containerId: string): Submission[] =>
+      containerId === 'ungrouped' ? ungroupedItems : itemsForSegment(containerId),
+    [ungroupedItems, itemsForSegment],
+  );
+
+  // Single drag handler for the whole sidebar: reorder within a block, or
+  // drag an item into another block (lands at the bottom).
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active: dragged, over } = event;
+    if (!over) return;
+    const draggedId = String(dragged.id);
+    const overId = String(over.id);
+
+    const sourceContainer = containerOf(draggedId);
+    // `over` is either a block id (dropped on the container) or an item id.
+    const isContainer = overId === 'ungrouped' || knownSegmentIds.has(overId);
+    const targetContainer = isContainer ? overId : containerOf(overId);
+
+    if (sourceContainer === targetContainer) {
+      // Reorder within the same block.
+      if (isContainer || overId === draggedId) return;
+      const groupItems = containerItems(sourceContainer);
+      const oldIndex = groupItems.findIndex((s) => s.id === draggedId);
+      const newIndex = groupItems.findIndex((s) => s.id === overId);
+      if (oldIndex === -1 || newIndex === -1) return;
+      persistGroupOrder(arrayMove(groupItems, oldIndex, newIndex));
+    } else {
+      // Move into another block, at the bottom.
+      const segId = targetContainer === 'ungrouped' ? null : targetContainer;
+      moveItemToSegment(draggedId, segId);
+    }
   };
 
   // --- Direct add ---
@@ -767,56 +787,56 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            {blocks.map((b, i) => {
-              if (b.segment === null) {
-                // Ungrouped block. Only gets a header (and reorder controls)
-                // once at least one segment exists; otherwise renders flat.
-                const hasSegments = segments.length > 0;
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCorners}
+              onDragEnd={handleDragEnd}
+            >
+              {blocks.map((b, i) => {
+                if (b.segment === null) {
+                  // Ungrouped block. Only gets a header (and reorder controls)
+                  // once at least one segment exists; otherwise renders flat.
+                  const hasSegments = segments.length > 0;
+                  return (
+                    <SegmentBlock
+                      key="ungrouped"
+                      containerId="ungrouped"
+                      title={hasSegments ? 'Ungrouped' : null}
+                      editable={false}
+                      collapsed={ungroupedCollapsed}
+                      items={ungroupedItems}
+                      activeId={activeId}
+                      onSelectItem={selectItem}
+                      onRemoveItem={removeFromQueue}
+                      onToggleCollapse={hasSegments ? () => setUngroupedCollapsed((c) => !c) : undefined}
+                      onMoveUp={hasSegments ? () => moveBlock(i, -1) : undefined}
+                      onMoveDown={hasSegments ? () => moveBlock(i, 1) : undefined}
+                    />
+                  );
+                }
+                const seg = b.segment;
+                const items = itemsForSegment(seg.id);
                 return (
                   <SegmentBlock
-                    key="ungrouped"
-                    title={hasSegments ? 'Ungrouped' : null}
-                    editable={false}
-                    collapsed={ungroupedCollapsed}
-                    items={ungroupedItems}
-                    segments={segments}
+                    key={seg.id}
+                    containerId={seg.id}
+                    title={seg.name}
+                    editable
+                    collapsed={seg.collapsed}
+                    items={items}
                     activeId={activeId}
-                    sensors={sensors}
-                    onReorder={reorderGroup(ungroupedItems)}
                     onSelectItem={selectItem}
                     onRemoveItem={removeFromQueue}
-                    onMoveItem={moveItemToSegment}
-                    onToggleCollapse={hasSegments ? () => setUngroupedCollapsed((c) => !c) : undefined}
-                    onMoveUp={hasSegments ? () => moveBlock(i, -1) : undefined}
-                    onMoveDown={hasSegments ? () => moveBlock(i, 1) : undefined}
+                    onRenameLocal={(name) => renameSegmentLocal(seg.id, name)}
+                    onRenameCommit={() => commitRename(seg.id)}
+                    onToggleCollapse={() => toggleCollapse(seg)}
+                    onMoveUp={() => moveBlock(i, -1)}
+                    onMoveDown={() => moveBlock(i, 1)}
+                    onDelete={() => deleteSegment(seg.id)}
                   />
                 );
-              }
-              const seg = b.segment;
-              const items = itemsForSegment(seg.id);
-              return (
-                <SegmentBlock
-                  key={seg.id}
-                  title={seg.name}
-                  editable
-                  collapsed={seg.collapsed}
-                  items={items}
-                  segments={segments}
-                  activeId={activeId}
-                  sensors={sensors}
-                  onReorder={reorderGroup(items)}
-                  onSelectItem={selectItem}
-                  onRemoveItem={removeFromQueue}
-                  onMoveItem={moveItemToSegment}
-                  onRenameLocal={(name) => renameSegmentLocal(seg.id, name)}
-                  onRenameCommit={() => commitRename(seg.id)}
-                  onToggleCollapse={() => toggleCollapse(seg)}
-                  onMoveUp={() => moveBlock(i, -1)}
-                  onMoveDown={() => moveBlock(i, 1)}
-                  onDelete={() => deleteSegment(seg.id)}
-                />
-              );
-            })}
+              })}
+            </DndContext>
           </div>
         </aside>
       </main>
