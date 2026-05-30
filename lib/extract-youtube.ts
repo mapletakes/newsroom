@@ -74,6 +74,19 @@ export async function fetchYouTubeMeta(url: string): Promise<YouTubeMeta> {
     } catch {}
   }
 
+  // Duration isn't available via oEmbed, so scrape the watch page when we still
+  // don't have it (e.g. no API key). Also backfills any missing metadata.
+  if (meta.durationSeconds == null) {
+    const scraped = await scrapeWatchPageMeta(url);
+    if (scraped) {
+      meta.durationSeconds = meta.durationSeconds ?? scraped.durationSeconds ?? null;
+      meta.title = meta.title || scraped.title || null;
+      meta.publisher = meta.publisher || scraped.publisher || null;
+      meta.thumbnail = meta.thumbnail || scraped.thumbnail || null;
+      meta.description = meta.description || scraped.description || null;
+    }
+  }
+
   // Transcript (best-effort; fails silently)
   try {
     // Dynamic import to keep cold start light
@@ -104,6 +117,63 @@ function extractListId(url: string): string | null {
     const u = new URL(url);
     return u.searchParams.get('list');
   } catch { return null; }
+}
+
+// Extract the first balanced { ... } JSON object that follows a marker string.
+// Used to pull ytInitialPlayerResponse out of a watch page (its end isn't a
+// clean ";</script>", so brace-match instead).
+function extractJsonAfter(html: string, marker: string): string | null {
+  const m = html.indexOf(marker);
+  if (m === -1) return null;
+  const begin = html.indexOf('{', m + marker.length);
+  if (begin === -1) return null;
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = begin; i < html.length; i++) {
+    const ch = html[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === '\\') esc = true;
+      else if (ch === '"') inStr = false;
+    } else if (ch === '"') {
+      inStr = true;
+    } else if (ch === '{') {
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0) return html.substring(begin, i + 1);
+    }
+  }
+  return null;
+}
+
+// Scrape a single video's watch page for metadata (notably duration) when the
+// YouTube API key isn't available. No key needed.
+async function scrapeWatchPageMeta(url: string): Promise<Partial<YouTubeMeta> | null> {
+  try {
+    const r = await fetch(url, {
+      headers: { 'User-Agent': BROWSER_UA, 'Accept-Language': 'en-US,en;q=0.9' },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!r.ok) return null;
+    const json = extractJsonAfter(await r.text(), 'ytInitialPlayerResponse');
+    if (!json) return null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const vd = (JSON.parse(json) as any)?.videoDetails;
+    if (!vd) return null;
+    const thumbs = vd.thumbnail?.thumbnails;
+    const lenSecs = vd.lengthSeconds ? parseInt(vd.lengthSeconds, 10) : NaN;
+    return {
+      title: vd.title || null,
+      publisher: vd.author || null,
+      description: vd.shortDescription ? String(vd.shortDescription).slice(0, 800) : null,
+      thumbnail: Array.isArray(thumbs) ? thumbs[thumbs.length - 1]?.url || null : null,
+      durationSeconds: Number.isFinite(lenSecs) ? lenSecs : null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 function scrapePlaylistItems(html: string): PlaylistItem[] {
