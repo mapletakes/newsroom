@@ -110,14 +110,16 @@ export async function PATCH(req: NextRequest) {
     patch.position = (last?.position ?? 0) + 1;
   }
 
-  // On approval, fetch related coverage before writing
+  // On approval, fetch related coverage before writing — but only for news
+  // articles. YouTube, socials, clips, etc. don't have "other coverage" to
+  // find, so searching for them just wastes the search quota.
   if (body.status === 'approved') {
     const { data: sub } = await sb
       .from('submissions')
-      .select('title, publisher, url, related_coverage')
+      .select('title, publisher, url, kind, related_coverage')
       .eq('id', id)
       .single();
-    if (sub && !sub.related_coverage && sub.title) {
+    if (sub && sub.kind === 'article' && !sub.related_coverage && sub.title) {
       const { data: streamSettings } = await sb
         .from('streams')
         .select('preferred_sources')
