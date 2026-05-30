@@ -155,6 +155,9 @@ function SegmentBlock({
     draggingSourceContainer !== null &&
     draggingSourceContainer !== containerId;
 
+  // Combined runtime of any videos in this block.
+  const totalSeconds = items.reduce((sum, s) => sum + (s.duration_seconds || 0), 0);
+
   return (
     <div
       ref={setNodeRef}
@@ -184,7 +187,9 @@ function SegmentBlock({
               {title}
             </span>
           )}
-          <span className="shrink-0 font-mono text-[10px] text-ink/50">({items.length})</span>
+          <span className="shrink-0 font-mono text-[10px] text-ink/50">
+            ({items.length}{totalSeconds > 0 ? ` · ${formatDuration(totalSeconds)}` : ''})
+          </span>
           <button onClick={onMoveUp} className="shrink-0 w-5 text-ink/40 hover:text-ink" aria-label="Move up">↑</button>
           <button onClick={onMoveDown} className="shrink-0 w-5 text-ink/40 hover:text-ink" aria-label="Move down">↓</button>
           {onDelete && (
