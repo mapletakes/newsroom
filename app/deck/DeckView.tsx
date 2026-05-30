@@ -16,6 +16,7 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragOverEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
 import {
@@ -114,6 +115,7 @@ function SegmentBlock({
   items,
   activeId,
   draggingSourceContainer,
+  overContainerId,
   onSelectItem,
   onRemoveItem,
   onRenameLocal,
@@ -130,6 +132,7 @@ function SegmentBlock({
   items: Submission[];
   activeId: string | null;
   draggingSourceContainer: string | null; // container of the item being dragged, if any
+  overContainerId: string | null; // container currently under the cursor
   onSelectItem: (id: string) => void;
   onRemoveItem: (id: string) => void;
   onRenameLocal?: (name: string) => void;
@@ -141,12 +144,16 @@ function SegmentBlock({
 }) {
   // The whole block (header included) is a drop target so items can be dragged
   // anywhere onto it — even onto a collapsed segment's header.
-  const { setNodeRef, isOver } = useDroppable({ id: containerId });
+  const { setNodeRef } = useDroppable({ id: containerId });
 
-  // True when an item from a DIFFERENT block is hovering this one — i.e. a drop
-  // here would move it in (and land at the bottom).
+  // True when an item from a DIFFERENT block is hovering this one (anywhere —
+  // header, items, or gaps), i.e. a drop here would move it in at the bottom.
+  // Driven by the context-level over-container so it works even when the
+  // cursor is over an individual item rather than the container itself.
   const isDropTarget =
-    isOver && draggingSourceContainer !== null && draggingSourceContainer !== containerId;
+    overContainerId === containerId &&
+    draggingSourceContainer !== null &&
+    draggingSourceContainer !== containerId;
 
   return (
     <div
@@ -231,6 +238,7 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
   const [takeaway, setTakeaway] = useState('');
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [overContainer, setOverContainer] = useState<string | null>(null);
 
   const [addUrl, setAddUrl] = useState('');
   const [adding, setAdding] = useState(false);
@@ -509,10 +517,21 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
     setActiveDragId(String(event.active.id));
   };
 
+  // Track which container is under the cursor (resolving items → their block)
+  // so the whole target block can highlight, not just the area under it.
+  const handleDragOver = (event: DragOverEvent) => {
+    const { over } = event;
+    if (!over) { setOverContainer(null); return; }
+    const overId = String(over.id);
+    const isContainer = overId === 'ungrouped' || knownSegmentIds.has(overId);
+    setOverContainer(isContainer ? overId : containerOf(overId));
+  };
+
   // Single drag handler for the whole sidebar: reorder within a block, or
   // drag an item into another block (lands at the bottom).
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveDragId(null);
+    setOverContainer(null);
     const { active: dragged, over } = event;
     if (!over) return;
     const draggedId = String(dragged.id);
@@ -820,8 +839,9 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
               sensors={sensors}
               collisionDetection={closestCorners}
               onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
               onDragEnd={handleDragEnd}
-              onDragCancel={() => setActiveDragId(null)}
+              onDragCancel={() => { setActiveDragId(null); setOverContainer(null); }}
             >
               {blocks.map((b, i) => {
                 if (b.segment === null) {
@@ -838,6 +858,7 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
                       items={ungroupedItems}
                       activeId={activeId}
                       draggingSourceContainer={draggingSourceContainer}
+                      overContainerId={overContainer}
                       onSelectItem={selectItem}
                       onRemoveItem={removeFromQueue}
                       onToggleCollapse={hasSegments ? () => setUngroupedCollapsed((c) => !c) : undefined}
@@ -858,6 +879,7 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
                     items={items}
                     activeId={activeId}
                     draggingSourceContainer={draggingSourceContainer}
+                    overContainerId={overContainer}
                     onSelectItem={selectItem}
                     onRemoveItem={removeFromQueue}
                     onRenameLocal={(name) => renameSegmentLocal(seg.id, name)}
