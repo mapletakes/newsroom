@@ -34,12 +34,14 @@ const byPosition = (a: Submission, b: Submission) =>
 function SortableQueueItem({
   s,
   segments,
+  isActive,
   onSelect,
   onRemove,
   onMove,
 }: {
   s: Submission;
   segments: Segment[];
+  isActive: boolean;
   onSelect: () => void;
   onRemove: () => void;
   onMove: (segmentId: string | null) => void;
@@ -73,9 +75,12 @@ function SortableQueueItem({
         </button>
         <button
           onClick={onSelect}
-          className="flex-1 text-left card-paper p-2 hover:bg-paper min-w-0"
+          className={`flex-1 text-left card-paper p-2 hover:bg-paper min-w-0 ${
+            isActive ? 'ring-2 ring-rust ring-inset bg-rust/5' : ''
+          }`}
         >
           <div className="font-mono text-[10px] uppercase tracking-widest text-ink/60 mb-1">
+            {isActive && <span className="text-rust font-bold mr-1">▶ NOW</span>}
             {s.kind.replace('_', ' ')}
             {s.duration_seconds ? ` · ${formatDuration(s.duration_seconds)}` : ''}
             {s.dmca_risk === 'high' && <span className="text-rust ml-1">⚠</span>}
@@ -123,6 +128,7 @@ function SegmentBlock({
   collapsed,
   items,
   segments,
+  activeId,
   sensors,
   onReorder,
   onSelectItem,
@@ -140,6 +146,7 @@ function SegmentBlock({
   collapsed: boolean;
   items: Submission[];
   segments: Segment[];
+  activeId: string | null;
   sensors: ReturnType<typeof useSensors>;
   onReorder: (e: DragEndEvent) => void;
   onSelectItem: (id: string) => void;
@@ -195,6 +202,7 @@ function SegmentBlock({
                   key={s.id}
                   s={s}
                   segments={segments}
+                  isActive={s.id === activeId}
                   onSelect={() => onSelectItem(s.id)}
                   onRemove={() => onRemoveItem(s.id)}
                   onMove={(seg) => onMoveItem(s.id, seg)}
@@ -286,9 +294,11 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
     return flat;
   }, [blocks, queue, segments]);
 
-  // Auto-select the first item in play order when nothing is active.
+  // Auto-select the first item in play order when nothing is active, or when
+  // the active item has left the queue (played/removed from elsewhere).
   useEffect(() => {
-    if (!activeId && orderedQueue.length > 0) {
+    const activeExists = !!activeId && orderedQueue.some((s) => s.id === activeId);
+    if (!activeExists && orderedQueue.length > 0) {
       setActiveId(orderedQueue[0].id);
       setStartedAt(Date.now());
       setTakeaway('');
@@ -307,23 +317,27 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
     return found;
   }, [queue, activeId]);
 
-  // Everything except the active (now-playing) item, in play order.
+  // Everything except the active (now-playing) item — used only to pick the
+  // "next" item when playing/skipping/removing.
   const remaining = useMemo(
     () => orderedQueue.filter((s) => s.id !== activeId),
     [orderedQueue, activeId],
   );
 
+  // The sidebar renders the FULL list (active item included, highlighted),
+  // grouped by block.
   const knownSegmentIds = useMemo(() => new Set(segments.map((s) => s.id)), [segments]);
   const ungroupedItems = useMemo(
-    () => remaining.filter((s) => !s.segment_id || !knownSegmentIds.has(s.segment_id)),
-    [remaining, knownSegmentIds],
+    () => orderedQueue.filter((s) => !s.segment_id || !knownSegmentIds.has(s.segment_id)),
+    [orderedQueue, knownSegmentIds],
   );
   const itemsForSegment = useCallback(
-    (segId: string) => remaining.filter((s) => s.segment_id === segId),
-    [remaining],
+    (segId: string) => orderedQueue.filter((s) => s.segment_id === segId),
+    [orderedQueue],
   );
 
   const selectItem = (id: string) => {
+    if (id === activeId) return; // already playing — don't reset the timer/takeaway
     setActiveId(id);
     setStartedAt(Date.now());
     setTakeaway('');
@@ -742,7 +756,7 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
 
           <div className="flex items-center justify-between mb-3">
             <span className="font-mono text-xs uppercase tracking-widest text-ink/60">
-              Up next ({remaining.length})
+              Queue ({orderedQueue.length})
             </span>
             <button
               onClick={addSegment}
@@ -766,6 +780,7 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
                     collapsed={ungroupedCollapsed}
                     items={ungroupedItems}
                     segments={segments}
+                    activeId={activeId}
                     sensors={sensors}
                     onReorder={reorderGroup(ungroupedItems)}
                     onSelectItem={selectItem}
@@ -787,6 +802,7 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
                   collapsed={seg.collapsed}
                   items={items}
                   segments={segments}
+                  activeId={activeId}
                   sensors={sensors}
                   onReorder={reorderGroup(items)}
                   onSelectItem={selectItem}
