@@ -8,6 +8,7 @@ import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { useQueueRealtime } from '@/lib/use-queue-realtime';
 import {
   DndContext,
+  DragOverlay,
   closestCorners,
   KeyboardSensor,
   PointerSensor,
@@ -15,6 +16,7 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragStartEvent,
 } from '@dnd-kit/core';
 import {
   arrayMove,
@@ -111,6 +113,7 @@ function SegmentBlock({
   collapsed,
   items,
   activeId,
+  draggingSourceContainer,
   onSelectItem,
   onRemoveItem,
   onRenameLocal,
@@ -126,6 +129,7 @@ function SegmentBlock({
   collapsed: boolean;
   items: Submission[];
   activeId: string | null;
+  draggingSourceContainer: string | null; // container of the item being dragged, if any
   onSelectItem: (id: string) => void;
   onRemoveItem: (id: string) => void;
   onRenameLocal?: (name: string) => void;
@@ -135,12 +139,22 @@ function SegmentBlock({
   onMoveDown?: () => void;
   onDelete?: () => void;
 }) {
-  // Make the whole block a drop target so items can be dragged into it
-  // (including empty segments).
+  // The whole block (header included) is a drop target so items can be dragged
+  // anywhere onto it — even onto a collapsed segment's header.
   const { setNodeRef, isOver } = useDroppable({ id: containerId });
 
+  // True when an item from a DIFFERENT block is hovering this one — i.e. a drop
+  // here would move it in (and land at the bottom).
+  const isDropTarget =
+    isOver && draggingSourceContainer !== null && draggingSourceContainer !== containerId;
+
   return (
-    <div className="mb-2">
+    <div
+      ref={setNodeRef}
+      className={`mb-2 rounded-sm transition-colors ${
+        isDropTarget ? 'ring-2 ring-rust bg-rust/5' : ''
+      }`}
+    >
       {title !== null && (
         <div className="flex items-center gap-1 mb-1 bg-ink/10 px-1 py-1">
           <button
@@ -173,14 +187,9 @@ function SegmentBlock({
           )}
         </div>
       )}
-      {!collapsed && (
+      {!collapsed ? (
         <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
-          <div
-            ref={setNodeRef}
-            className={`space-y-1 min-h-[2rem] rounded-sm transition-colors ${
-              isOver ? 'bg-rust/10 outline-dashed outline-1 outline-rust/40' : ''
-            }`}
-          >
+          <div className="space-y-1 min-h-[2rem]">
             {items.map((s) => (
               <SortableQueueItem
                 key={s.id}
@@ -190,13 +199,24 @@ function SegmentBlock({
                 onRemove={() => onRemoveItem(s.id)}
               />
             ))}
-            {title !== null && items.length === 0 && (
+            {isDropTarget && (
+              <div className="border-2 border-dashed border-rust bg-rust/10 px-2 py-2 text-center font-mono text-[10px] uppercase tracking-widest text-rust">
+                Drop here
+              </div>
+            )}
+            {title !== null && items.length === 0 && !isDropTarget && (
               <div className="font-mono text-[10px] text-ink/40 px-6 py-2 italic">
                 empty — drag items here
               </div>
             )}
           </div>
         </SortableContext>
+      ) : (
+        isDropTarget && (
+          <div className="border-2 border-dashed border-rust bg-rust/10 px-2 py-2 text-center font-mono text-[10px] uppercase tracking-widest text-rust">
+            Drop to add here
+          </div>
+        )
       )}
     </div>
   );
@@ -210,6 +230,7 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
   const [activeId, setActiveId] = useState<string | null>(null);
   const [takeaway, setTakeaway] = useState('');
   const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
 
   const [addUrl, setAddUrl] = useState('');
   const [adding, setAdding] = useState(false);
@@ -484,9 +505,14 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
     [ungroupedItems, itemsForSegment],
   );
 
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveDragId(String(event.active.id));
+  };
+
   // Single drag handler for the whole sidebar: reorder within a block, or
   // drag an item into another block (lands at the bottom).
   const handleDragEnd = (event: DragEndEvent) => {
+    setActiveDragId(null);
     const { active: dragged, over } = event;
     if (!over) return;
     const draggedId = String(dragged.id);
@@ -553,6 +579,9 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
     active && (active.kind === 'youtube' || active.kind === 'youtube_short')
       ? extractYouTubeId(active.url)
       : null;
+
+  const activeDragItem = activeDragId ? queue.find((s) => s.id === activeDragId) || null : null;
+  const draggingSourceContainer = activeDragId ? containerOf(activeDragId) : null;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -790,7 +819,9 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
             <DndContext
               sensors={sensors}
               collisionDetection={closestCorners}
+              onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
+              onDragCancel={() => setActiveDragId(null)}
             >
               {blocks.map((b, i) => {
                 if (b.segment === null) {
@@ -806,6 +837,7 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
                       collapsed={ungroupedCollapsed}
                       items={ungroupedItems}
                       activeId={activeId}
+                      draggingSourceContainer={draggingSourceContainer}
                       onSelectItem={selectItem}
                       onRemoveItem={removeFromQueue}
                       onToggleCollapse={hasSegments ? () => setUngroupedCollapsed((c) => !c) : undefined}
@@ -825,6 +857,7 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
                     collapsed={seg.collapsed}
                     items={items}
                     activeId={activeId}
+                    draggingSourceContainer={draggingSourceContainer}
                     onSelectItem={selectItem}
                     onRemoveItem={removeFromQueue}
                     onRenameLocal={(name) => renameSegmentLocal(seg.id, name)}
@@ -836,6 +869,19 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
                   />
                 );
               })}
+              <DragOverlay>
+                {activeDragItem ? (
+                  <div className="card-paper p-2 shadow-lg bg-paper w-[300px] opacity-95 cursor-grabbing">
+                    <div className="font-mono text-[10px] uppercase tracking-widest text-ink/60 mb-1">
+                      {activeDragItem.kind.replace('_', ' ')}
+                      {activeDragItem.duration_seconds ? ` · ${formatDuration(activeDragItem.duration_seconds)}` : ''}
+                    </div>
+                    <div className="font-display text-sm font-bold leading-tight line-clamp-2">
+                      {activeDragItem.title || activeDragItem.url}
+                    </div>
+                  </div>
+                ) : null}
+              </DragOverlay>
             </DndContext>
           </div>
         </aside>
