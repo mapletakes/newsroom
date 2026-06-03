@@ -84,6 +84,7 @@ export async function fetchYouTubeMeta(url: string): Promise<YouTubeMeta> {
       meta.publisher = meta.publisher || scraped.publisher || null;
       meta.thumbnail = meta.thumbnail || scraped.thumbnail || null;
       meta.description = meta.description || scraped.description || null;
+      meta.publishedAt = meta.publishedAt || scraped.publishedAt || null;
     }
   }
 
@@ -160,8 +161,10 @@ async function scrapeWatchPageMeta(url: string): Promise<Partial<YouTubeMeta> | 
     const json = extractJsonAfter(await r.text(), 'ytInitialPlayerResponse');
     if (!json) return null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const vd = (JSON.parse(json) as any)?.videoDetails;
+    const data = JSON.parse(json) as any;
+    const vd = data?.videoDetails;
     if (!vd) return null;
+    const micro = data?.microformat?.playerMicroformatRenderer;
     const thumbs = vd.thumbnail?.thumbnails;
     const lenSecs = vd.lengthSeconds ? parseInt(vd.lengthSeconds, 10) : NaN;
     return {
@@ -170,6 +173,7 @@ async function scrapeWatchPageMeta(url: string): Promise<Partial<YouTubeMeta> | 
       description: vd.shortDescription ? String(vd.shortDescription).slice(0, 800) : null,
       thumbnail: Array.isArray(thumbs) ? thumbs[thumbs.length - 1]?.url || null : null,
       durationSeconds: Number.isFinite(lenSecs) ? lenSecs : null,
+      publishedAt: micro?.publishDate || micro?.uploadDate || null,
     };
   } catch {
     return null;
