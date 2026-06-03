@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { SubmissionCard, type Submission } from '@/components/SubmissionCard';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { useQueueRealtime } from '@/lib/use-queue-realtime';
+import { formatDuration } from '@/lib/url';
 
 export function ModView({
   channel,
@@ -22,6 +23,7 @@ export function ModView({
   isMod?: boolean;
 }) {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [nowPlaying, setNowPlaying] = useState<Submission | null>(null);
   const [filter, setFilter] = useState<'pending' | 'approved' | 'played' | 'rejected'>('pending');
   const [counts, setCounts] = useState<{ pending: number; approved: number; played: number; rejected: number; total: number }>({
     pending: 0,
@@ -36,6 +38,7 @@ export function ModView({
     if (r.ok) {
       const data = await r.json();
       setSubmissions(data.submissions || []);
+      setNowPlaying(data.nowPlaying || null);
       if (data.counts) setCounts(data.counts);
     }
   }, [filter]);
@@ -95,6 +98,42 @@ export function ModView({
           <DarkModeToggle />
         </div>
       </header>
+
+      {/* On air — what the streamer is currently showing on the deck */}
+      <div className="px-6 py-2 bg-rust/10 border-b border-rust/30 flex items-center gap-3 min-h-[2.75rem]">
+        <span className="shrink-0 font-mono text-xs uppercase tracking-widest text-rust font-bold flex items-center gap-1">
+          <span className="inline-block w-2 h-2 rounded-full bg-rust animate-pulse" />
+          On air
+        </span>
+        {nowPlaying ? (
+          <>
+            {nowPlaying.thumbnail_url && (
+              <img
+                src={nowPlaying.thumbnail_url}
+                alt=""
+                className="shrink-0 w-12 h-8 object-cover border border-ink/20"
+              />
+            )}
+            <span className="font-display text-sm font-bold truncate">
+              {nowPlaying.title || nowPlaying.url}
+            </span>
+            <span className="shrink-0 font-mono text-[10px] uppercase tracking-widest text-ink/50">
+              {nowPlaying.kind.replace('_', ' ')}
+              {nowPlaying.duration_seconds ? ` · ${formatDuration(nowPlaying.duration_seconds)}` : ''}
+            </span>
+            <a
+              href={nowPlaying.url}
+              target="_blank"
+              rel="noreferrer"
+              className="shrink-0 ml-auto font-mono text-xs uppercase tracking-widest underline hover:text-rust"
+            >
+              Open ↗
+            </a>
+          </>
+        ) : (
+          <span className="font-mono text-xs text-ink/50">Nothing on the deck right now.</span>
+        )}
+      </div>
 
       {/* Filter tabs */}
       <div className="px-6 py-3 border-b border-ink/20 flex items-center gap-1 flex-wrap font-mono text-xs uppercase">

@@ -17,7 +17,8 @@ create table if not exists public.streams (
   auto_summarize boolean default true,
   ignored_users text[] default '{}'::text[], -- usernames whose links are silently dropped
   preferred_sources text[] default '{}'::text[], -- domains prioritised in related coverage search
-  ungrouped_position int default 0 -- order of the "ungrouped" block among deck segments
+  ungrouped_position int default 0, -- order of the "ungrouped" block among deck segments
+  now_playing_id uuid -- submission the streamer is currently showing on the deck
 );
 
 -- Moderators on a stream

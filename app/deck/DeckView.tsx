@@ -320,6 +320,18 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
     }
   }, [orderedQueue, activeId]);
 
+  // Report the now-playing item to the server so the mod view can show it.
+  const lastSentNowPlaying = useRef<string | null>(null);
+  useEffect(() => {
+    if (lastSentNowPlaying.current === activeId) return;
+    lastSentNowPlaying.current = activeId;
+    fetch('/api/deck/now-playing', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: activeId }),
+    }).catch(() => {});
+  }, [activeId]);
+
   const active = useMemo(() => {
     const found = queue.find((s) => s.id === activeId) || null;
     if (found && found.related_coverage && !Array.isArray(found.related_coverage)) {

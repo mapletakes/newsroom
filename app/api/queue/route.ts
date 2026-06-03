@@ -60,8 +60,26 @@ export async function GET(req: NextRequest) {
       .eq('stream_id', session.streamId),
   ]);
 
+  // What the streamer is currently showing on the deck (for the mod view).
+  let nowPlaying: Record<string, unknown> | null = null;
+  const { data: streamRow, error: srErr } = await sb
+    .from('streams')
+    .select('now_playing_id')
+    .eq('id', session.streamId)
+    .maybeSingle();
+  if (!srErr && streamRow?.now_playing_id) {
+    const { data: np } = await sb
+      .from('submissions')
+      .select('*')
+      .eq('id', streamRow.now_playing_id)
+      .eq('stream_id', session.streamId)
+      .maybeSingle();
+    nowPlaying = np || null;
+  }
+
   return NextResponse.json({
     submissions: data || [],
+    nowPlaying,
     counts: {
       pending: pending.count ?? 0,
       approved: approved.count ?? 0,
