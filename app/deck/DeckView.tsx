@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { Submission } from '@/components/SubmissionCard';
-import { extractYouTubeId, formatDuration } from '@/lib/url';
+import { extractYouTubeId, formatDuration, formatDate } from '@/lib/url';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { useQueueRealtime } from '@/lib/use-queue-realtime';
 import {
@@ -668,6 +668,7 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
                   </span>
                 )}
                 {active.publisher && <span className="text-ink/60">· {active.publisher}</span>}
+                {active.published_at && <span className="text-ink/60">· {formatDate(active.published_at)}</span>}
               </div>
 
               <h1 className="font-display text-4xl lg:text-5xl font-black leading-tight mb-4">

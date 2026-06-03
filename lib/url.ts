@@ -79,6 +79,19 @@ export function formatDuration(seconds: number | null | undefined): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+export function formatDate(input: string | null | undefined): string {
+  if (!input) return '';
+  const d = new Date(input);
+  if (isNaN(d.getTime())) return '';
+  // Format in UTC so date-only values (e.g. "2023-05-14") don't shift a day.
+  return d.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 export function extractYouTubeId(url: string): string | null {
   try {
     const u = new URL(url);

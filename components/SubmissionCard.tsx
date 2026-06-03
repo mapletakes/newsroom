@@ -1,6 +1,6 @@
 'use client';
 
-import { formatDuration } from '@/lib/url';
+import { formatDuration, formatDate } from '@/lib/url';
 
 type Submission = {
   id: string;
@@ -11,6 +11,7 @@ type Submission = {
   thumbnail_url: string | null;
   publisher: string | null;
   duration_seconds: number | null;
+  published_at: string | null;
   description: string | null;
   summary: string | null;
   credibility_tag: string | null;
@@ -94,6 +95,7 @@ export function SubmissionCard({
         </h3>
         <div className="font-mono text-[11px] text-ink/60 mb-2 truncate">
           {s.publisher || host}
+          {s.published_at && ` · ${formatDate(s.published_at)}`}
           {s.submitter_login && (
             <> · submitted by <strong>{s.submitter_login}</strong>
               {s.submitter_is_mod ? ' (mod)' : s.submitter_is_vip ? ' (vip)' : s.submitter_is_sub ? ' (sub)' : ''}
