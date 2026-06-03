@@ -100,7 +100,7 @@ export function ModView({
       </header>
 
       {/* On air — what the streamer is currently showing on the deck */}
-      <div className="px-6 py-2 bg-rust/10 border-b border-rust/30 flex items-center gap-3 min-h-[2.75rem]">
+      <div className="px-6 py-2 bg-rust/10 border-b border-rust/30 flex items-center gap-3 flex-wrap min-h-[2.75rem]">
         <span className="shrink-0 font-mono text-xs uppercase tracking-widest text-rust font-bold flex items-center gap-1">
           <span className="inline-block w-2 h-2 rounded-full bg-rust animate-pulse" />
           On air
@@ -114,18 +114,26 @@ export function ModView({
                 className="shrink-0 w-12 h-8 object-cover border border-ink/20"
               />
             )}
-            <span className="font-display text-sm font-bold truncate">
+            <span className="flex-1 min-w-0 font-display text-sm font-bold truncate">
               {nowPlaying.title || nowPlaying.url}
             </span>
             <span className="shrink-0 font-mono text-[10px] uppercase tracking-widest text-ink/50">
               {nowPlaying.kind.replace('_', ' ')}
               {nowPlaying.duration_seconds ? ` · ${formatDuration(nowPlaying.duration_seconds)}` : ''}
             </span>
+            <input
+              readOnly
+              value={nowPlaying.url}
+              onFocus={(e) => e.currentTarget.select()}
+              className="shrink-0 w-48 font-mono text-[11px] bg-paper border border-ink/20 px-2 py-1 focus:outline-none focus:border-ink"
+              aria-label="Now playing URL"
+            />
+            <CopyButton value={nowPlaying.url} />
             <a
               href={nowPlaying.url}
               target="_blank"
               rel="noreferrer"
-              className="shrink-0 ml-auto font-mono text-xs uppercase tracking-widest underline hover:text-rust"
+              className="shrink-0 font-mono text-xs uppercase tracking-widest underline hover:text-rust"
             >
               Open ↗
             </a>
@@ -243,6 +251,26 @@ export function ModView({
         </div>
       </main>
     </div>
+  );
+}
+
+function CopyButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(value);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        } catch {
+          /* clipboard unavailable */
+        }
+      }}
+      className="shrink-0 font-mono text-xs uppercase tracking-widest border border-ink/40 px-2 py-1 hover:bg-ink hover:text-paper transition-colors"
+    >
+      {copied ? 'Copied!' : 'Copy'}
+    </button>
   );
 }
 
