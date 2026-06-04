@@ -633,7 +633,7 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
           <Link href="/mod" className="underline hover:text-rust">
             Mod View &rarr;
           </Link>
-          <a href="/api/notes?format=markdown" className="underline hover:text-rust">
+          <a href="/api/notes?format=markdown&commit=1" className="underline hover:text-rust">
             Export Notes
           </a>
           <Link href="/setup" className="underline hover:text-rust">

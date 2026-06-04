@@ -18,7 +18,8 @@ create table if not exists public.streams (
   ignored_users text[] default '{}'::text[], -- usernames whose links are silently dropped
   preferred_sources text[] default '{}'::text[], -- domains prioritised in related coverage search
   ungrouped_position int default 0, -- order of the "ungrouped" block among deck segments
-  now_playing_id uuid -- submission the streamer is currently showing on the deck
+  now_playing_id uuid, -- submission the streamer is currently showing on the deck
+  notes_exported_at timestamptz -- marks the last show-notes export boundary
 );
 
 -- Moderators on a stream

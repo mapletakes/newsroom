@@ -259,7 +259,8 @@ export function SetupForm({
         <div className="space-y-2 font-mono text-sm">
           <div><Link href="/deck" className="underline hover:text-rust">-&gt; Streamer Deck</Link></div>
           <div><Link href="/mod" className="underline hover:text-rust">-&gt; Mod Triage</Link></div>
-          <div><a href="/api/notes?format=markdown" className="underline hover:text-rust">-&gt; Export show notes (Markdown)</a></div>
+          <div><a href="/api/notes?format=markdown&commit=1" className="underline hover:text-rust">-&gt; Export show notes since last export (Markdown)</a></div>
+          <div><a href="/api/notes?format=markdown" className="underline hover:text-rust text-ink/60">-&gt; Preview latest notes (don&apos;t mark exported)</a></div>
         </div>
       </section>
     </div>
