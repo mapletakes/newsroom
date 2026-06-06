@@ -1,7 +1,13 @@
 // Twitch OAuth Authorization Code flow (server-side).
 // user:read:chat is required for EventSub channel.chat.message webhooks.
 
-const SCOPES = ['user:read:email', 'user:read:chat', 'user:bot', 'user:read:moderated_channels'];
+const SCOPES = [
+  'user:read:email',
+  'user:read:chat',
+  'user:write:chat', // post "now watching" messages to the streamer's own chat
+  'user:bot',
+  'user:read:moderated_channels',
+];
 
 export function buildAuthUrl(state: string): string {
   const clientId = process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID!;
@@ -61,6 +67,65 @@ export async function fetchTwitchUser(accessToken: string): Promise<{
   const u = data.data?.[0];
   if (!u) throw new Error('No user in Twitch response');
   return u;
+}
+
+export async function refreshAccessToken(refreshToken: string): Promise<{
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+} | null> {
+  const clientId = process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID!;
+  const clientSecret = process.env.TWITCH_CLIENT_SECRET!;
+  const r = await fetch('https://id.twitch.tv/oauth2/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+    }),
+  });
+  if (!r.ok) return null;
+  return r.json();
+}
+
+/**
+ * Send a chat message to a broadcaster's channel as `senderId`.
+ * For posting to your own channel, senderId === broadcasterId.
+ * Requires a user access token with the `user:write:chat` scope.
+ */
+export async function sendChatMessage(
+  accessToken: string,
+  broadcasterId: string,
+  senderId: string,
+  message: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const clientId = process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID!;
+  const r = await fetch('https://api.twitch.tv/helix/chat/messages', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Client-Id': clientId,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      broadcaster_id: broadcasterId,
+      sender_id: senderId,
+      message,
+    }),
+  });
+
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    return { ok: false, error: `Twitch ${r.status}: ${text}` };
+  }
+  const data = await r.json().catch(() => null);
+  const sent = data?.data?.[0];
+  if (sent && sent.is_sent === false) {
+    return { ok: false, error: sent.drop_reason?.message || 'message dropped' };
+  }
+  return { ok: true };
 }
 
 export async function fetchModeratedChannels(

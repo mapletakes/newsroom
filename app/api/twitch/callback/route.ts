@@ -56,6 +56,17 @@ export async function GET(req: NextRequest) {
       .single();
     if (error || !stream) throw error || new Error('No stream row');
 
+    // Store tokens for posting "now watching" to chat. Separate, non-fatal
+    // step so login still works if the token columns migration hasn't run.
+    await sb
+      .from('streams')
+      .update({
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        token_expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+      })
+      .eq('id', stream.id);
+
     // Check which Twitch channels this user mods for
     const modChannels = await fetchModeratedChannels(tokens.access_token, user.id);
 

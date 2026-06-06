@@ -19,7 +19,12 @@ create table if not exists public.streams (
   preferred_sources text[] default '{}'::text[], -- domains prioritised in related coverage search
   ungrouped_position int default 0, -- order of the "ungrouped" block among deck segments
   now_playing_id uuid, -- submission the streamer is currently showing on the deck
-  notes_exported_at timestamptz -- marks the last show-notes export boundary
+  notes_exported_at timestamptz, -- marks the last show-notes export boundary
+  -- Streamer OAuth tokens (sensitive; service-role access only) used to post
+  -- "now watching" messages to chat on the streamer's behalf.
+  access_token text,
+  refresh_token text,
+  token_expires_at timestamptz
 );
 
 -- Moderators on a stream

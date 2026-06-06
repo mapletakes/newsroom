@@ -248,6 +248,7 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
   const [addUrl, setAddUrl] = useState('');
   const [adding, setAdding] = useState(false);
   const [addStatus, setAddStatus] = useState('');
+  const [announceStatus, setAnnounceStatus] = useState('');
 
   const suppressRefreshUntil = useRef(0);
 
@@ -416,6 +417,28 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
     setStartedAt(next ? Date.now() : null);
     setTakeaway('');
     await removeFromQueue(removedId);
+  };
+
+  // Post "Watching: <title> <url>" to the streamer's chat for pinning.
+  const announce = async () => {
+    if (!active || announceStatus === 'Posting…') return;
+    setAnnounceStatus('Posting…');
+    try {
+      const r = await fetch('/api/deck/announce', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: active.id }),
+      });
+      if (r.ok) {
+        setAnnounceStatus('Posted to chat ✓');
+      } else {
+        const e = await r.json().catch(() => ({}));
+        setAnnounceStatus(e.detail || e.error || 'Failed to post');
+      }
+    } catch {
+      setAnnounceStatus('Failed to post');
+    }
+    setTimeout(() => setAnnounceStatus(''), 4000);
   };
 
   // --- Segment handlers ---
@@ -796,6 +819,17 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
                   <span className="material-icons text-base">delete</span>
                   Remove
                 </button>
+                <button
+                  onClick={announce}
+                  className="font-mono text-sm uppercase tracking-widest border border-ink/40 px-4 py-2 hover:bg-ink hover:text-paper transition-colors inline-flex items-center gap-1"
+                  title="Post 'Watching: …' to your chat so a mod can pin it"
+                >
+                  <span className="material-icons text-base">campaign</span>
+                  Post to chat
+                </button>
+                {announceStatus && (
+                  <span className="self-center font-mono text-xs text-ink/60">{announceStatus}</span>
+                )}
               </div>
 
               <label className="block max-w-3xl">
