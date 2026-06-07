@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { Submission } from '@/components/SubmissionCard';
-import { extractYouTubeId, formatDuration, formatDate } from '@/lib/url';
+import { extractYouTubeId, formatDuration, formatDate, kindTint } from '@/lib/url';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { useQueueRealtime } from '@/lib/use-queue-realtime';
 import {
@@ -75,8 +75,8 @@ function SortableQueueItem({
         </button>
         <button
           onClick={onSelect}
-          className={`flex-1 text-left card-paper p-2 hover:bg-paper min-w-0 ${
-            isActive ? 'ring-2 ring-rust ring-inset bg-rust/5' : ''
+          className={`flex-1 text-left card-paper ${kindTint(s.kind)} p-2 min-w-0 ${
+            isActive ? 'ring-2 ring-rust ring-inset' : ''
           }`}
         >
           <div className="font-mono text-[10px] uppercase tracking-widest text-ink/60 mb-1">

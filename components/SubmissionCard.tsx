@@ -1,6 +1,6 @@
 'use client';
 
-import { formatDuration, formatDate } from '@/lib/url';
+import { formatDuration, formatDate, kindTint } from '@/lib/url';
 
 type Submission = {
   id: string;
@@ -60,7 +60,7 @@ export function SubmissionCard({
   })();
 
   return (
-    <article className={`card-paper ${compact ? 'p-3' : 'p-4'} flex gap-4`}>
+    <article className={`card-paper ${kindTint(s.kind)} ${compact ? 'p-3' : 'p-4'} flex gap-4`}>
       {s.thumbnail_url && (
         <img
           src={s.thumbnail_url}

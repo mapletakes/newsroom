@@ -79,6 +79,27 @@ export function formatDuration(seconds: number | null | undefined): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+// Maps a media kind to a muted, type-coded card tint class (see globals.css).
+export function kindTint(kind: string): string {
+  switch (kind) {
+    case 'youtube':
+    case 'youtube_short':
+    case 'youtube_playlist':
+      return 'tint-youtube';
+    case 'twitter':
+      return 'tint-twitter';
+    case 'article':
+      return 'tint-article';
+    case 'twitch_clip':
+    case 'twitch_vod':
+      return 'tint-twitch';
+    case 'tiktok':
+      return 'tint-tiktok';
+    default:
+      return 'tint-unknown';
+  }
+}
+
 export function formatDate(input: string | null | undefined): string {
   if (!input) return '';
   const d = new Date(input);
