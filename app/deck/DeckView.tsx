@@ -12,7 +12,6 @@ import {
   closestCorners,
   KeyboardSensor,
   PointerSensor,
-  useDroppable,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -116,13 +115,12 @@ function SegmentBlock({
   activeId,
   draggingSourceContainer,
   overContainerId,
+  sortable,
   onSelectItem,
   onRemoveItem,
   onRenameLocal,
   onRenameCommit,
   onToggleCollapse,
-  onMoveUp,
-  onMoveDown,
   onDelete,
 }: {
   containerId: string; // 'ungrouped' or a segment id — the drop target id
@@ -133,18 +131,24 @@ function SegmentBlock({
   activeId: string | null;
   draggingSourceContainer: string | null; // container of the item being dragged, if any
   overContainerId: string | null; // container currently under the cursor
+  sortable: boolean; // whether this block can be drag-reordered (has a header)
   onSelectItem: (id: string) => void;
   onRemoveItem: (id: string) => void;
   onRenameLocal?: (name: string) => void;
   onRenameCommit?: () => void;
   onToggleCollapse?: () => void;
-  onMoveUp?: () => void;
-  onMoveDown?: () => void;
   onDelete?: () => void;
 }) {
-  // The whole block (header included) is a drop target so items can be dragged
-  // anywhere onto it — even onto a collapsed segment's header.
-  const { setNodeRef } = useDroppable({ id: containerId });
+  // The block is a sortable: draggable by its header grip to reorder blocks,
+  // and a drop target so items can be dragged into it (even when collapsed).
+  const {
+    setNodeRef,
+    attributes,
+    listeners,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: containerId });
 
   // True when an item from a DIFFERENT block is hovering this one (anywhere —
   // header, items, or gaps), i.e. a drop here would move it in at the bottom.
@@ -158,15 +162,33 @@ function SegmentBlock({
   // Combined runtime of any videos in this block.
   const totalSeconds = items.reduce((sum, s) => sum + (s.duration_seconds || 0), 0);
 
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  };
+
   return (
     <div
       ref={setNodeRef}
+      style={style}
       className={`mb-2 rounded-sm transition-colors ${
         isDropTarget ? 'ring-2 ring-rust bg-rust/5' : ''
       }`}
     >
       {title !== null && (
         <div className="flex items-center gap-1 mb-1 bg-ink/10 px-1 py-1">
+          {sortable && (
+            <button
+              {...attributes}
+              {...listeners}
+              className="shrink-0 w-5 flex items-center justify-center cursor-grab active:cursor-grabbing text-ink/30 hover:text-ink/60 select-none"
+              aria-label="Drag to reorder segment"
+              tabIndex={-1}
+            >
+              ⠿
+            </button>
+          )}
           <button
             onClick={onToggleCollapse}
             className="shrink-0 w-5 text-ink/60 hover:text-ink"
@@ -190,8 +212,6 @@ function SegmentBlock({
           <span className="shrink-0 font-mono text-[10px] text-ink/50">
             ({items.length}{totalSeconds > 0 ? ` · ${formatDuration(totalSeconds)}` : ''})
           </span>
-          <button onClick={onMoveUp} className="shrink-0 w-5 text-ink/40 hover:text-ink" aria-label="Move up">↑</button>
-          <button onClick={onMoveDown} className="shrink-0 w-5 text-ink/40 hover:text-ink" aria-label="Move down">↓</button>
           {onDelete && (
             <button onClick={onDelete} className="shrink-0 w-5 flex items-center justify-center text-ink/30 hover:text-rust" aria-label="Delete segment">
               <span className="material-icons text-sm">delete</span>
@@ -291,6 +311,8 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
     arr.sort((a, b) => a.position - b.position);
     return arr;
   }, [segments, ungroupedPosition]);
+
+  const blockIds = useMemo(() => blocks.map((b) => b.id), [blocks]);
 
   // Flattened play order follows the block order.
   const orderedQueue = useMemo(() => {
@@ -478,25 +500,19 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
     suppressRefreshUntil.current = 0;
   };
 
-  // Move a block (ungrouped or a segment) up/down among all blocks.
-  const moveBlock = async (index: number, dir: -1 | 1) => {
-    const next = index + dir;
-    if (next < 0 || next >= blocks.length) return;
-    const reordered = [...blocks];
-    [reordered[index], reordered[next]] = [reordered[next], reordered[index]];
-
+  // Persist a new block order (ungrouped + segments) after a drag.
+  const persistBlockOrder = (orderedIds: string[]) => {
     // Optimistic: assign positions 1..N across all blocks.
-    const pos = new Map(reordered.map((b, i) => [b.id, i + 1]));
+    const pos = new Map(orderedIds.map((id, i) => [id, i + 1]));
     setSegments((prev) => prev.map((s) => ({ ...s, position: pos.get(s.id) ?? s.position })));
     if (pos.has('ungrouped')) setUngroupedPosition(pos.get('ungrouped')!);
 
     suppressRefreshUntil.current = Date.now() + 3000;
-    await fetch('/api/segments/reorder', {
+    return fetch('/api/segments/reorder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids: reordered.map((b) => b.id) }),
-    });
-    suppressRefreshUntil.current = 0;
+      body: JSON.stringify({ ids: orderedIds }),
+    }).finally(() => { suppressRefreshUntil.current = 0; });
   };
 
   const deleteSegment = async (id: string) => {
@@ -557,18 +573,26 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
     setActiveDragId(String(event.active.id));
   };
 
+  const isBlockId = useCallback(
+    (id: string) => id === 'ungrouped' || knownSegmentIds.has(id),
+    [knownSegmentIds],
+  );
+
   // Track which container is under the cursor (resolving items → their block)
   // so the whole target block can highlight, not just the area under it.
+  // Skipped while dragging a whole block.
   const handleDragOver = (event: DragOverEvent) => {
-    const { over } = event;
+    const { active, over } = event;
+    if (isBlockId(String(active.id))) { setOverContainer(null); return; }
     if (!over) { setOverContainer(null); return; }
     const overId = String(over.id);
-    const isContainer = overId === 'ungrouped' || knownSegmentIds.has(overId);
-    setOverContainer(isContainer ? overId : containerOf(overId));
+    setOverContainer(isBlockId(overId) ? overId : containerOf(overId));
   };
 
-  // Single drag handler for the whole sidebar: reorder within a block, or
-  // drag an item into another block (lands at the bottom).
+  // Single drag handler for the whole sidebar:
+  //  - drag a block (by its grip) to reorder blocks
+  //  - reorder items within a block
+  //  - drag an item into another block (lands at the bottom)
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveDragId(null);
     setOverContainer(null);
@@ -577,9 +601,20 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
     const draggedId = String(dragged.id);
     const overId = String(over.id);
 
+    // Block reorder.
+    if (isBlockId(draggedId)) {
+      const overBlockId = isBlockId(overId) ? overId : containerOf(overId);
+      if (draggedId === overBlockId) return;
+      const oldIndex = blocks.findIndex((b) => b.id === draggedId);
+      const newIndex = blocks.findIndex((b) => b.id === overBlockId);
+      if (oldIndex === -1 || newIndex === -1) return;
+      persistBlockOrder(arrayMove(blocks, oldIndex, newIndex).map((b) => b.id));
+      return;
+    }
+
+    // Item drag.
     const sourceContainer = containerOf(draggedId);
-    // `over` is either a block id (dropped on the container) or an item id.
-    const isContainer = overId === 'ungrouped' || knownSegmentIds.has(overId);
+    const isContainer = isBlockId(overId);
     const targetContainer = isContainer ? overId : containerOf(overId);
 
     if (sourceContainer === targetContainer) {
@@ -639,8 +674,12 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
       ? extractYouTubeId(active.url)
       : null;
 
-  const activeDragItem = activeDragId ? queue.find((s) => s.id === activeDragId) || null : null;
-  const draggingSourceContainer = activeDragId ? containerOf(activeDragId) : null;
+  const draggingBlock = activeDragId !== null && isBlockId(activeDragId);
+  const activeDragItem = activeDragId && !draggingBlock ? queue.find((s) => s.id === activeDragId) || null : null;
+  const activeDragBlock = draggingBlock
+    ? blocks.find((b) => b.id === activeDragId) || null
+    : null;
+  const draggingSourceContainer = activeDragItem ? containerOf(activeDragItem.id) : null;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -895,54 +934,54 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
               onDragEnd={handleDragEnd}
               onDragCancel={() => { setActiveDragId(null); setOverContainer(null); }}
             >
-              {blocks.map((b, i) => {
-                if (b.segment === null) {
-                  // Ungrouped block. Only gets a header (and reorder controls)
-                  // once at least one segment exists; otherwise renders flat.
-                  const hasSegments = segments.length > 0;
+              <SortableContext items={blockIds} strategy={verticalListSortingStrategy}>
+                {blocks.map((b) => {
+                  if (b.segment === null) {
+                    // Ungrouped block. Only gets a header (and drag handle) once
+                    // at least one segment exists; otherwise renders flat.
+                    const hasSegments = segments.length > 0;
+                    return (
+                      <SegmentBlock
+                        key="ungrouped"
+                        containerId="ungrouped"
+                        title={hasSegments ? 'Ungrouped' : null}
+                        editable={false}
+                        collapsed={ungroupedCollapsed}
+                        items={ungroupedItems}
+                        activeId={activeId}
+                        draggingSourceContainer={draggingSourceContainer}
+                        overContainerId={overContainer}
+                        sortable={hasSegments}
+                        onSelectItem={selectItem}
+                        onRemoveItem={removeFromQueue}
+                        onToggleCollapse={hasSegments ? () => setUngroupedCollapsed((c) => !c) : undefined}
+                      />
+                    );
+                  }
+                  const seg = b.segment;
+                  const items = itemsForSegment(seg.id);
                   return (
                     <SegmentBlock
-                      key="ungrouped"
-                      containerId="ungrouped"
-                      title={hasSegments ? 'Ungrouped' : null}
-                      editable={false}
-                      collapsed={ungroupedCollapsed}
-                      items={ungroupedItems}
+                      key={seg.id}
+                      containerId={seg.id}
+                      title={seg.name}
+                      editable
+                      collapsed={seg.collapsed}
+                      items={items}
                       activeId={activeId}
                       draggingSourceContainer={draggingSourceContainer}
                       overContainerId={overContainer}
+                      sortable
                       onSelectItem={selectItem}
                       onRemoveItem={removeFromQueue}
-                      onToggleCollapse={hasSegments ? () => setUngroupedCollapsed((c) => !c) : undefined}
-                      onMoveUp={hasSegments ? () => moveBlock(i, -1) : undefined}
-                      onMoveDown={hasSegments ? () => moveBlock(i, 1) : undefined}
+                      onRenameLocal={(name) => renameSegmentLocal(seg.id, name)}
+                      onRenameCommit={() => commitRename(seg.id)}
+                      onToggleCollapse={() => toggleCollapse(seg)}
+                      onDelete={() => deleteSegment(seg.id)}
                     />
                   );
-                }
-                const seg = b.segment;
-                const items = itemsForSegment(seg.id);
-                return (
-                  <SegmentBlock
-                    key={seg.id}
-                    containerId={seg.id}
-                    title={seg.name}
-                    editable
-                    collapsed={seg.collapsed}
-                    items={items}
-                    activeId={activeId}
-                    draggingSourceContainer={draggingSourceContainer}
-                    overContainerId={overContainer}
-                    onSelectItem={selectItem}
-                    onRemoveItem={removeFromQueue}
-                    onRenameLocal={(name) => renameSegmentLocal(seg.id, name)}
-                    onRenameCommit={() => commitRename(seg.id)}
-                    onToggleCollapse={() => toggleCollapse(seg)}
-                    onMoveUp={() => moveBlock(i, -1)}
-                    onMoveDown={() => moveBlock(i, 1)}
-                    onDelete={() => deleteSegment(seg.id)}
-                  />
-                );
-              })}
+                })}
+              </SortableContext>
               <DragOverlay>
                 {activeDragItem ? (
                   <div className="card-paper p-2 shadow-lg bg-paper w-[300px] opacity-95 cursor-grabbing">
@@ -953,6 +992,10 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
                     <div className="font-display text-base font-bold leading-tight line-clamp-2">
                       {activeDragItem.title || activeDragItem.url}
                     </div>
+                  </div>
+                ) : activeDragBlock ? (
+                  <div className="bg-ink/10 border border-ink/30 shadow-lg px-2 py-1.5 w-[300px] opacity-95 cursor-grabbing font-mono text-xs uppercase tracking-widest font-bold text-ink/70">
+                    ⠿ {activeDragBlock.segment ? activeDragBlock.segment.name : 'Ungrouped'}
                   </div>
                 ) : null}
               </DragOverlay>
