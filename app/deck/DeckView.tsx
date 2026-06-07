@@ -79,17 +79,17 @@ function SortableQueueItem({
             isActive ? 'ring-2 ring-rust ring-inset' : ''
           }`}
         >
-          <div className="font-mono text-[10px] uppercase tracking-widest text-ink/60 mb-1">
+          <div className="font-mono text-xs uppercase tracking-widest text-ink/60 mb-1">
             {isActive && <span className="text-rust font-bold mr-1">▶ NOW</span>}
             {s.kind.replace('_', ' ')}
             {s.duration_seconds ? ` · ${formatDuration(s.duration_seconds)}` : ''}
             {s.dmca_risk === 'high' && <span className="text-rust ml-1">⚠</span>}
           </div>
-          <div className="font-display text-sm font-bold leading-tight line-clamp-2">
+          <div className="font-display text-base font-bold leading-tight line-clamp-2">
             {s.title || s.url}
           </div>
           {s.publisher && (
-            <div className="font-mono text-[10px] text-ink/50 mt-1 truncate">
+            <div className="font-mono text-xs text-ink/50 mt-1 truncate">
               {s.publisher}
             </div>
           )}
@@ -775,7 +775,7 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
                           <div className="font-display text-sm font-bold leading-tight mb-1">
                             {c.title}
                           </div>
-                          <div className="font-mono text-[10px] uppercase tracking-widest text-ink/60 mb-1">
+                          <div className="font-mono text-xs uppercase tracking-widest text-ink/60 mb-1">
                             {c.publisher}
                           </div>
                           {c.snippet && (
@@ -946,11 +946,11 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
               <DragOverlay>
                 {activeDragItem ? (
                   <div className="card-paper p-2 shadow-lg bg-paper w-[300px] opacity-95 cursor-grabbing">
-                    <div className="font-mono text-[10px] uppercase tracking-widest text-ink/60 mb-1">
+                    <div className="font-mono text-xs uppercase tracking-widest text-ink/60 mb-1">
                       {activeDragItem.kind.replace('_', ' ')}
                       {activeDragItem.duration_seconds ? ` · ${formatDuration(activeDragItem.duration_seconds)}` : ''}
                     </div>
-                    <div className="font-display text-sm font-bold leading-tight line-clamp-2">
+                    <div className="font-display text-base font-bold leading-tight line-clamp-2">
                       {activeDragItem.title || activeDragItem.url}
                     </div>
                   </div>

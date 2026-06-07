@@ -71,29 +71,29 @@ export function SubmissionCard({
       )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1 flex-wrap">
-          <span className="font-mono text-[10px] uppercase tracking-widest bg-ink text-paper px-1.5 py-0.5">
+          <span className="font-mono text-xs uppercase tracking-widest bg-ink text-paper px-1.5 py-0.5">
             {KIND_LABELS[s.kind] || s.kind}
           </span>
           {s.duration_seconds ? (
-            <span className="font-mono text-[10px] uppercase tracking-widest text-ink/60">
+            <span className="font-mono text-xs uppercase tracking-widest text-ink/60">
               {formatDuration(s.duration_seconds)}
             </span>
           ) : null}
           {s.credibility_tag && (
-            <span className="font-mono text-[10px] uppercase tracking-widest border border-ink/40 px-1.5 py-0.5">
+            <span className="font-mono text-xs uppercase tracking-widest border border-ink/40 px-1.5 py-0.5">
               {s.credibility_tag}
             </span>
           )}
           {s.dmca_risk && (
-            <span className={`font-mono text-[10px] uppercase tracking-widest dmca-${s.dmca_risk}`}>
+            <span className={`font-mono text-xs uppercase tracking-widest dmca-${s.dmca_risk}`}>
               {RISK_LABELS[s.dmca_risk]}
             </span>
           )}
         </div>
-        <h3 className={`font-display ${compact ? 'text-base' : 'text-lg'} font-bold leading-tight mb-1`}>
+        <h3 className={`font-display ${compact ? 'text-lg' : 'text-xl'} font-bold leading-tight mb-1`}>
           {s.title || s.url}
         </h3>
-        <div className="font-mono text-[11px] text-ink/60 mb-2 truncate">
+        <div className="font-mono text-xs text-ink/60 mb-2 truncate">
           {s.publisher || host}
           {s.published_at && ` · ${formatDate(s.published_at)}`}
           {s.submitter_login && (
@@ -103,14 +103,14 @@ export function SubmissionCard({
           )}
         </div>
         {!compact && (s.summary || s.description) && (
-          <p className="text-sm leading-relaxed mb-2 whitespace-pre-line">
+          <p className="text-base leading-relaxed mb-2 whitespace-pre-line">
             {s.summary || s.description}
           </p>
         )}
         {!compact && s.topics && s.topics.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-2">
             {s.topics.map((t) => (
-              <span key={t} className="font-mono text-[10px] uppercase bg-paper border border-ink/30 px-1.5 py-0.5">
+              <span key={t} className="font-mono text-xs uppercase bg-paper border border-ink/30 px-1.5 py-0.5">
                 #{t}
               </span>
             ))}
