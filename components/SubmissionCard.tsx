@@ -1,6 +1,6 @@
 'use client';
 
-import { formatDuration, formatDate, kindTint } from '@/lib/url';
+import { formatDuration, formatDate, formatDateTime, relativeTime, kindTint } from '@/lib/url';
 
 type Submission = {
   id: string;
@@ -45,6 +45,14 @@ const RISK_LABELS: Record<string, string> = {
   medium: '◐ Medium DMCA risk',
   low: '○ Low DMCA risk',
 };
+
+// Tint the capture age so stale (e.g. overnight) items stand out.
+function captureAgeClass(createdAt: string): string {
+  const hours = (Date.now() - new Date(createdAt).getTime()) / 3_600_000;
+  if (hours >= 24) return 'text-rust font-bold';
+  if (hours >= 6) return 'text-ochre';
+  return 'text-ink/45';
+}
 
 export function SubmissionCard({
   s,
@@ -93,7 +101,7 @@ export function SubmissionCard({
         <h3 className={`font-display ${compact ? 'text-lg' : 'text-xl'} font-bold leading-tight mb-1`}>
           {s.title || s.url}
         </h3>
-        <div className="font-mono text-xs text-ink/60 mb-2 truncate">
+        <div className="font-mono text-xs text-ink/60 mb-1 truncate">
           {s.publisher || host}
           {s.published_at && ` · ${formatDate(s.published_at)}`}
           {s.submitter_login && (
@@ -101,6 +109,10 @@ export function SubmissionCard({
               {s.submitter_is_mod ? ' (mod)' : s.submitter_is_vip ? ' (vip)' : s.submitter_is_sub ? ' (sub)' : ''}
             </>
           )}
+        </div>
+        <div className="font-mono text-xs mb-2">
+          <span className="text-ink/45">Captured {formatDateTime(s.created_at)} · </span>
+          <span className={captureAgeClass(s.created_at)}>{relativeTime(s.created_at)}</span>
         </div>
         {!compact && (s.summary || s.description) && (
           <p className="text-base leading-relaxed mb-2 whitespace-pre-line">

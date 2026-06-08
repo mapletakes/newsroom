@@ -100,6 +100,34 @@ export function kindTint(kind: string): string {
   }
 }
 
+// Local date + time, e.g. "Jun 8, 2:34 PM".
+export function formatDateTime(input: string | null | undefined): string {
+  if (!input) return '';
+  const d = new Date(input);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+// Short relative time, e.g. "just now", "5m ago", "3h ago", "2d ago".
+export function relativeTime(input: string | null | undefined): string {
+  if (!input) return '';
+  const then = new Date(input).getTime();
+  if (isNaN(then)) return '';
+  const s = Math.max(0, Math.floor((Date.now() - then) / 1000));
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
+
 export function formatDate(input: string | null | undefined): string {
   if (!input) return '';
   const d = new Date(input);
