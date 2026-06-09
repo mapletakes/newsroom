@@ -5,22 +5,32 @@ import { refreshAccessToken, sendChatMessage } from '@/lib/twitch-oauth';
 
 const MAX_CHARS = 500;
 
-// Post a "Watching: <title> <url>" message to the streamer's own chat.
+// Post "Watching: <title> <url>" to the channel's chat, as the logged-in
+// user (streamer or mod) using their own stored token.
 export async function POST(req: NextRequest) {
-  // Streamer or mod — both post as the broadcaster via the stored token.
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   }
 
   const sb = supabaseAdmin();
-  const { data: stream } = await sb
+
+  // The channel we're posting to (the broadcaster).
+  const { data: channel } = await sb
     .from('streams')
-    .select('twitch_user_id, access_token, refresh_token, token_expires_at, now_playing_id')
+    .select('twitch_user_id, now_playing_id')
     .eq('id', session.streamId)
     .single();
+  if (!channel) return NextResponse.json({ error: 'stream not found' }, { status: 404 });
 
-  if (!stream?.access_token || !stream?.refresh_token) {
+  // The sender = the logged-in user, posting from their own account. Their
+  // tokens live on their own stream row (keyed by their twitch_user_id).
+  const { data: sender } = await sb
+    .from('streams')
+    .select('id, access_token, refresh_token, token_expires_at')
+    .eq('twitch_user_id', session.twitchUserId)
+    .maybeSingle();
+  if (!sender?.access_token || !sender?.refresh_token) {
     return NextResponse.json(
       { error: 'reconnect', detail: 'Chat posting needs reauthorization — sign out and back in.' },
       { status: 400 },
@@ -28,7 +38,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const subId = body.id ? String(body.id) : stream.now_playing_id;
+  const subId = body.id ? String(body.id) : channel.now_playing_id;
   if (!subId) {
     return NextResponse.json({ error: 'nothing to announce' }, { status: 400 });
   }
@@ -41,11 +51,11 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
   if (!sub) return NextResponse.json({ error: 'submission not found' }, { status: 404 });
 
-  // Refresh the token if it's expired or about to be.
-  let accessToken = stream.access_token;
-  const expMs = stream.token_expires_at ? new Date(stream.token_expires_at).getTime() : 0;
+  // Refresh the sender's token if it's expired or about to be.
+  let accessToken = sender.access_token;
+  const expMs = sender.token_expires_at ? new Date(sender.token_expires_at).getTime() : 0;
   if (expMs < Date.now() + 60_000) {
-    const refreshed = await refreshAccessToken(stream.refresh_token);
+    const refreshed = await refreshAccessToken(sender.refresh_token);
     if (!refreshed) {
       return NextResponse.json(
         { error: 'reconnect', detail: 'Chat token expired — sign out and back in.' },
@@ -60,7 +70,7 @@ export async function POST(req: NextRequest) {
         refresh_token: refreshed.refresh_token,
         token_expires_at: new Date(Date.now() + refreshed.expires_in * 1000).toISOString(),
       })
-      .eq('id', session.streamId);
+      .eq('id', sender.id);
   }
 
   // Build the message, truncating the title if needed to fit Twitch's limit.
@@ -74,8 +84,8 @@ export async function POST(req: NextRequest) {
 
   const result = await sendChatMessage(
     accessToken,
-    stream.twitch_user_id,
-    stream.twitch_user_id,
+    channel.twitch_user_id, // broadcaster (channel)
+    session.twitchUserId, // sender (this user)
     message,
   );
   if (!result.ok) {
