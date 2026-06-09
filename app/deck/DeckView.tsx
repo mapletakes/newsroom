@@ -217,17 +217,18 @@ function SegmentBlock({
           {editable ? (
             <input
               value={title}
+              size={Math.min(Math.max(title.length + 1, 6), 28)}
               onChange={(e) => onRenameLocal?.(e.target.value)}
               onBlur={() => onRenameCommit?.()}
               onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-              className="flex-1 min-w-0 bg-transparent font-mono text-xs uppercase tracking-widest font-bold focus:outline-none focus:bg-paper px-1 py-0.5"
+              className="min-w-0 shrink bg-transparent font-mono text-xs uppercase tracking-widest font-bold focus:outline-none focus:bg-paper px-1 py-0.5"
             />
           ) : (
-            <span className="flex-1 min-w-0 font-mono text-xs uppercase tracking-widest font-bold text-ink/50 px-1 py-0.5 truncate">
+            <span className="min-w-0 font-mono text-xs uppercase tracking-widest font-bold text-ink/50 px-1 py-0.5 truncate max-w-[12rem]">
               {title}
             </span>
           )}
-          <span className="shrink-0 font-mono text-[10px] text-ink/50">
+          <span className="mr-auto shrink-0 font-mono text-xs font-semibold text-ink/60">
             ({items.length}{totalSeconds > 0 ? ` · ${formatDuration(totalSeconds)}` : ''})
           </span>
           {onDelete && (
