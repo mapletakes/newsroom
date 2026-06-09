@@ -470,13 +470,28 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
     if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return;
     if (orderedQueue.length === 0) return;
 
+    const withMod = e.ctrlKey || e.metaKey;
+
+    // Ctrl/Cmd + ↑/↓ moves the selected item within its block.
+    const nudge = (dir: -1 | 1) => {
+      if (!active) return;
+      const block = containerOf(active.id);
+      const groupItems = containerItems(block);
+      const i = groupItems.findIndex((s) => s.id === active.id);
+      const j = i + dir;
+      if (i < 0 || j < 0 || j >= groupItems.length) return;
+      persistGroupOrder(arrayMove(groupItems, i, j));
+    };
+
     const idx = orderedQueue.findIndex((s) => s.id === activeId);
     if (e.key === 'ArrowDown') {
       e.preventDefault();
+      if (withMod) { nudge(1); return; }
       const next = orderedQueue[Math.min((idx < 0 ? -1 : idx) + 1, orderedQueue.length - 1)];
       if (next) selectItem(next.id);
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
+      if (withMod) { nudge(-1); return; }
       const prev = orderedQueue[Math.max((idx < 0 ? 1 : idx) - 1, 0)];
       if (prev) selectItem(prev.id);
     } else if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -976,7 +991,7 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
             </button>
           </div>
           <div className="font-mono text-[10px] text-ink/40 mb-3">
-            ↑ / ↓ to move selection · Del to remove
+            ↑ / ↓ select · Ctrl+↑ / ↓ reorder · Del remove
           </div>
 
           <div className="flex-1 overflow-y-auto">
