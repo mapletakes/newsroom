@@ -767,8 +767,10 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
                 {active.title || active.url}
               </h1>
 
-              {active.summary && (
-                <p className="text-lg leading-relaxed mb-6 max-w-3xl">{active.summary}</p>
+              {(active.summary || active.description) && (
+                <p className="text-lg leading-relaxed mb-6 max-w-3xl whitespace-pre-line">
+                  {active.summary || active.description}
+                </p>
               )}
 
               {active.mod_notes && (

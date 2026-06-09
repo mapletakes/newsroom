@@ -69,12 +69,12 @@ export async function runExtraction(submissionId: string) {
       bodyText = meta.description;
     }
 
-    const enriched = await enrichContent({
-      url: sub.url,
-      title,
-      publisher,
-      body: bodyText,
-    });
+    // Tweets are short enough to read verbatim — skip the AI summary/analysis
+    // and just keep the tweet text (stored as `description`).
+    const enriched =
+      sub.kind === 'twitter'
+        ? { summary: null, credibility: null, topics: null as string[] | null, dmcaRisk: null }
+        : await enrichContent({ url: sub.url, title, publisher, body: bodyText });
 
     await sb.from('submissions').update({
       title,
