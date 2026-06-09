@@ -987,19 +987,19 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
             )}
           </form>
 
-          <div className="flex items-center justify-between mb-1">
-            <span className="font-mono text-xs uppercase tracking-widest text-ink/60">
+          <div className="flex items-center gap-3 mb-3 flex-wrap">
+            <span className="shrink-0 font-mono text-xs uppercase tracking-widest text-ink/60">
               Queue ({orderedQueue.length})
+            </span>
+            <span className="min-w-0 truncate font-mono text-[10px] text-ink/40">
+              ↑/↓ select · Ctrl+↑/↓ reorder · Enter open · P played · Del remove
             </span>
             <button
               onClick={addSegment}
-              className="font-mono text-[10px] uppercase tracking-widest border border-ink/30 px-2 py-1 hover:bg-ink hover:text-paper transition-colors"
+              className="shrink-0 ml-auto font-mono text-[10px] uppercase tracking-widest border border-ink/30 px-2 py-1 hover:bg-ink hover:text-paper transition-colors"
             >
               + Segment
             </button>
-          </div>
-          <div className="font-mono text-[10px] text-ink/40 mb-3">
-            ↑/↓ select · Ctrl+↑/↓ reorder · Enter open · P played · Del remove
           </div>
 
           <div className="flex-1 overflow-y-auto">
