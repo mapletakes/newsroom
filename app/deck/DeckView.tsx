@@ -497,6 +497,14 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
     } else if (e.key === 'Delete' || e.key === 'Backspace') {
       e.preventDefault();
       rejectActive();
+    } else if (e.key === 'Enter') {
+      if (active) {
+        e.preventDefault();
+        window.open(active.url, '_blank', 'noopener,noreferrer');
+      }
+    } else if (!withMod && (e.key === 'p' || e.key === 'P')) {
+      e.preventDefault();
+      markPlayed();
     }
   };
   useEffect(() => {
@@ -991,7 +999,7 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
             </button>
           </div>
           <div className="font-mono text-[10px] text-ink/40 mb-3">
-            ↑ / ↓ select · Ctrl+↑ / ↓ reorder · Del remove
+            ↑/↓ select · Ctrl+↑/↓ reorder · Enter open · P played · Del remove
           </div>
 
           <div className="flex-1 overflow-y-auto">
