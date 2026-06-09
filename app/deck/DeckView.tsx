@@ -386,12 +386,13 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
     return found;
   }, [queue, activeId]);
 
-  // Everything except the active (now-playing) item — used only to pick the
-  // "next" item when playing/skipping/removing.
-  const remaining = useMemo(
-    () => orderedQueue.filter((s) => s.id !== activeId),
-    [orderedQueue, activeId],
-  );
+  // The item to advance to after playing/skipping/removing the active one:
+  // the next item in play order, or the previous one if it was last.
+  const nextAfterActive = useCallback((): Submission | null => {
+    const idx = orderedQueue.findIndex((s) => s.id === activeId);
+    if (idx < 0) return orderedQueue[0] || null;
+    return orderedQueue[idx + 1] || orderedQueue[idx - 1] || null;
+  }, [orderedQueue, activeId]);
 
   // The sidebar renders the FULL list (active item included, highlighted),
   // grouped by block.
@@ -425,7 +426,7 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
         duration_on_screen_s: duration,
       }),
     });
-    const next = remaining[0];
+    const next = nextAfterActive();
     setActiveId(next?.id || null);
     setStartedAt(next ? Date.now() : null);
     setTakeaway('');
@@ -434,7 +435,7 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
 
   const skip = async () => {
     if (!active) return;
-    const next = remaining[0];
+    const next = nextAfterActive();
     setActiveId(next?.id || null);
     setStartedAt(next ? Date.now() : null);
     setTakeaway('');
@@ -453,7 +454,7 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
   const rejectActive = async () => {
     if (!active) return;
     const removedId = active.id;
-    const next = remaining[0];
+    const next = nextAfterActive();
     setActiveId(next?.id || null);
     setStartedAt(next ? Date.now() : null);
     setTakeaway('');
