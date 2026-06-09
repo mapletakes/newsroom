@@ -129,6 +129,7 @@ export function ModView({
               aria-label="Now playing URL"
             />
             <CopyButton value={nowPlaying.url} />
+            <AnnounceButton submissionId={nowPlaying.id} />
             <a
               href={nowPlaying.url}
               target="_blank"
@@ -251,6 +252,43 @@ export function ModView({
         </div>
       </main>
     </div>
+  );
+}
+
+function AnnounceButton({ submissionId }: { submissionId: string }) {
+  const [status, setStatus] = useState('');
+  const post = async () => {
+    if (status === 'Posting…') return;
+    setStatus('Posting…');
+    try {
+      const r = await fetch('/api/deck/announce', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: submissionId }),
+      });
+      if (r.ok) {
+        setStatus('Posted ✓');
+      } else {
+        const e = await r.json().catch(() => ({}));
+        setStatus(e.detail || e.error || 'Failed');
+      }
+    } catch {
+      setStatus('Failed');
+    }
+    setTimeout(() => setStatus(''), 4000);
+  };
+  return (
+    <span className="shrink-0 flex items-center gap-2">
+      <button
+        onClick={post}
+        className="font-mono text-xs uppercase tracking-widest border border-ink/40 px-2 py-1 hover:bg-ink hover:text-paper transition-colors inline-flex items-center gap-1"
+        title="Post 'Watching: …' to chat"
+      >
+        <span className="material-icons text-sm">campaign</span>
+        Post to chat
+      </button>
+      {status && <span className="font-mono text-xs text-ink/60">{status}</span>}
+    </span>
   );
 }
 

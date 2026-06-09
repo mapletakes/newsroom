@@ -7,9 +7,10 @@ const MAX_CHARS = 500;
 
 // Post a "Watching: <title> <url>" message to the streamer's own chat.
 export async function POST(req: NextRequest) {
+  // Streamer or mod — both post as the broadcaster via the stored token.
   const session = await getSession();
-  if (!session || session.role !== 'streamer') {
-    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  if (!session) {
+    return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   }
 
   const sb = supabaseAdmin();
