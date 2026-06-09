@@ -460,6 +460,36 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
     await removeFromQueue(removedId);
   };
 
+  // Keyboard controls: ↑/↓ move the selection, Delete/Backspace trash it.
+  // Held in a ref so the single listener always sees the latest state.
+  const keyHandlerRef = useRef<(e: KeyboardEvent) => void>(() => {});
+  keyHandlerRef.current = (e: KeyboardEvent) => {
+    // Don't hijack typing in inputs / textareas / contenteditable fields.
+    const el = e.target as HTMLElement | null;
+    const tag = el?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return;
+    if (orderedQueue.length === 0) return;
+
+    const idx = orderedQueue.findIndex((s) => s.id === activeId);
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const next = orderedQueue[Math.min((idx < 0 ? -1 : idx) + 1, orderedQueue.length - 1)];
+      if (next) selectItem(next.id);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prev = orderedQueue[Math.max((idx < 0 ? 1 : idx) - 1, 0)];
+      if (prev) selectItem(prev.id);
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      e.preventDefault();
+      rejectActive();
+    }
+  };
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => keyHandlerRef.current(e);
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, []);
+
   // Post "Watching: <title> <url>" to the streamer's chat for pinning.
   const announce = async () => {
     if (!active || announceStatus === 'Posting…') return;
@@ -934,7 +964,7 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
             )}
           </form>
 
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-1">
             <span className="font-mono text-xs uppercase tracking-widest text-ink/60">
               Queue ({orderedQueue.length})
             </span>
@@ -944,6 +974,9 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
             >
               + Segment
             </button>
+          </div>
+          <div className="font-mono text-[10px] text-ink/40 mb-3">
+            ↑ / ↓ to move selection · Del to remove
           </div>
 
           <div className="flex-1 overflow-y-auto">
