@@ -154,7 +154,11 @@ function extractJsonAfter(html: string, marker: string): string | null {
 async function scrapeWatchPageMeta(url: string): Promise<Partial<YouTubeMeta> | null> {
   try {
     const r = await fetch(url, {
-      headers: { 'User-Agent': BROWSER_UA, 'Accept-Language': 'en-US,en;q=0.9' },
+      headers: {
+        'User-Agent': BROWSER_UA,
+        'Accept-Language': 'en-US,en;q=0.9',
+        Cookie: 'SOCS=CAI; CONSENT=YES+1',
+      },
       signal: AbortSignal.timeout(10000),
     });
     if (!r.ok) return null;
@@ -180,39 +184,51 @@ async function scrapeWatchPageMeta(url: string): Promise<Partial<YouTubeMeta> | 
   }
 }
 
-function scrapePlaylistItems(html: string): PlaylistItem[] {
-  const marker = 'var ytInitialData = ';
-  const startIdx = html.indexOf(marker);
-  if (startIdx === -1) return [];
-  const jsonStart = startIdx + marker.length;
-  const endIdx = html.indexOf(';</script>', jsonStart);
-  if (endIdx === -1) return [];
+// Pull the ytInitialData JSON blob, trying the assignment forms YouTube uses.
+function extractYtInitialData(html: string): string | null {
+  for (const marker of ['var ytInitialData = ', 'window["ytInitialData"] = ', 'ytInitialData = ']) {
+    const json = extractJsonAfter(html, marker);
+    if (json) return json;
+  }
+  return null;
+}
 
-  let data: Record<string, unknown>;
-  try { data = JSON.parse(html.substring(jsonStart, endIdx)); } catch { return []; }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const tabs = (data as any)?.contents?.twoColumnBrowseResultsRenderer?.tabs;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const section = tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents?.[0];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const items: any[] =
-    section?.itemSectionRenderer?.contents?.[0]?.playlistVideoListRenderer?.contents || [];
-
-  const out: PlaylistItem[] = [];
-  for (const item of items) {
-    const v = item?.playlistVideoRenderer;
-    if (!v?.videoId) continue;
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// Recursively collect every playlistVideoRenderer in the data, so we don't
+// depend on YouTube's exact navigation path (which changes periodically).
+function collectPlaylistVideos(node: any, out: PlaylistItem[], seen: Set<string>): void {
+  if (!node || typeof node !== 'object') return;
+  if (Array.isArray(node)) {
+    for (const n of node) collectPlaylistVideos(n, out, seen);
+    return;
+  }
+  const v = node.playlistVideoRenderer;
+  if (v?.videoId && !seen.has(v.videoId)) {
+    seen.add(v.videoId);
     const thumbs = v.thumbnail?.thumbnails;
     const lenSecs = v.lengthSeconds ? parseInt(v.lengthSeconds, 10) : NaN;
     out.push({
       url: `https://www.youtube.com/watch?v=${v.videoId}`,
-      title: v.title?.runs?.[0]?.text || null,
+      title: v.title?.runs?.[0]?.text || v.title?.simpleText || null,
       thumbnail: Array.isArray(thumbs) ? thumbs[thumbs.length - 1]?.url || null : null,
       publisher: v.shortBylineText?.runs?.[0]?.text || null,
       durationSeconds: Number.isFinite(lenSecs) ? lenSecs : null,
     });
   }
+  for (const k in node) {
+    if (k === 'playlistVideoRenderer') continue;
+    collectPlaylistVideos(node[k], out, seen);
+  }
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+function scrapePlaylistItems(html: string): PlaylistItem[] {
+  const json = extractYtInitialData(html);
+  if (!json) return [];
+  let data: unknown;
+  try { data = JSON.parse(json); } catch { return []; }
+  const out: PlaylistItem[] = [];
+  collectPlaylistVideos(data, out, new Set());
   return out;
 }
 
@@ -221,8 +237,13 @@ export async function expandPlaylistWithMeta(url: string): Promise<PlaylistItem[
   if (!listId) return [];
 
   try {
-    const r = await fetch(`https://www.youtube.com/playlist?list=${listId}`, {
-      headers: { 'User-Agent': BROWSER_UA, 'Accept-Language': 'en-US,en;q=0.9' },
+    const r = await fetch(`https://www.youtube.com/playlist?list=${listId}&hl=en`, {
+      headers: {
+        'User-Agent': BROWSER_UA,
+        'Accept-Language': 'en-US,en;q=0.9',
+        // Skip the EU consent interstitial that otherwise replaces the page.
+        Cookie: 'SOCS=CAI; CONSENT=YES+1',
+      },
       signal: AbortSignal.timeout(12000),
     });
     if (!r.ok) return [];
