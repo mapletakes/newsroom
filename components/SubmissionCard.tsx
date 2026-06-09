@@ -10,6 +10,7 @@ type Submission = {
   title: string | null;
   thumbnail_url: string | null;
   publisher: string | null;
+  author: string | null;
   duration_seconds: number | null;
   published_at: string | null;
   description: string | null;

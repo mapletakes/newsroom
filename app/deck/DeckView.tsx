@@ -74,24 +74,42 @@ function SortableQueueItem({
         </button>
         <button
           onClick={onSelect}
-          className={`flex-1 text-left card-paper ${kindTint(s.kind)} p-2 min-w-0 ${
+          className={`flex-1 text-left card-paper ${kindTint(s.kind)} p-3 min-w-0 ${
             isActive ? 'ring-2 ring-rust ring-inset' : ''
           }`}
         >
-          <div className="font-mono text-xs uppercase tracking-widest text-ink/60 mb-1">
-            {isActive && <span className="text-rust font-bold mr-1">▶ NOW</span>}
-            {s.kind.replace('_', ' ')}
-            {s.duration_seconds ? ` · ${formatDuration(s.duration_seconds)}` : ''}
-            {s.dmca_risk === 'high' && <span className="text-rust ml-1">⚠</span>}
-          </div>
-          <div className="font-display text-base font-bold leading-tight line-clamp-2">
-            {s.title || s.url}
-          </div>
-          {s.publisher && (
-            <div className="font-mono text-xs text-ink/50 mt-1 truncate">
-              {s.publisher}
+          <div className="flex gap-3">
+            {s.thumbnail_url && (
+              <img
+                src={s.thumbnail_url}
+                alt=""
+                loading="lazy"
+                className="shrink-0 w-28 h-[4.5rem] object-cover border border-ink/20"
+              />
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="font-mono text-[11px] uppercase tracking-widest text-ink/60 mb-1">
+                {isActive && <span className="text-rust font-bold mr-1">▶ NOW</span>}
+                {s.kind.replace('_', ' ')}
+                {s.duration_seconds ? ` · ${formatDuration(s.duration_seconds)}` : ''}
+                {s.published_at ? ` · ${formatDate(s.published_at)}` : ''}
+                {s.dmca_risk === 'high' && <span className="text-rust ml-1">⚠</span>}
+              </div>
+              <div className="font-display text-lg font-bold leading-tight line-clamp-2">
+                {s.title || s.url}
+              </div>
+              {(s.publisher || s.author) && (
+                <div className="font-mono text-xs text-ink/50 truncate mt-0.5">
+                  {[s.publisher, s.author].filter(Boolean).join(' · ')}
+                </div>
+              )}
+              {(s.summary || s.description) && (
+                <p className="text-sm text-ink/70 leading-snug line-clamp-2 mt-1">
+                  {s.summary || s.description}
+                </p>
+              )}
             </div>
-          )}
+          </div>
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); onRemove(); }}
@@ -706,7 +724,7 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
         </div>
       </header>
 
-      <main className="flex-1 grid lg:grid-cols-[1fr_640px] gap-0">
+      <main className="flex-1 grid lg:grid-cols-2 gap-0">
         {/* Active card */}
         <section className="p-8 border-r border-ink/20">
           {!active && (
@@ -745,7 +763,7 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
                 {active.published_at && <span className="text-ink/60">· {formatDate(active.published_at)}</span>}
               </div>
 
-              <h1 className="font-display text-4xl lg:text-5xl font-black leading-tight mb-4">
+              <h1 className="font-display text-3xl lg:text-4xl font-black leading-tight mb-4">
                 {active.title || active.url}
               </h1>
 
