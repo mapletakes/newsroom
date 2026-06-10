@@ -308,6 +308,21 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
     }
   }, []);
 
+  // While the user is actively editing (reorder/move/delete), hold off the
+  // realtime + poll refetches so optimistic updates aren't clobbered mid-burst,
+  // then reconcile with the server once, after things settle. Each edit pushes
+  // the window forward and reschedules the single reconcile.
+  const reconcileTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holdAndReconcile = useCallback((ms = 1500) => {
+    suppressRefreshUntil.current = Date.now() + ms;
+    if (reconcileTimer.current) clearTimeout(reconcileTimer.current);
+    reconcileTimer.current = setTimeout(() => {
+      suppressRefreshUntil.current = 0;
+      refresh();
+    }, ms);
+  }, [refresh]);
+  useEffect(() => () => { if (reconcileTimer.current) clearTimeout(reconcileTimer.current); }, []);
+
   useEffect(() => { refresh(); }, [refresh]);
 
   // Refetch instantly when the server broadcasts a queue change.
@@ -415,22 +430,25 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
 
   const markPlayed = async () => {
     if (!active) return;
+    const playedId = active.id;
     const duration = startedAt ? Math.round((Date.now() - startedAt) / 1000) : null;
-    await fetch('/api/queue', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: active.id,
-        status: 'played',
-        takeaway: takeaway || null,
-        duration_on_screen_s: duration,
-      }),
-    });
+    const tk = takeaway || null;
     const next = nextAfterActive();
     setActiveId(next?.id || null);
     setStartedAt(next ? Date.now() : null);
     setTakeaway('');
-    refresh();
+    setQueue((prev) => prev.filter((s) => s.id !== playedId)); // optimistic
+    holdAndReconcile();
+    await fetch('/api/queue', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: playedId,
+        status: 'played',
+        takeaway: tk,
+        duration_on_screen_s: duration,
+      }),
+    });
   };
 
   const skip = async () => {
@@ -443,6 +461,7 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
 
   const removeFromQueue = async (id: string) => {
     setQueue((prev) => prev.filter((s) => s.id !== id));
+    holdAndReconcile();
     await fetch('/api/queue', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -552,25 +571,23 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
   const commitRename = async (id: string) => {
     const seg = segments.find((s) => s.id === id);
     if (!seg) return;
-    suppressRefreshUntil.current = Date.now() + 3000;
+    holdAndReconcile();
     await fetch('/api/segments', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, name: seg.name }),
     });
-    suppressRefreshUntil.current = 0;
   };
 
   const toggleCollapse = async (seg: Segment) => {
     const collapsed = !seg.collapsed;
     setSegments((prev) => prev.map((s) => (s.id === seg.id ? { ...s, collapsed } : s)));
-    suppressRefreshUntil.current = Date.now() + 3000;
+    holdAndReconcile();
     await fetch('/api/segments', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: seg.id, collapsed }),
     });
-    suppressRefreshUntil.current = 0;
   };
 
   // Persist a new block order (ungrouped + segments) after a drag.
@@ -580,12 +597,12 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
     setSegments((prev) => prev.map((s) => ({ ...s, position: pos.get(s.id) ?? s.position })));
     if (pos.has('ungrouped')) setUngroupedPosition(pos.get('ungrouped')!);
 
-    suppressRefreshUntil.current = Date.now() + 3000;
+    holdAndReconcile();
     return fetch('/api/segments/reorder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ids: orderedIds }),
-    }).finally(() => { suppressRefreshUntil.current = 0; });
+    });
   };
 
   const deleteSegment = async (id: string) => {
@@ -600,25 +617,23 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
 
   // Move an item into a segment (or back to ungrouped), landing at the bottom.
   const moveItemToSegment = async (id: string, segmentId: string | null) => {
-    suppressRefreshUntil.current = Date.now() + 3000;
     // Optimistic: reassign segment and sort to the bottom of the target group.
     setQueue((prev) => prev.map((s) => (s.id === id ? { ...s, segment_id: segmentId, position: 1e6 } : s)));
+    holdAndReconcile();
     await fetch('/api/queue', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, segment_id: segmentId }),
     });
-    suppressRefreshUntil.current = 0;
-    refresh();
   };
 
   // Persist a new within-group order (positions 1..N).
   const persistGroupOrder = (reordered: Submission[]) => {
-    suppressRefreshUntil.current = Date.now() + 5000;
     setQueue((prev) => {
       const pos = new Map(reordered.map((s, i) => [s.id, i + 1]));
       return prev.map((s) => (pos.has(s.id) ? { ...s, position: pos.get(s.id)! } : s));
     });
+    holdAndReconcile();
     return fetch('/api/queue/reorder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
