@@ -3,6 +3,7 @@ import { exchangeCode, fetchTwitchUser, fetchModeratedChannels } from '@/lib/twi
 import { createChatSubscription } from '@/lib/twitch-eventsub';
 import { supabaseAdmin } from '@/lib/supabase';
 import { buildSessionCookie, verifyOAuthStateDetailed } from '@/lib/session';
+import { requireApproval } from '@/lib/admin';
 
 // Auth callback must never be cached.
 export const dynamic = 'force-dynamic';
@@ -41,6 +42,14 @@ export async function GET(req: NextRequest) {
 
     const sb = supabaseAdmin();
 
+    // Is this a brand-new streamer? (for optional approval gating)
+    const { data: existing } = await sb
+      .from('streams')
+      .select('id')
+      .eq('twitch_user_id', user.id)
+      .maybeSingle();
+    const isNewStreamer = !existing;
+
     // Upsert this user's own stream row
     const { data: stream, error } = await sb
       .from('streams')
@@ -55,6 +64,12 @@ export async function GET(req: NextRequest) {
       .select()
       .single();
     if (error || !stream) throw error || new Error('No stream row');
+
+    // Gate brand-new streamers when approval is required. Separate, non-fatal
+    // step so login still works if the `approved` column migration hasn't run.
+    if (isNewStreamer && requireApproval()) {
+      await sb.from('streams').update({ approved: false }).eq('id', stream.id);
+    }
 
     // Store tokens for posting "now watching" to chat. Separate, non-fatal
     // step so login still works if the token columns migration hasn't run.

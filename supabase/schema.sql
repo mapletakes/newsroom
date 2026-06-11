@@ -26,7 +26,9 @@ create table if not exists public.streams (
   refresh_token text,
   token_expires_at timestamptz,
   -- Personal token for quick-adding links from a bookmarklet / extension.
-  add_token text
+  add_token text,
+  -- Admin access gate. false = blocked / pending approval.
+  approved boolean default true
 );
 
 -- Moderators on a stream

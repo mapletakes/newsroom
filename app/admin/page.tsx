@@ -1,0 +1,75 @@
+import { redirect } from 'next/navigation';
+import Link from 'next/link';
+import { getSession } from '@/lib/session';
+import { supabaseAdmin } from '@/lib/supabase';
+import { isAdmin } from '@/lib/admin';
+import { listSubscriptions } from '@/lib/twitch-eventsub';
+import { AdminChannels, type ChannelRow } from './AdminChannels';
+
+export const dynamic = 'force-dynamic';
+
+export default async function AdminPage() {
+  const session = await getSession();
+  if (!session) redirect('/login');
+  if (!isAdmin(session.twitchUserId)) redirect('/');
+
+  const sb = supabaseAdmin();
+  const { data: streams } = await sb
+    .from('streams')
+    .select('id, twitch_user_id, twitch_login, display_name, created_at, approved, access_token')
+    .order('created_at', { ascending: true });
+
+  // EventSub status for every channel in one Twitch call.
+  const subStatus = new Map<string, string>();
+  try {
+    const subs = await listSubscriptions('channel.chat.message');
+    for (const s of subs as { condition: { broadcaster_user_id: string }; status: string }[]) {
+      // Prefer an "enabled" sub if multiple exist.
+      const prev = subStatus.get(s.condition.broadcaster_user_id);
+      if (!prev || s.status === 'enabled') subStatus.set(s.condition.broadcaster_user_id, s.status);
+    }
+  } catch {
+    /* leave statuses unknown */
+  }
+
+  const rows: ChannelRow[] = await Promise.all(
+    (streams || []).map(async (st): Promise<ChannelRow> => {
+      const [total, pending, last] = await Promise.all([
+        sb.from('submissions').select('*', { count: 'exact', head: true }).eq('stream_id', st.id),
+        sb.from('submissions').select('*', { count: 'exact', head: true }).eq('stream_id', st.id).eq('status', 'pending'),
+        sb.from('submissions').select('created_at').eq('stream_id', st.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      ]);
+      return {
+        id: st.id,
+        login: st.twitch_login,
+        displayName: st.display_name,
+        createdAt: st.created_at,
+        approved: st.approved !== false,
+        chatEnabled: !!st.access_token,
+        eventsub: subStatus.get(st.twitch_user_id) || 'none',
+        total: total.count ?? 0,
+        pending: pending.count ?? 0,
+        lastAt: last.data?.created_at ?? null,
+      };
+    }),
+  );
+
+  const activeChannels = rows.filter((r) => r.eventsub === 'enabled').length;
+
+  return (
+    <div className="min-h-screen px-6 py-10 max-w-6xl mx-auto">
+      <header className="mb-8 flex items-center gap-3 flex-wrap">
+        <Link href="/" className="font-display text-2xl font-black">Newsroom</Link>
+        <span className="font-mono text-xs uppercase tracking-widest text-ink/60">/ admin</span>
+        <div className="ml-auto font-mono text-xs text-ink/60">
+          {rows.length} channels · {activeChannels} listening
+        </div>
+      </header>
+
+      <h1 className="font-display text-4xl font-bold mb-2">Channels</h1>
+      <div className="rule-double mb-8" />
+
+      <AdminChannels initial={rows} />
+    </div>
+  );
+}

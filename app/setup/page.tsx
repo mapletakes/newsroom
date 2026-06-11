@@ -16,6 +16,8 @@ export default async function SetupPage() {
     .eq('id', session.streamId)
     .single();
 
+  if (stream?.approved === false) redirect('/blocked');
+
   return (
     <SetupForm
       streamId={session.streamId}

@@ -70,10 +70,12 @@ export async function POST(req: NextRequest) {
   const sb = supabaseAdmin();
   const { data: stream } = await sb
     .from('streams')
-    .select('id, submit_command, allow_anyone, ignored_users')
+    .select('id, submit_command, allow_anyone, ignored_users, approved')
     .eq('twitch_user_id', broadcasterUserId)
     .single();
   if (!stream) return new NextResponse(null, { status: 204 });
+  // Don't ingest for blocked / unapproved channels.
+  if (stream.approved === false) return new NextResponse(null, { status: 204 });
 
   // Parse badges
   const badges: { set_id: string }[] = event.badges || [];

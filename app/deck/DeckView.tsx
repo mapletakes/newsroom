@@ -273,7 +273,7 @@ function SegmentBlock({
   );
 }
 
-export function DeckView({ displayName, streamId }: { displayName: string; streamId: string }) {
+export function DeckView({ displayName, streamId, isAdmin = false }: { displayName: string; streamId: string; isAdmin?: boolean }) {
   const [queue, setQueue] = useState<Submission[]>([]);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [ungroupedPosition, setUngroupedPosition] = useState(0);
@@ -789,6 +789,11 @@ export function DeckView({ displayName, streamId }: { displayName: string; strea
           <Link href="/setup" className="underline hover:text-rust">
             Settings
           </Link>
+          {isAdmin && (
+            <Link href="/admin" className="underline hover:text-rust">
+              Admin
+            </Link>
+          )}
           <span>{displayName}</span>
           <DarkModeToggle />
         </div>

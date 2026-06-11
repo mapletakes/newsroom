@@ -14,6 +14,7 @@ export function ModView({
   submitCommand,
   streamId,
   isMod = false,
+  isAdmin = false,
 }: {
   channel: string;
   displayName: string;
@@ -21,6 +22,7 @@ export function ModView({
   submitCommand: string | null;
   streamId: string;
   isMod?: boolean;
+  isAdmin?: boolean;
 }) {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [nowPlaying, setNowPlaying] = useState<Submission | null>(null);
@@ -95,6 +97,7 @@ export function ModView({
           <Link href="/choose" className="underline hover:text-rust">Switch Channel</Link>
           {!isMod && <Link href="/deck" className="underline hover:text-rust">Streamer Deck →</Link>}
           {!isMod && <Link href="/setup" className="underline hover:text-rust">Settings</Link>}
+          {isAdmin && <Link href="/admin" className="underline hover:text-rust">Admin</Link>}
           <DarkModeToggle />
         </div>
       </header>
