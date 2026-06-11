@@ -9,10 +9,17 @@ import { AdminChannels, type ChannelRow } from './AdminChannels';
 
 export const dynamic = 'force-dynamic';
 
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams: { window?: string };
+}) {
   const session = await getSession();
   if (!session) redirect('/login');
   if (!isAdmin(session.twitchUserId)) redirect('/');
+
+  const win = searchParams.window === '30d' ? '30d' : 'all';
+  const since = win === '30d' ? new Date(Date.now() - 30 * 86_400_000).toISOString() : null;
 
   const sb = supabaseAdmin();
   const { data: streams } = await sb
@@ -35,12 +42,19 @@ export default async function AdminPage() {
 
   const rows: ChannelRow[] = await Promise.all(
     (streams || []).map(async (st): Promise<ChannelRow> => {
+      // Usage counts respect the selected window; channel stats stay all-time.
+      let sumQ = sb.from('submissions').select('*', { count: 'exact', head: true }).eq('stream_id', st.id).not('summary', 'is', null);
+      let srchQ = sb.from('submissions').select('*', { count: 'exact', head: true }).eq('stream_id', st.id).not('related_coverage', 'is', null);
+      if (since) {
+        sumQ = sumQ.gte('created_at', since);
+        srchQ = srchQ.gte('created_at', since);
+      }
       const [total, pending, last, summaries, searches] = await Promise.all([
         sb.from('submissions').select('*', { count: 'exact', head: true }).eq('stream_id', st.id),
         sb.from('submissions').select('*', { count: 'exact', head: true }).eq('stream_id', st.id).eq('status', 'pending'),
         sb.from('submissions').select('created_at').eq('stream_id', st.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-        sb.from('submissions').select('*', { count: 'exact', head: true }).eq('stream_id', st.id).not('summary', 'is', null),
-        sb.from('submissions').select('*', { count: 'exact', head: true }).eq('stream_id', st.id).not('related_coverage', 'is', null),
+        sumQ,
+        srchQ,
       ]);
       const summaryCount = summaries.count ?? 0;
       const searchCount = searches.count ?? 0;
@@ -77,8 +91,23 @@ export default async function AdminPage() {
       </header>
 
       <h1 className="font-display text-4xl font-bold mb-2">Channels</h1>
+      <div className="flex items-center gap-1 mb-3 font-mono text-xs uppercase tracking-widest">
+        <span className="text-ink/50 mr-1">Usage window:</span>
+        <Link
+          href="/admin"
+          className={`px-3 py-1 border ${win === 'all' ? 'bg-ink text-paper border-ink' : 'border-ink/30 hover:border-ink'}`}
+        >
+          All time
+        </Link>
+        <Link
+          href="/admin?window=30d"
+          className={`px-3 py-1 border ${win === '30d' ? 'bg-ink text-paper border-ink' : 'border-ink/30 hover:border-ink'}`}
+        >
+          30 days
+        </Link>
+      </div>
       <p className="font-mono text-xs text-ink/50 mb-4">
-        Usage is all-time; cost is a rough estimate, not a billed amount.
+        Usage reflects {win === '30d' ? 'the last 30 days' : 'all time'}; cost is a rough estimate, not a billed amount.
       </p>
       <div className="rule-double mb-8" />
 
