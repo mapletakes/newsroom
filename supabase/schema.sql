@@ -24,7 +24,9 @@ create table if not exists public.streams (
   -- "now watching" messages to chat on the streamer's behalf.
   access_token text,
   refresh_token text,
-  token_expires_at timestamptz
+  token_expires_at timestamptz,
+  -- Personal token for quick-adding links from a bookmarklet / extension.
+  add_token text
 );
 
 -- Moderators on a stream

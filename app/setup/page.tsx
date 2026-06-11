@@ -25,6 +25,7 @@ export default async function SetupPage() {
       allowDuplicates={stream?.allow_duplicates ?? false}
       ignoredUsers={stream?.ignored_users ?? []}
       preferredSources={stream?.preferred_sources ?? []}
+      addToken={stream?.add_token ?? null}
     />
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export function SetupForm({
   streamId,
@@ -11,6 +11,7 @@ export function SetupForm({
   allowDuplicates,
   ignoredUsers,
   preferredSources,
+  addToken,
 }: {
   streamId: string;
   displayName: string;
@@ -19,6 +20,7 @@ export function SetupForm({
   allowDuplicates: boolean;
   ignoredUsers: string[];
   preferredSources: string[];
+  addToken: string | null;
 }) {
   const [cmd, setCmd] = useState(submitCommand);
   const [open, setOpen] = useState(allowAnyone);
@@ -234,6 +236,11 @@ export function SetupForm({
       </section>
 
       <section className="mb-10">
+        <h2 className="font-display text-2xl font-bold mb-4">Quick add</h2>
+        <QuickAdd initialToken={addToken} />
+      </section>
+
+      <section className="mb-10">
         <h2 className="font-display text-2xl font-bold mb-4">Chat connection</h2>
         <EventSubStatus />
       </section>
@@ -263,6 +270,99 @@ export function SetupForm({
           <div><a href="/api/notes?format=markdown" className="underline hover:text-rust text-ink/60">-&gt; Preview latest notes (don&apos;t mark exported)</a></div>
         </div>
       </section>
+    </div>
+  );
+}
+
+// -- Quick add (bookmarklet) widget --
+
+function QuickAdd({ initialToken }: { initialToken: string | null }) {
+  const [token, setToken] = useState<string | null>(initialToken);
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const linkRef = useRef<HTMLAnchorElement>(null);
+
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const bookmarklet = token
+    ? `javascript:(function(){window.open('${origin}/quick-add?token=${token}&url='+encodeURIComponent(location.href),'nr_add','width=440,height=280');})();`
+    : '';
+
+  // React blocks javascript: hrefs, so set it on the DOM node directly.
+  useEffect(() => {
+    if (linkRef.current && bookmarklet) linkRef.current.setAttribute('href', bookmarklet);
+  }, [bookmarklet]);
+
+  const generate = async () => {
+    if (token && !window.confirm('Regenerate? Your existing bookmarklet will stop working until you replace it.')) return;
+    setBusy(true);
+    try {
+      const r = await fetch('/api/deck/token', { method: 'POST' });
+      if (r.ok) {
+        const d = await r.json();
+        setToken(d.token);
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(bookmarklet);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard unavailable */
+    }
+  };
+
+  return (
+    <div>
+      <p className="text-sm text-ink/70 leading-relaxed mb-4 max-w-prose">
+        Add the page you&apos;re on straight to your deck while prepping — no copy/paste or
+        tab-switching. Works on articles, tweets, and YouTube videos (paste a playlist URL to
+        bulk-add). Items land as <strong>approved</strong>, ready in the deck.
+      </p>
+
+      {!token ? (
+        <button
+          onClick={generate}
+          disabled={busy}
+          className="font-mono text-sm uppercase tracking-widest bg-ink text-paper px-4 py-2 hover:bg-rust disabled:opacity-50"
+        >
+          {busy ? 'Generating…' : 'Generate add link'}
+        </button>
+      ) : (
+        <div className="space-y-4">
+          <div>
+            <p className="font-mono text-xs uppercase tracking-widest text-ink/60 mb-2">
+              Drag this to your bookmarks bar:
+            </p>
+            {/* eslint-disable-next-line jsx-a11y/anchor-is-valid */}
+            <a
+              ref={linkRef}
+              onClick={(e) => e.preventDefault()}
+              draggable
+              className="inline-block cursor-grab active:cursor-grabbing font-mono text-sm uppercase tracking-widest bg-moss text-paper px-4 py-2 select-none"
+              title="Drag me to your bookmarks bar"
+            >
+              + Add to Newsroom
+            </a>
+            <p className="text-xs text-ink/50 mt-2">
+              Then on any page, click the bookmark — a small window confirms and closes.
+              Can&apos;t drag it? <button onClick={copy} className="underline hover:text-rust">{copied ? 'Copied!' : 'Copy the code'}</button> and create a new bookmark with it as the URL.
+            </p>
+          </div>
+
+          <div className="font-mono text-xs text-ink/50">
+            Token (for the browser extension):{' '}
+            <code className="bg-ink/10 px-1 py-0.5 break-all">{token}</code>
+            <button onClick={generate} disabled={busy} className="ml-2 underline hover:text-rust disabled:opacity-50">
+              {busy ? '…' : 'Regenerate'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
