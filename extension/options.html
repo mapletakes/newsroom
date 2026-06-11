@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Newsroom Quick Add — Options</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 440px; margin: 32px auto; padding: 0 16px; color: #16151a; }
+      h2 { margin: 0 0 4px; }
+      p { font-size: 13px; color: #555; line-height: 1.5; }
+      label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; margin: 18px 0 4px; font-weight: 700; color: #555; }
+      input { width: 100%; padding: 9px; font-family: ui-monospace, monospace; font-size: 13px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+      button { margin-top: 18px; padding: 9px 18px; font-weight: 600; cursor: pointer; border: 0; border-radius: 4px; background: #16151a; color: #fff; }
+      .ok { color: #3a7d44; margin-left: 10px; font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <h2>Newsroom Quick Add</h2>
+    <p>Paste your add token from <strong>Newsroom → Settings → Quick add</strong>. Then use the toolbar button or right-click &ldquo;Add to Newsroom&rdquo; on any page, link, or video.</p>
+    <label for="token">Add token</label>
+    <input id="token" placeholder="nr_…" autocomplete="off" spellcheck="false" />
+    <label for="appUrl">Newsroom URL</label>
+    <input id="appUrl" placeholder="https://newsroom-psi-five.vercel.app" autocomplete="off" spellcheck="false" />
+    <div><button id="save">Save</button><span id="status" class="ok"></span></div>
+    <script src="options.js"></script>
+  </body>
+</html>
