@@ -19,3 +19,12 @@ export function isAdmin(twitchUserId: string | null | undefined): boolean {
 export function requireApproval(): boolean {
   return process.env.REQUIRE_APPROVAL === 'true';
 }
+
+// Rough per-operation cost estimates (USD) for the admin usage view. These are
+// ballpark figures, not billed amounts — tune as your model/provider changes.
+export const COST_PER_SUMMARY = 0.003; // one Claude enrichment call per item
+export const COST_PER_SEARCH = 0.005; // one Brave related-coverage search
+
+export function estimateCost(summaries: number, searches: number): number {
+  return summaries * COST_PER_SUMMARY + searches * COST_PER_SEARCH;
+}
