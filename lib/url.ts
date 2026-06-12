@@ -79,6 +79,26 @@ export function formatDuration(seconds: number | null | undefined): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+// Broad category for the deck's quick type filter.
+export type KindCategory = 'video' | 'social' | 'article' | 'other';
+export function kindCategory(kind: string): KindCategory {
+  switch (kind) {
+    case 'youtube':
+    case 'youtube_short':
+    case 'youtube_playlist':
+    case 'twitch_clip':
+    case 'twitch_vod':
+    case 'tiktok':
+      return 'video';
+    case 'twitter':
+      return 'social';
+    case 'article':
+      return 'article';
+    default:
+      return 'other';
+  }
+}
+
 // Maps a media kind to a muted, type-coded card tint class (see globals.css).
 export function kindTint(kind: string): string {
   switch (kind) {

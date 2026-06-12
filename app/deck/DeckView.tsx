@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { Submission } from '@/components/SubmissionCard';
-import { extractYouTubeId, formatDuration, formatDate, kindTint } from '@/lib/url';
+import { extractYouTubeId, formatDuration, formatDate, kindTint, kindCategory, type KindCategory } from '@/lib/url';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { useQueueRealtime } from '@/lib/use-queue-realtime';
 import {
@@ -130,6 +130,7 @@ function SegmentBlock({
   editable,
   collapsed,
   items,
+  filtering,
   activeId,
   draggingSourceContainer,
   overContainerId,
@@ -146,6 +147,7 @@ function SegmentBlock({
   editable: boolean;
   collapsed: boolean;
   items: Submission[];
+  filtering: boolean; // a type filter is active (suppresses the empty hint)
   activeId: string | null;
   draggingSourceContainer: string | null; // container of the item being dragged, if any
   overContainerId: string | null; // container currently under the cursor
@@ -255,7 +257,7 @@ function SegmentBlock({
                 Drop here
               </div>
             )}
-            {title !== null && items.length === 0 && !isDropTarget && (
+            {title !== null && items.length === 0 && !isDropTarget && !filtering && (
               <div className="font-mono text-[10px] text-ink/40 px-6 py-2 italic">
                 empty — drag items here
               </div>
@@ -420,6 +422,33 @@ export function DeckView({ displayName, streamId, isAdmin = false }: { displayNa
     (segId: string) => orderedQueue.filter((s) => s.segment_id === segId),
     [orderedQueue],
   );
+
+  // Quick view filter by media category. Purely visual — does not affect play
+  // order, keyboard nav, or reorder (those use the unfiltered lists above).
+  const [typeFilter, setTypeFilter] = useState<'all' | KindCategory>('all');
+  const filterItems = useCallback(
+    (items: Submission[]) =>
+      typeFilter === 'all' ? items : items.filter((s) => kindCategory(s.kind) === typeFilter),
+    [typeFilter],
+  );
+  const catCounts = useMemo(() => {
+    const c = { all: orderedQueue.length, video: 0, social: 0, article: 0, other: 0 };
+    for (const s of orderedQueue) c[kindCategory(s.kind)]++;
+    return c;
+  }, [orderedQueue]);
+
+  // Block ids that actually render under the current filter (so the block-level
+  // SortableContext doesn't reference hidden blocks).
+  const visibleBlockIds = useMemo(() => {
+    if (typeFilter === 'all') return blockIds;
+    return blocks
+      .filter((b) =>
+        b.segment === null
+          ? segments.length === 0 || filterItems(ungroupedItems).length > 0
+          : filterItems(itemsForSegment(b.segment.id)).length > 0,
+      )
+      .map((b) => b.id);
+  }, [typeFilter, blockIds, blocks, segments, ungroupedItems, filterItems, itemsForSegment]);
 
   const selectItem = (id: string) => {
     if (id === activeId) return; // already playing — don't reset the timer/takeaway
@@ -1023,6 +1052,27 @@ export function DeckView({ displayName, streamId, isAdmin = false }: { displayNa
             </button>
           </div>
 
+          {/* Quick type filter */}
+          <div className="flex items-center gap-1 mb-3 flex-wrap font-mono text-[10px] uppercase tracking-widest">
+            {([
+              ['all', 'All'],
+              ['video', 'Videos'],
+              ['social', 'Socials'],
+              ['article', 'Articles'],
+              ['other', 'Other'],
+            ] as const).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setTypeFilter(key)}
+                className={`px-2 py-1 border ${
+                  typeFilter === key ? 'bg-ink text-paper border-ink' : 'border-ink/30 hover:border-ink'
+                }`}
+              >
+                {label} ({catCounts[key]})
+              </button>
+            ))}
+          </div>
+
           <div className="flex-1 overflow-y-auto">
             <DndContext
               sensors={sensors}
@@ -1032,12 +1082,15 @@ export function DeckView({ displayName, streamId, isAdmin = false }: { displayNa
               onDragEnd={handleDragEnd}
               onDragCancel={() => { setActiveDragId(null); setOverContainer(null); }}
             >
-              <SortableContext items={blockIds} strategy={verticalListSortingStrategy}>
+              <SortableContext items={visibleBlockIds} strategy={verticalListSortingStrategy}>
                 {blocks.map((b) => {
+                  const filtering = typeFilter !== 'all';
                   if (b.segment === null) {
                     // Ungrouped block. Only gets a header (and drag handle) once
                     // at least one segment exists; otherwise renders flat.
                     const hasSegments = segments.length > 0;
+                    const items = filterItems(ungroupedItems);
+                    if (filtering && hasSegments && items.length === 0) return null;
                     return (
                       <SegmentBlock
                         key="ungrouped"
@@ -1045,7 +1098,8 @@ export function DeckView({ displayName, streamId, isAdmin = false }: { displayNa
                         title={hasSegments ? 'Ungrouped' : null}
                         editable={false}
                         collapsed={ungroupedCollapsed}
-                        items={ungroupedItems}
+                        items={items}
+                        filtering={filtering}
                         activeId={activeId}
                         draggingSourceContainer={draggingSourceContainer}
                         overContainerId={overContainer}
@@ -1057,7 +1111,9 @@ export function DeckView({ displayName, streamId, isAdmin = false }: { displayNa
                     );
                   }
                   const seg = b.segment;
-                  const items = itemsForSegment(seg.id);
+                  const items = filterItems(itemsForSegment(seg.id));
+                  // Hide segments with nothing matching the active filter.
+                  if (filtering && items.length === 0) return null;
                   return (
                     <SegmentBlock
                       key={seg.id}
@@ -1066,6 +1122,7 @@ export function DeckView({ displayName, streamId, isAdmin = false }: { displayNa
                       editable
                       collapsed={seg.collapsed}
                       items={items}
+                      filtering={filtering}
                       activeId={activeId}
                       draggingSourceContainer={draggingSourceContainer}
                       overContainerId={overContainer}
