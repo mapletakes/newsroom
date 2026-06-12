@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSession } from '@/lib/session';
 import { refreshAccessToken, sendChatMessage } from '@/lib/twitch-oauth';
+import { encryptSecret, decryptSecret } from '@/lib/crypto';
 
 const MAX_CHARS = 500;
 
@@ -30,7 +31,9 @@ export async function POST(req: NextRequest) {
     .select('id, access_token, refresh_token, token_expires_at')
     .eq('twitch_user_id', session.twitchUserId)
     .maybeSingle();
-  if (!sender?.access_token || !sender?.refresh_token) {
+  const storedAccess = decryptSecret(sender?.access_token);
+  const storedRefresh = decryptSecret(sender?.refresh_token);
+  if (!sender || !storedAccess || !storedRefresh) {
     return NextResponse.json(
       { error: 'reconnect', detail: 'Chat posting needs reauthorization — sign out and back in.' },
       { status: 400 },
@@ -52,10 +55,10 @@ export async function POST(req: NextRequest) {
   if (!sub) return NextResponse.json({ error: 'submission not found' }, { status: 404 });
 
   // Refresh the sender's token if it's expired or about to be.
-  let accessToken = sender.access_token;
+  let accessToken = storedAccess;
   const expMs = sender.token_expires_at ? new Date(sender.token_expires_at).getTime() : 0;
   if (expMs < Date.now() + 60_000) {
-    const refreshed = await refreshAccessToken(sender.refresh_token);
+    const refreshed = await refreshAccessToken(storedRefresh);
     if (!refreshed) {
       return NextResponse.json(
         { error: 'reconnect', detail: 'Chat token expired — sign out and back in.' },
@@ -66,8 +69,8 @@ export async function POST(req: NextRequest) {
     await sb
       .from('streams')
       .update({
-        access_token: refreshed.access_token,
-        refresh_token: refreshed.refresh_token,
+        access_token: encryptSecret(refreshed.access_token),
+        refresh_token: encryptSecret(refreshed.refresh_token),
         token_expires_at: new Date(Date.now() + refreshed.expires_in * 1000).toISOString(),
       })
       .eq('id', sender.id);

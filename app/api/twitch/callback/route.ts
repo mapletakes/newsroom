@@ -4,6 +4,7 @@ import { createChatSubscription } from '@/lib/twitch-eventsub';
 import { supabaseAdmin } from '@/lib/supabase';
 import { buildSessionCookie, verifyOAuthStateDetailed } from '@/lib/session';
 import { requireApproval } from '@/lib/admin';
+import { encryptSecret } from '@/lib/crypto';
 
 // Auth callback must never be cached.
 export const dynamic = 'force-dynamic';
@@ -76,8 +77,8 @@ export async function GET(req: NextRequest) {
     await sb
       .from('streams')
       .update({
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token,
+        access_token: encryptSecret(tokens.access_token),
+        refresh_token: encryptSecret(tokens.refresh_token),
         token_expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
       })
       .eq('id', stream.id);
