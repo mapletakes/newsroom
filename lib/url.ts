@@ -88,9 +88,9 @@ export function kindCategory(kind: string): KindCategory {
     case 'youtube_playlist':
     case 'twitch_clip':
     case 'twitch_vod':
-    case 'tiktok':
       return 'video';
     case 'twitter':
+    case 'tiktok':
       return 'social';
     case 'article':
       return 'article';
