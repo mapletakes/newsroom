@@ -866,6 +866,9 @@ export function DeckView({ displayName, streamId, isAdmin = false }: { displayNa
                 )}
                 {active.publisher && <span className="text-ink/60">· {active.publisher}</span>}
                 {active.published_at && <span className="text-ink/60">· {formatDate(active.published_at)}</span>}
+                <span className="ml-auto normal-case tracking-normal">
+                  <ArchiveButton id={active.id} archiveUrl={active.archive_url} />
+                </span>
               </div>
 
               <h1 className="font-display text-3xl lg:text-4xl font-black leading-tight mb-4">
@@ -994,9 +997,6 @@ export function DeckView({ displayName, streamId, isAdmin = false }: { displayNa
                 {announceStatus && (
                   <span className="self-center font-mono text-xs text-ink/60">{announceStatus}</span>
                 )}
-                <span className="self-center ml-1">
-                  <ArchiveButton id={active.id} archiveUrl={active.archive_url} />
-                </span>
               </div>
 
               <label className="block max-w-3xl">
