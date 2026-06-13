@@ -25,13 +25,18 @@ export async function GET(req: NextRequest) {
 
   let q = sb
     .from('show_notes')
-    .select('*')
+    // Pull the submission's archive_url too, as a fallback if the note was
+    // created before archiving finished.
+    .select('*, submission:submissions(archive_url)')
     .eq('stream_id', session.streamId)
     .order('played_at', { ascending: true });
   if (isExport && lastExport) q = q.gt('played_at', lastExport);
 
   const { data, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const archiveOf = (n: { archive_url?: string | null; submission?: { archive_url?: string | null } | null }) =>
+    n.archive_url || n.submission?.archive_url || null;
 
   if (isExport) {
     const fmt = (iso: string) =>
@@ -46,7 +51,9 @@ export async function GET(req: NextRequest) {
     for (const n of data || []) {
       lines.push(`## [${n.title || n.url}](${n.url})`);
       lines.push('');
-      lines.push(`*Played ${fmt(n.played_at)}*`);
+      const archive = archiveOf(n);
+      const meta = `*Played ${fmt(n.played_at)}*` + (archive ? ` · [Archived snapshot](${archive})` : '');
+      lines.push(meta);
       lines.push('');
       if (n.summary) { lines.push(n.summary); lines.push(''); }
       if (n.takeaway) { lines.push(`> ${n.takeaway}`); lines.push(''); }

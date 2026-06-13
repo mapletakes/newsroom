@@ -108,13 +108,15 @@ create index if not exists submissions_stream_url_idx
 create table if not exists public.show_notes (
   id uuid primary key default gen_random_uuid(),
   stream_id uuid references public.streams(id) on delete cascade,
-  submission_id uuid references public.submissions(id) on delete cascade,
+  -- Keep the note even if the submission is later cleared/deleted.
+  submission_id uuid references public.submissions(id) on delete set null,
   played_at timestamptz not null,
   stream_started_at timestamptz,
   timestamp_offset_s int, -- seconds into the stream when played
   title text,
   url text,
   summary text,
+  archive_url text, -- Wayback snapshot, copied at play time
   takeaway text, -- optional streamer's note
   created_at timestamptz default now()
 );

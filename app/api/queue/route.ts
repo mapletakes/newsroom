@@ -171,6 +171,7 @@ export async function PATCH(req: NextRequest) {
       title: data.title,
       url: data.url,
       summary: data.summary,
+      archive_url: data.archive_url,
       takeaway: body.takeaway || null,
     });
   }
