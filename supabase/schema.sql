@@ -84,6 +84,8 @@ create table if not exists public.submissions (
   raw_message text,
   -- Related coverage (populated on approval)
   related_coverage jsonb,
+  -- Wayback Machine snapshot URL (receipts for deleted/edited content)
+  archive_url text,
   -- Mod actions
   mod_notes text,
   position int,

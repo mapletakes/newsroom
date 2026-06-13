@@ -5,6 +5,7 @@ import Link from 'next/link';
 import type { Submission } from '@/components/SubmissionCard';
 import { extractYouTubeId, formatDuration, formatDate, kindTint, kindCategory, type KindCategory } from '@/lib/url';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
+import { ArchiveButton } from '@/components/ArchiveButton';
 import { useQueueRealtime } from '@/lib/use-queue-realtime';
 import {
   DndContext,
@@ -993,6 +994,9 @@ export function DeckView({ displayName, streamId, isAdmin = false }: { displayNa
                 {announceStatus && (
                   <span className="self-center font-mono text-xs text-ink/60">{announceStatus}</span>
                 )}
+                <span className="self-center ml-1">
+                  <ArchiveButton id={active.id} archiveUrl={active.archive_url} />
+                </span>
               </div>
 
               <label className="block max-w-3xl">

@@ -1,6 +1,7 @@
 'use client';
 
 import { formatDuration, formatDate, formatDateTime, relativeTime, kindTint } from '@/lib/url';
+import { ArchiveButton } from './ArchiveButton';
 
 type Submission = {
   id: string;
@@ -19,6 +20,7 @@ type Submission = {
   topics: string[] | null;
   dmca_risk: string | null;
   related_coverage: { title: string; url: string; publisher: string; snippet: string }[] | null;
+  archive_url: string | null;
   mod_notes: string | null;
   segment_id: string | null;
   position: number | null;
@@ -129,6 +131,9 @@ export function SubmissionCard({
             ))}
           </div>
         )}
+        <div className="mt-1">
+          <ArchiveButton id={s.id} archiveUrl={s.archive_url} />
+        </div>
         {actions && <div className="mt-2 flex gap-2 flex-wrap">{actions}</div>}
       </div>
     </article>

@@ -62,6 +62,15 @@ export function ModView({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, ...patch }),
     });
+    // Auto-archive on approval (fire-and-forget; the snapshot link appears
+    // on the card once the capture finishes and broadcasts).
+    if (patch.status === 'approved') {
+      fetch('/api/archive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      }).catch(() => {});
+    }
     refresh();
   };
 
