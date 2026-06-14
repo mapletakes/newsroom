@@ -1,46 +1,50 @@
-// Page archiving via the Internet Archive's Wayback Machine.
-// Triggers a "Save Page Now" capture and returns the snapshot URL, so deleted
-// or edited content keeps a receipt.
+// Page archiving via archive.today (archive.ph). It renders JavaScript and
+// gets past most paywalls / soft blocks, which the Wayback Machine struggles
+// with.
+//
+// Caveat: archive.today is behind Cloudflare and often blocks datacenter IPs
+// (e.g. Vercel), so a server-side capture isn't guaranteed. We therefore store
+// the deterministic "newest" link — https://archive.today/newest/<url> — which
+// redirects to the latest snapshot, or offers to create one when first opened
+// in a real browser. We also attempt a best-effort capture so a snapshot often
+// exists already by the time anyone clicks.
 
+const BASE = 'https://archive.today';
 const UA =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Newsroom';
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
 
-// Look up the most recent existing snapshot (fast, no new capture).
-async function latestSnapshot(url: string): Promise<string | null> {
-  try {
-    const r = await fetch(`https://archive.org/wayback/available?url=${encodeURIComponent(url)}`, {
-      headers: { 'User-Agent': UA },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!r.ok) return null;
-    const data = await r.json();
-    const snap = data?.archived_snapshots?.closest;
-    return snap?.available && snap.url ? String(snap.url).replace(/^http:/, 'https:') : null;
-  } catch {
-    return null;
-  }
+const SNAPSHOT_RE = /archive\.(?:today|ph|is|li|md|fo|vn)\/[A-Za-z0-9]+/;
+
+// A link that always resolves: to the latest snapshot if one exists, otherwise
+// to archive.today's save prompt for this URL.
+export function newestLink(url: string): string {
+  return `${BASE}/newest/${url}`;
 }
 
-// Trigger a fresh capture and return its snapshot URL. Falls back to the latest
-// existing snapshot if Save Page Now is slow / rate-limited / blocked.
 export async function requestArchive(url: string): Promise<string | null> {
+  // Best-effort server-side capture (may be Cloudflare-blocked).
   try {
-    const r = await fetch(`https://web.archive.org/save/${url}`, {
-      method: 'GET',
-      redirect: 'follow',
-      headers: { 'User-Agent': UA },
-      signal: AbortSignal.timeout(25000),
+    const res = await fetch(`${BASE}/submit/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': UA,
+      },
+      body: new URLSearchParams({ url, anyway: '1' }).toString(),
+      redirect: 'manual',
+      signal: AbortSignal.timeout(12000),
     });
 
-    // The fresh snapshot path comes back in Content-Location: /web/<ts>/<url>
-    const cl = r.headers.get('content-location');
-    if (cl && cl.startsWith('/web/')) {
-      return `https://web.archive.org${cl}`;
+    // A fresh/existing snapshot comes back via the Refresh or Location header.
+    const refresh = res.headers.get('refresh');
+    const fromRefresh = refresh && /url=(\S+)/i.exec(refresh)?.[1];
+    const candidate = fromRefresh || res.headers.get('location') || '';
+    if (SNAPSHOT_RE.test(candidate)) {
+      return candidate.replace(/^http:/, 'https:');
     }
-    // Otherwise the final URL after following redirects may be the snapshot.
-    if (r.url && r.url.includes('/web/')) return r.url;
   } catch {
-    /* fall through to availability lookup */
+    /* Cloudflare / timeout — fall back to the deterministic link */
   }
-  return latestSnapshot(url);
+
+  return newestLink(url);
 }

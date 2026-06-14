@@ -867,7 +867,7 @@ export function DeckView({ displayName, streamId, isAdmin = false }: { displayNa
                 {active.publisher && <span className="text-ink/60">· {active.publisher}</span>}
                 {active.published_at && <span className="text-ink/60">· {formatDate(active.published_at)}</span>}
                 <span className="ml-auto normal-case tracking-normal">
-                  <ArchiveButton id={active.id} archiveUrl={active.archive_url} />
+                  <ArchiveButton id={active.id} url={active.url} archiveUrl={active.archive_url} />
                 </span>
               </div>
 

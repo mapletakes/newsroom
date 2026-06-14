@@ -132,7 +132,7 @@ export function SubmissionCard({
           </div>
         )}
         <div className="mt-1">
-          <ArchiveButton id={s.id} archiveUrl={s.archive_url} />
+          <ArchiveButton id={s.id} url={s.url} archiveUrl={s.archive_url} />
         </div>
         {actions && <div className="mt-2 flex gap-2 flex-wrap">{actions}</div>}
       </div>
