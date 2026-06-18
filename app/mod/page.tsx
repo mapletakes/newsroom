@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase';
 import { isAdmin } from '@/lib/admin';
+import { canMemberCurate } from '@/lib/curate';
 import { ModView } from './ModView';
 
 export const dynamic = 'force-dynamic';
@@ -19,6 +20,10 @@ export default async function ModPage() {
 
   if (stream?.approved === false) redirect('/blocked');
 
+  const isModRole = session.role === 'mod';
+  // Streamers always reach the deck; mods only if authorized to curate.
+  const canCurate = isModRole ? await canMemberCurate(session.streamId, session.twitchUserId) : true;
+
   return (
     <ModView
       channel={stream?.twitch_login || session.twitchLogin}
@@ -26,8 +31,9 @@ export default async function ModPage() {
       streamDisplayName={stream?.display_name || session.displayName}
       submitCommand={stream?.submit_command || null}
       streamId={session.streamId}
-      isMod={session.role === 'mod'}
+      isMod={isModRole}
       isAdmin={isAdmin(session.twitchUserId)}
+      canCurate={canCurate}
     />
   );
 }

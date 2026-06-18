@@ -37,6 +37,8 @@ create table if not exists public.moderators (
   twitch_user_id text not null,
   twitch_login text not null,
   added_at timestamptz default now(),
+  -- if true, this mod may curate the streamer deck (organize, not play)
+  can_curate boolean default false,
   primary key (stream_id, twitch_user_id)
 );
 

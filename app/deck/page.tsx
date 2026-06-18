@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase';
 import { isAdmin } from '@/lib/admin';
+import { canMemberCurate } from '@/lib/curate';
 import { DeckView } from './DeckView';
 
 export const dynamic = 'force-dynamic';
@@ -18,11 +19,19 @@ export default async function DeckPage() {
     .maybeSingle();
   if (stream?.approved === false) redirect('/blocked');
 
+  // Mods may only reach the deck if the streamer authorized them to curate,
+  // and then only in curate-only mode (no live playback controls).
+  const curateOnly = session.role === 'mod';
+  if (curateOnly && !(await canMemberCurate(session.streamId, session.twitchUserId))) {
+    redirect('/mod');
+  }
+
   return (
     <DeckView
       displayName={session.displayName}
       streamId={session.streamId}
       isAdmin={isAdmin(session.twitchUserId)}
+      curateOnly={curateOnly}
     />
   );
 }

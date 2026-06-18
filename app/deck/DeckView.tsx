@@ -276,7 +276,17 @@ function SegmentBlock({
   );
 }
 
-export function DeckView({ displayName, streamId, isAdmin = false }: { displayName: string; streamId: string; isAdmin?: boolean }) {
+export function DeckView({
+  displayName,
+  streamId,
+  isAdmin = false,
+  curateOnly = false,
+}: {
+  displayName: string;
+  streamId: string;
+  isAdmin?: boolean;
+  curateOnly?: boolean;
+}) {
   const [queue, setQueue] = useState<Submission[]>([]);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [ungroupedPosition, setUngroupedPosition] = useState(0);
@@ -392,8 +402,10 @@ export function DeckView({ displayName, streamId, isAdmin = false }: { displayNa
   }, [orderedQueue, activeId]);
 
   // Report the now-playing item to the server so the mod view can show it.
+  // Curators don't drive the live show, so they never set "on air".
   const lastSentNowPlaying = useRef<string | null>(null);
   useEffect(() => {
+    if (curateOnly) return;
     if (lastSentNowPlaying.current === activeId) return;
     lastSentNowPlaying.current = activeId;
     fetch('/api/deck/now-playing', {
@@ -401,7 +413,7 @@ export function DeckView({ displayName, streamId, isAdmin = false }: { displayNa
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: activeId }),
     }).catch(() => {});
-  }, [activeId]);
+  }, [activeId, curateOnly]);
 
   const active = useMemo(() => {
     const found = queue.find((s) => s.id === activeId) || null;
@@ -563,7 +575,7 @@ export function DeckView({ displayName, streamId, isAdmin = false }: { displayNa
         e.preventDefault();
         window.open(active.url, '_blank', 'noopener,noreferrer');
       }
-    } else if (!withMod && (e.key === 'p' || e.key === 'P')) {
+    } else if (!curateOnly && !withMod && (e.key === 'p' || e.key === 'P')) {
       e.preventDefault();
       markPlayed();
     }
@@ -820,19 +832,23 @@ export function DeckView({ displayName, streamId, isAdmin = false }: { displayNa
           Newsroom
         </Link>
         <span className="font-mono text-xs uppercase tracking-widest text-ink/60">
-          / streamer deck
+          / {curateOnly ? 'curating deck' : 'streamer deck'}
         </span>
         <div className="ml-auto flex items-center gap-4 font-mono text-xs">
           <span className="uppercase tracking-widest">{queue.length} approved</span>
           <Link href="/mod" className="underline hover:text-rust">
             Mod View &rarr;
           </Link>
-          <a href="/api/notes?format=markdown&commit=1" className="underline hover:text-rust">
-            Export Notes
-          </a>
-          <Link href="/setup" className="underline hover:text-rust">
-            Settings
-          </Link>
+          {!curateOnly && (
+            <a href="/api/notes?format=markdown&commit=1" className="underline hover:text-rust">
+              Export Notes
+            </a>
+          )}
+          {!curateOnly && (
+            <Link href="/setup" className="underline hover:text-rust">
+              Settings
+            </Link>
+          )}
           {isAdmin && (
             <Link href="/admin" className="underline hover:text-rust">
               Admin
@@ -980,51 +996,59 @@ export function DeckView({ displayName, streamId, isAdmin = false }: { displayNa
                 >
                   Open source ↗
                 </a>
-                <button
-                  onClick={markPlayed}
-                  className="font-mono text-sm uppercase tracking-widest bg-moss text-paper px-4 py-2 hover:opacity-90"
-                >
-                  ✓ Played — next
-                </button>
-                <button
-                  onClick={skip}
-                  className="font-mono text-sm uppercase tracking-widest border border-ink/40 px-4 py-2 hover:bg-ink hover:text-paper"
-                >
-                  Skip
-                </button>
+                {!curateOnly && (
+                  <button
+                    onClick={markPlayed}
+                    className="font-mono text-sm uppercase tracking-widest bg-moss text-paper px-4 py-2 hover:opacity-90"
+                  >
+                    ✓ Played — next
+                  </button>
+                )}
+                {!curateOnly && (
+                  <button
+                    onClick={skip}
+                    className="font-mono text-sm uppercase tracking-widest border border-ink/40 px-4 py-2 hover:bg-ink hover:text-paper"
+                  >
+                    Skip
+                  </button>
+                )}
                 <button
                   onClick={rejectActive}
                   className="font-mono text-sm uppercase tracking-widest border border-rust/50 text-rust px-4 py-2 hover:bg-rust hover:text-paper transition-colors inline-flex items-center gap-1"
-                  title="Remove from deck without playing"
+                  title="Remove from deck"
                 >
                   <span className="material-icons text-base">delete</span>
                   Remove
                 </button>
-                <button
-                  onClick={announce}
-                  className="font-mono text-sm uppercase tracking-widest border border-ink/40 px-4 py-2 hover:bg-ink hover:text-paper transition-colors inline-flex items-center gap-1"
-                  title="Post 'Watching: …' to your chat so a mod can pin it"
-                >
-                  <span className="material-icons text-base">campaign</span>
-                  Post to chat
-                </button>
-                {announceStatus && (
+                {!curateOnly && (
+                  <button
+                    onClick={announce}
+                    className="font-mono text-sm uppercase tracking-widest border border-ink/40 px-4 py-2 hover:bg-ink hover:text-paper transition-colors inline-flex items-center gap-1"
+                    title="Post 'Watching: …' to your chat so a mod can pin it"
+                  >
+                    <span className="material-icons text-base">campaign</span>
+                    Post to chat
+                  </button>
+                )}
+                {!curateOnly && announceStatus && (
                   <span className="self-center font-mono text-xs text-ink/60">{announceStatus}</span>
                 )}
               </div>
 
-              <label className="block max-w-3xl">
-                <span className="font-mono text-xs uppercase tracking-widest text-ink/60">
-                  Takeaway for show notes (optional)
-                </span>
-                <textarea
-                  value={takeaway}
-                  onChange={(e) => setTakeaway(e.target.value)}
-                  rows={3}
-                  className="w-full mt-1 border border-ink/30 bg-paper p-3 font-mono text-sm focus:outline-none focus:border-ink"
-                  placeholder="Add a one-liner about what you said about this on stream..."
-                />
-              </label>
+              {!curateOnly && (
+                <label className="block max-w-3xl">
+                  <span className="font-mono text-xs uppercase tracking-widest text-ink/60">
+                    Takeaway for show notes (optional)
+                  </span>
+                  <textarea
+                    value={takeaway}
+                    onChange={(e) => setTakeaway(e.target.value)}
+                    rows={3}
+                    className="w-full mt-1 border border-ink/30 bg-paper p-3 font-mono text-sm focus:outline-none focus:border-ink"
+                    placeholder="Add a one-liner about what you said about this on stream..."
+                  />
+                </label>
+              )}
             </article>
           )}
         </section>
@@ -1060,7 +1084,7 @@ export function DeckView({ displayName, streamId, isAdmin = false }: { displayNa
               Queue ({orderedQueue.length})
             </span>
             <span className="min-w-0 truncate font-mono text-[10px] text-ink/40">
-              ↑/↓ select · Ctrl+↑/↓ reorder · Enter open · P played · Del remove
+              ↑/↓ select · Ctrl+↑/↓ reorder · Enter open{!curateOnly && ' · P played'} · Del remove
             </span>
             <button
               onClick={addSegment}

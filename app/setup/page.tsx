@@ -19,6 +19,12 @@ export default async function SetupPage() {
 
   if (stream?.approved === false) redirect('/blocked');
 
+  const { data: mods } = await sb
+    .from('moderators')
+    .select('twitch_user_id, twitch_login, can_curate')
+    .eq('stream_id', session.streamId)
+    .order('twitch_login', { ascending: true });
+
   return (
     <SetupForm
       streamId={session.streamId}
@@ -30,6 +36,11 @@ export default async function SetupPage() {
       preferredSources={stream?.preferred_sources ?? []}
       addToken={stream?.add_token ?? null}
       isAdmin={isAdmin(session.twitchUserId)}
+      moderators={(mods ?? []).map((m) => ({
+        twitchUserId: m.twitch_user_id,
+        login: m.twitch_login,
+        canCurate: m.can_curate === true,
+      }))}
     />
   );
 }

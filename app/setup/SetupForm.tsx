@@ -14,6 +14,7 @@ export function SetupForm({
   preferredSources,
   addToken,
   isAdmin = false,
+  moderators,
 }: {
   streamId: string;
   displayName: string;
@@ -24,6 +25,7 @@ export function SetupForm({
   preferredSources: string[];
   addToken: string | null;
   isAdmin?: boolean;
+  moderators: { twitchUserId: string; login: string; canCurate: boolean }[];
 }) {
   const [cmd, setCmd] = useState(submitCommand);
   const [open, setOpen] = useState(allowAnyone);
@@ -251,6 +253,11 @@ export function SetupForm({
       </section>
 
       <section className="mb-10">
+        <h2 className="font-display text-2xl font-bold mb-4">Deck curators</h2>
+        <Curators initial={moderators} />
+      </section>
+
+      <section className="mb-10">
         <h2 className="font-display text-2xl font-bold mb-4">Chat connection</h2>
         <EventSubStatus />
       </section>
@@ -279,6 +286,56 @@ export function SetupForm({
         </div>
       </section>
       </main>
+    </div>
+  );
+}
+
+// -- Deck curators --
+
+function Curators({ initial }: { initial: { twitchUserId: string; login: string; canCurate: boolean }[] }) {
+  const [mods, setMods] = useState(initial);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const toggle = async (twitchUserId: string, canCurate: boolean) => {
+    setBusy(twitchUserId);
+    const r = await fetch('/api/curators', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ twitchUserId, canCurate }),
+    });
+    setBusy(null);
+    if (r.ok) {
+      setMods((ms) => ms.map((m) => (m.twitchUserId === twitchUserId ? { ...m, canCurate } : m)));
+    }
+  };
+
+  return (
+    <div>
+      <p className="text-sm text-ink/70 leading-relaxed mb-4 max-w-prose">
+        Let a mod help organize your deck — arrange segments, reorder, and add links — without
+        controlling live playback. They get a curate-only view of the deck. Mods appear here once
+        they&apos;ve signed in to Newsroom and are a moderator of your channel.
+      </p>
+      {mods.length === 0 ? (
+        <p className="font-mono text-xs text-ink/50">No mods have signed in yet.</p>
+      ) : (
+        <div className="space-y-1">
+          {mods.map((m) => (
+            <label key={m.twitchUserId} className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={m.canCurate}
+                disabled={busy === m.twitchUserId}
+                onChange={(e) => toggle(m.twitchUserId, e.target.checked)}
+              />
+              <span className="font-mono text-sm">{m.login}</span>
+              {m.canCurate && (
+                <span className="font-mono text-[10px] uppercase tracking-widest text-moss">curator</span>
+              )}
+            </label>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
