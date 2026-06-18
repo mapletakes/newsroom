@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
+import { DarkModeToggle } from '@/components/DarkModeToggle';
 
 export function SetupForm({
   streamId,
@@ -12,6 +13,7 @@ export function SetupForm({
   ignoredUsers,
   preferredSources,
   addToken,
+  isAdmin = false,
 }: {
   streamId: string;
   displayName: string;
@@ -21,6 +23,7 @@ export function SetupForm({
   ignoredUsers: string[];
   preferredSources: string[];
   addToken: string | null;
+  isAdmin?: boolean;
 }) {
   const [cmd, setCmd] = useState(submitCommand);
   const [open, setOpen] = useState(allowAnyone);
@@ -52,12 +55,19 @@ export function SetupForm({
   };
 
   return (
-    <div className="min-h-screen px-6 py-10 max-w-2xl mx-auto">
-      <header className="mb-8">
+    <div className="min-h-screen flex flex-col">
+      <header className="border-b-2 border-ink px-6 py-3 flex items-center gap-6 flex-wrap">
         <Link href="/" className="font-display text-2xl font-black">Newsroom</Link>
-        <span className="font-mono text-xs uppercase tracking-widest text-ink/60 ml-3">/ settings</span>
+        <span className="font-mono text-xs uppercase tracking-widest text-ink/60">/ settings</span>
+        <div className="ml-auto flex items-center gap-4 font-mono text-xs">
+          <Link href="/deck" className="underline hover:text-rust">Streamer Deck</Link>
+          <Link href="/mod" className="underline hover:text-rust">Mod View</Link>
+          {isAdmin && <Link href="/admin" className="underline hover:text-rust">Admin</Link>}
+          <DarkModeToggle />
+        </div>
       </header>
 
+      <main className="px-6 py-10 max-w-2xl mx-auto w-full">
       <h1 className="font-display text-4xl font-bold mb-2">Settings</h1>
       <div className="rule-double mb-8" />
 
@@ -262,14 +272,13 @@ export function SetupForm({
       </section>
 
       <section>
-        <h2 className="font-display text-2xl font-bold mb-4">Quick links</h2>
+        <h2 className="font-display text-2xl font-bold mb-4">Show notes</h2>
         <div className="space-y-2 font-mono text-sm">
-          <div><Link href="/deck" className="underline hover:text-rust">-&gt; Streamer Deck</Link></div>
-          <div><Link href="/mod" className="underline hover:text-rust">-&gt; Mod Triage</Link></div>
           <div><a href="/api/notes?format=markdown&commit=1" className="underline hover:text-rust">-&gt; Export show notes since last export (Markdown)</a></div>
           <div><a href="/api/notes?format=markdown" className="underline hover:text-rust text-ink/60">-&gt; Preview latest notes (don&apos;t mark exported)</a></div>
         </div>
       </section>
+      </main>
     </div>
   );
 }

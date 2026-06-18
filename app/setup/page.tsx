@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase';
+import { isAdmin } from '@/lib/admin';
 import { SetupForm } from './SetupForm';
 
 export const dynamic = 'force-dynamic';
@@ -28,6 +29,7 @@ export default async function SetupPage() {
       ignoredUsers={stream?.ignored_users ?? []}
       preferredSources={stream?.preferred_sources ?? []}
       addToken={stream?.add_token ?? null}
+      isAdmin={isAdmin(session.twitchUserId)}
     />
   );
 }
