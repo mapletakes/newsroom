@@ -346,6 +346,7 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
   const [token, setToken] = useState<string | null>(initialToken);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [tokenCopied, setTokenCopied] = useState(false);
   const linkRef = useRef<HTMLAnchorElement>(null);
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -377,6 +378,17 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
       await navigator.clipboard.writeText(bookmarklet);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard unavailable */
+    }
+  };
+
+  const copyToken = async () => {
+    if (!token) return;
+    try {
+      await navigator.clipboard.writeText(token);
+      setTokenCopied(true);
+      setTimeout(() => setTokenCopied(false), 1500);
     } catch {
       /* clipboard unavailable */
     }
@@ -420,12 +432,34 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
             </p>
           </div>
 
-          <div className="font-mono text-xs text-ink/50">
-            Token (for the browser extension):{' '}
-            <code className="bg-ink/10 px-1 py-0.5 break-all">{token}</code>
-            <button onClick={generate} disabled={busy} className="ml-2 underline hover:text-rust disabled:opacity-50">
-              {busy ? '…' : 'Regenerate'}
-            </button>
+          <div>
+            <p className="font-mono text-xs uppercase tracking-widest text-ink/60 mb-2">
+              Token (for the browser extension)
+            </p>
+            <div className="flex gap-1 items-center">
+              <input
+                readOnly
+                value={token ?? ''}
+                onFocus={(e) => e.currentTarget.select()}
+                className="flex-1 min-w-0 font-mono text-xs bg-ink/10 border border-ink/20 px-2 py-1.5 focus:outline-none focus:border-ink"
+                aria-label="Add token"
+              />
+              <button
+                type="button"
+                onClick={copyToken}
+                className="shrink-0 font-mono text-xs uppercase tracking-widest bg-ink text-paper px-3 py-1.5 hover:bg-rust transition-colors"
+              >
+                {tokenCopied ? 'Copied!' : 'Copy'}
+              </button>
+              <button
+                type="button"
+                onClick={generate}
+                disabled={busy}
+                className="shrink-0 font-mono text-xs uppercase tracking-widest border border-ink/40 px-3 py-1.5 hover:bg-ink hover:text-paper disabled:opacity-50"
+              >
+                {busy ? '…' : 'Regenerate'}
+              </button>
+            </div>
           </div>
         </div>
       )}
