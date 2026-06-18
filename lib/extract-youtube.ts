@@ -232,10 +232,20 @@ function scrapePlaylistItems(html: string): PlaylistItem[] {
   return out;
 }
 
+// API-first playlist expansion (reliable from datacenter IPs), falling back to
+// HTML scraping when there's no key or the API errors.
 export async function expandPlaylistWithMeta(url: string): Promise<PlaylistItem[]> {
   const listId = extractListId(url);
   if (!listId) return [];
 
+  if (process.env.YOUTUBE_API_KEY) {
+    const viaApi = await expandPlaylistViaApi(listId);
+    if (viaApi.length > 0) return viaApi;
+  }
+  return scrapePlaylist(listId);
+}
+
+async function scrapePlaylist(listId: string): Promise<PlaylistItem[]> {
   try {
     const r = await fetch(`https://www.youtube.com/playlist?list=${listId}&hl=en`, {
       headers: {
@@ -248,6 +258,76 @@ export async function expandPlaylistWithMeta(url: string): Promise<PlaylistItem[
     });
     if (!r.ok) return [];
     return scrapePlaylistItems(await r.text());
+  } catch {
+    return [];
+  }
+}
+
+// Expand a playlist via the YouTube Data API: playlistItems for the list, then
+// videos.list (batched) for durations.
+async function expandPlaylistViaApi(listId: string): Promise<PlaylistItem[]> {
+  const key = process.env.YOUTUBE_API_KEY!;
+  try {
+    const raw: { videoId: string; title: string | null; thumbnail: string | null; publisher: string | null }[] = [];
+    let pageToken: string | undefined;
+    for (let page = 0; page < 20; page++) {
+      const u = new URL('https://www.googleapis.com/youtube/v3/playlistItems');
+      u.searchParams.set('part', 'snippet,contentDetails');
+      u.searchParams.set('maxResults', '50');
+      u.searchParams.set('playlistId', listId);
+      u.searchParams.set('key', key);
+      if (pageToken) u.searchParams.set('pageToken', pageToken);
+      const r = await fetch(u, { signal: AbortSignal.timeout(10000) });
+      if (!r.ok) return []; // let the caller fall back to scraping
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data = await r.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const it of data.items || []) {
+        const vid = it.contentDetails?.videoId || it.snippet?.resourceId?.videoId;
+        const title = it.snippet?.title;
+        // Skip private/deleted entries.
+        if (!vid || title === 'Private video' || title === 'Deleted video') continue;
+        const thumbs = it.snippet?.thumbnails;
+        raw.push({
+          videoId: vid,
+          title: title || null,
+          thumbnail:
+            thumbs?.maxres?.url || thumbs?.high?.url || thumbs?.medium?.url || thumbs?.default?.url || null,
+          publisher: it.snippet?.videoOwnerChannelTitle || it.snippet?.channelTitle || null,
+        });
+      }
+      pageToken = data.nextPageToken;
+      if (!pageToken) break;
+    }
+    if (raw.length === 0) return [];
+
+    // Durations come from videos.list (batched 50 at a time).
+    const durations = new Map<string, number>();
+    for (let i = 0; i < raw.length; i += 50) {
+      const ids = raw.slice(i, i + 50).map((x) => x.videoId).join(',');
+      const u = new URL('https://www.googleapis.com/youtube/v3/videos');
+      u.searchParams.set('part', 'contentDetails');
+      u.searchParams.set('id', ids);
+      u.searchParams.set('key', key);
+      const r = await fetch(u, { signal: AbortSignal.timeout(10000) });
+      if (!r.ok) continue;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data = await r.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const it of data.items || []) {
+        if (it.id && it.contentDetails?.duration) {
+          durations.set(it.id, parseISODuration(it.contentDetails.duration));
+        }
+      }
+    }
+
+    return raw.map((x) => ({
+      url: `https://www.youtube.com/watch?v=${x.videoId}`,
+      title: x.title,
+      thumbnail: x.thumbnail,
+      publisher: x.publisher,
+      durationSeconds: durations.get(x.videoId) ?? null,
+    }));
   } catch {
     return [];
   }
