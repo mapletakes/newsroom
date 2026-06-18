@@ -293,6 +293,8 @@ export function DeckView({ displayName, streamId, isAdmin = false }: { displayNa
   const [announceStatus, setAnnounceStatus] = useState('');
 
   const suppressRefreshUntil = useRef(0);
+  // The segment whose name is being edited, so a refresh doesn't clobber it.
+  const editingSegmentRef = useRef<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (Date.now() < suppressRefreshUntil.current) return;
@@ -306,7 +308,16 @@ export function DeckView({ displayName, streamId, isAdmin = false }: { displayNa
     }
     if (sr.ok) {
       const data = await sr.json();
-      setSegments(data.segments || []);
+      const incoming: Segment[] = data.segments || [];
+      // Don't overwrite the name of a segment that's currently being renamed.
+      setSegments((prev) => {
+        const editing = editingSegmentRef.current;
+        if (!editing) return incoming;
+        const localName = prev.find((s) => s.id === editing)?.name;
+        return localName == null
+          ? incoming
+          : incoming.map((s) => (s.id === editing ? { ...s, name: localName } : s));
+      });
       if (typeof data.ungroupedPosition === 'number') setUngroupedPosition(data.ungroupedPosition);
     }
   }, []);
@@ -595,11 +606,14 @@ export function DeckView({ displayName, streamId, isAdmin = false }: { displayNa
     refresh();
   };
 
-  const renameSegmentLocal = (id: string, name: string) =>
+  const renameSegmentLocal = (id: string, name: string) => {
+    editingSegmentRef.current = id;
     setSegments((prev) => prev.map((s) => (s.id === id ? { ...s, name } : s)));
+  };
 
   const commitRename = async (id: string) => {
     const seg = segments.find((s) => s.id === id);
+    editingSegmentRef.current = null;
     if (!seg) return;
     holdAndReconcile();
     await fetch('/api/segments', {
