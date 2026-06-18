@@ -33,6 +33,15 @@ export async function addToDeck(
       return { ok: false, expanded: false, count: 0, error: 'could not expand playlist' };
     }
 
+    // The deck never duplicates: skip videos already approved (and skip repeats
+    // within the playlist itself).
+    const { data: existing } = await sb
+      .from('submissions')
+      .select('normalized_url')
+      .eq('stream_id', streamId)
+      .eq('status', 'approved');
+    const onDeck = new Set((existing ?? []).map((e) => e.normalized_url));
+
     const { data: maxRow } = await sb
       .from('submissions')
       .select('position')
@@ -46,12 +55,15 @@ export async function addToDeck(
 
     let count = 0;
     for (const v of videos) {
+      const nu = normalizeUrl(v.url);
+      if (onDeck.has(nu)) continue;
+      onDeck.add(nu);
       const { data } = await sb
         .from('submissions')
         .insert({
           stream_id: streamId,
           url: v.url,
-          normalized_url: normalizeUrl(v.url),
+          normalized_url: nu,
           kind: 'youtube',
           status: 'approved',
           approved_at: new Date().toISOString(),
@@ -67,17 +79,36 @@ export async function addToDeck(
       if (data) count++;
     }
 
+    if (count === 0) {
+      return { ok: false, expanded: true, count: 0, error: 'Every video in that playlist is already on the deck.' };
+    }
     broadcastQueueChange(streamId);
     return { ok: true, expanded: true, count };
   }
 
-  // ── Single link → insert approved, then enrich ─────────────────
+  // ── Single link → block deck duplicates, then insert + enrich ──
+  const normalized = normalizeUrl(url);
+  const { data: dupe } = await sb
+    .from('submissions')
+    .select('id, segment:segments(name)')
+    .eq('stream_id', streamId)
+    .eq('status', 'approved')
+    .eq('normalized_url', normalized)
+    .limit(1)
+    .maybeSingle();
+  if (dupe) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const segName = (dupe as any).segment?.name as string | undefined;
+    const where = segName ? `segment “${segName}”` : 'the ungrouped list';
+    return { ok: false, expanded: false, count: 0, error: `Already on the deck — in ${where}.` };
+  }
+
   const { data: submission, error } = await sb
     .from('submissions')
     .insert({
       stream_id: streamId,
       url,
-      normalized_url: normalizeUrl(url),
+      normalized_url: normalized,
       kind,
       status: 'approved',
       approved_at: new Date().toISOString(),
