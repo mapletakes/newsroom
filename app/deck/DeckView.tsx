@@ -142,6 +142,7 @@ function SegmentBlock({
   onRenameCommit,
   onToggleCollapse,
   onDelete,
+  onClearItems,
 }: {
   containerId: string; // 'ungrouped' or a segment id — the drop target id
   title: string | null; // null → no header (render items flat)
@@ -159,6 +160,7 @@ function SegmentBlock({
   onRenameCommit?: () => void;
   onToggleCollapse?: () => void;
   onDelete?: () => void;
+  onClearItems?: () => void;
 }) {
   // The block is a sortable: draggable by its header grip to reorder blocks,
   // and a drop target so items can be dragged into it (even when collapsed).
@@ -234,6 +236,16 @@ function SegmentBlock({
           <span className="mr-auto shrink-0 font-mono text-xs font-semibold text-ink/60">
             ({items.length}{totalSeconds > 0 ? ` · ${formatDuration(totalSeconds)}` : ''})
           </span>
+          {onClearItems && items.length > 0 && (
+            <button
+              onClick={onClearItems}
+              className="shrink-0 w-5 flex items-center justify-center text-ink/30 hover:text-rust"
+              aria-label="Reject all items in this block"
+              title="Reject all items here (clears the block)"
+            >
+              <span className="material-icons text-sm">playlist_remove</span>
+            </button>
+          )}
           {onDelete && (
             <button onClick={onDelete} className="shrink-0 w-5 flex items-center justify-center text-ink/30 hover:text-rust" aria-label="Delete segment">
               <span className="material-icons text-sm">delete</span>
@@ -669,6 +681,27 @@ export function DeckView({
       body: JSON.stringify({ id }),
     });
     refresh();
+  };
+
+  // Reject every item in one block (a segment, or ungrouped) — end-of-day cleanup.
+  const clearBlock = async (containerId: string, label: string) => {
+    const inBlock = (s: Submission) =>
+      containerId === 'ungrouped'
+        ? !s.segment_id || !knownSegmentIds.has(s.segment_id)
+        : s.segment_id === containerId;
+    const count = queue.filter(inBlock).length;
+    if (count === 0) return;
+    if (!window.confirm(`Reject all ${count} item${count === 1 ? '' : 's'} in ${label}? They’ll be removed from the deck.`)) {
+      return;
+    }
+    // Optimistic: drop them from the deck immediately.
+    setQueue((prev) => prev.filter((s) => !inBlock(s)));
+    holdAndReconcile();
+    await fetch('/api/deck/clear-block', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ containerId }),
+    });
   };
 
   // Move an item into a segment (or back to ungrouped), landing at the bottom.
@@ -1149,6 +1182,7 @@ export function DeckView({
                         onSelectItem={selectItem}
                         onRemoveItem={removeFromQueue}
                         onToggleCollapse={hasSegments ? () => setUngroupedCollapsed((c) => !c) : undefined}
+                        onClearItems={hasSegments ? () => clearBlock('ungrouped', 'the Ungrouped list') : undefined}
                       />
                     );
                   }
@@ -1175,6 +1209,7 @@ export function DeckView({
                       onRenameCommit={() => commitRename(seg.id)}
                       onToggleCollapse={() => toggleCollapse(seg)}
                       onDelete={() => deleteSegment(seg.id)}
+                      onClearItems={() => clearBlock(seg.id, `“${seg.name}”`)}
                     />
                   );
                 })}
