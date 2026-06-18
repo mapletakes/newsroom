@@ -134,9 +134,34 @@ export async function PATCH(req: NextRequest) {
   if (body.status === 'approved') {
     const { data: sub } = await sb
       .from('submissions')
-      .select('title, publisher, url, kind, related_coverage')
+      .select('title, publisher, url, kind, normalized_url, related_coverage')
       .eq('id', id)
       .single();
+
+    // The deck must never contain duplicates, regardless of the stream's
+    // allow_duplicates setting (which only governs the overall queue). Block
+    // approval if the same URL is already approved (i.e. already on the deck).
+    if (sub) {
+      const { data: dupe } = await sb
+        .from('submissions')
+        .select('id, segment:segments(name)')
+        .eq('stream_id', session.streamId)
+        .eq('status', 'approved')
+        .eq('normalized_url', sub.normalized_url)
+        .neq('id', id)
+        .limit(1)
+        .maybeSingle();
+      if (dupe) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const segName = (dupe as any).segment?.name as string | undefined;
+        const where = segName ? `segment “${segName}”` : 'the ungrouped list';
+        return NextResponse.json(
+          { error: 'duplicate', detail: `Already on the deck — in ${where}.`, segment: segName ?? null },
+          { status: 409 },
+        );
+      }
+    }
+
     if (sub && sub.kind === 'article' && !sub.related_coverage && sub.title) {
       const { data: streamSettings } = await sb
         .from('streams')

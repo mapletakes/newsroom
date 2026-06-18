@@ -56,12 +56,20 @@ export function ModView({
     return () => clearInterval(id);
   }, [refresh]);
 
-  const mutate = async (id: string, patch: Record<string, unknown>) => {
-    await fetch('/api/queue', {
+  const mutate = async (
+    id: string,
+    patch: Record<string, unknown>,
+  ): Promise<{ ok: boolean; error?: string }> => {
+    const r = await fetch('/api/queue', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, ...patch }),
     });
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}));
+      // e.g. trying to approve something already on the deck.
+      return { ok: false, error: e.detail || e.error || 'Action failed' };
+    }
     // Auto-archive on approval (fire-and-forget; the snapshot link appears
     // on the card once the capture finishes and broadcasts).
     if (patch.status === 'approved') {
@@ -72,6 +80,7 @@ export function ModView({
       }).catch(() => {});
     }
     refresh();
+    return { ok: true };
   };
 
   const tabCount = (k: 'pending' | 'approved' | 'played' | 'rejected') => counts[k];
@@ -329,19 +338,30 @@ function ModActions({
   mutate,
 }: {
   id: string;
-  mutate: (id: string, patch: Record<string, unknown>) => Promise<void>;
+  mutate: (id: string, patch: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>;
 }) {
   const [note, setNote] = useState('');
   const [showNote, setShowNote] = useState(false);
+  const [error, setError] = useState('');
+  const [approving, setApproving] = useState(false);
+
+  const approve = async () => {
+    setError('');
+    setApproving(true);
+    const res = await mutate(id, { status: 'approved', mod_notes: note || null });
+    setApproving(false);
+    if (!res.ok) setError(res.error || 'Could not approve');
+  };
 
   return (
     <div className="flex flex-col gap-2 w-full">
       <div className="flex gap-2 flex-wrap items-center">
         <button
-          onClick={() => mutate(id, { status: 'approved', mod_notes: note || null })}
-          className="font-mono text-xs uppercase tracking-widest bg-moss text-paper px-3 py-1.5 hover:opacity-90"
+          onClick={approve}
+          disabled={approving}
+          className="font-mono text-xs uppercase tracking-widest bg-moss text-paper px-3 py-1.5 hover:opacity-90 disabled:opacity-60"
         >
-          Approve
+          {approving ? 'Approving…' : 'Approve'}
         </button>
         <button
           onClick={() => mutate(id, { status: 'rejected' })}
@@ -356,6 +376,9 @@ function ModActions({
           {showNote ? '− hide note' : '+ add note'}
         </button>
       </div>
+      {error && (
+        <div className="font-mono text-xs text-rust">⚠ {error}</div>
+      )}
       {showNote && (
         <input
           value={note}
