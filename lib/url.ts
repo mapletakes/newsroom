@@ -40,6 +40,20 @@ export function normalizeUrl(raw: string): string {
   }
 }
 
+// Strip playlist-related params (notably `list`, which can be an unlisted
+// playlist ID) before posting a URL publicly to chat. Keeps the video id and
+// timestamp.
+export function sanitizeShareUrl(raw: string): string {
+  const PLAYLIST_PARAMS = ['list', 'index', 'start_radio', 'pp', 'si'];
+  try {
+    const u = new URL(raw.trim());
+    for (const p of PLAYLIST_PARAMS) u.searchParams.delete(p);
+    return u.toString();
+  } catch {
+    return raw;
+  }
+}
+
 export function detectKind(url: string): MediaKind {
   let u: URL;
   try { u = new URL(url); } catch { return 'unknown'; }

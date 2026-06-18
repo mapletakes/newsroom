@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { SubmissionCard, type Submission } from '@/components/SubmissionCard';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { useQueueRealtime } from '@/lib/use-queue-realtime';
-import { formatDuration } from '@/lib/url';
+import { formatDuration, sanitizeShareUrl } from '@/lib/url';
 
 export function ModView({
   channel,
@@ -147,12 +147,12 @@ export function ModView({
             </span>
             <input
               readOnly
-              value={nowPlaying.url}
+              value={sanitizeShareUrl(nowPlaying.url)}
               onFocus={(e) => e.currentTarget.select()}
               className="shrink-0 w-48 font-mono text-[11px] bg-paper border border-ink/20 px-2 py-1 focus:outline-none focus:border-ink"
               aria-label="Now playing URL"
             />
-            <CopyButton value={nowPlaying.url} />
+            <CopyButton value={sanitizeShareUrl(nowPlaying.url)} />
             <AnnounceButton submissionId={nowPlaying.id} />
             <a
               href={nowPlaying.url}

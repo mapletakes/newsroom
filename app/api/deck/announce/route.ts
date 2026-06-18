@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getSession } from '@/lib/session';
 import { refreshAccessToken, sendChatMessage } from '@/lib/twitch-oauth';
 import { encryptSecret, decryptSecret } from '@/lib/crypto';
+import { sanitizeShareUrl } from '@/lib/url';
 
 const MAX_CHARS = 500;
 
@@ -77,13 +78,15 @@ export async function POST(req: NextRequest) {
   }
 
   // Build the message, truncating the title if needed to fit Twitch's limit.
-  let title = sub.title || sub.url;
-  const fixed = `Watching:  ${sub.url}`.length; // "Watching: " + space + url
+  // Strip playlist params so an unlisted playlist id is never posted publicly.
+  const shareUrl = sanitizeShareUrl(sub.url);
+  let title = sub.title || shareUrl;
+  const fixed = `Watching:  ${shareUrl}`.length; // "Watching: " + space + url
   if (fixed + title.length > MAX_CHARS) {
     const room = Math.max(0, MAX_CHARS - fixed - 1);
     title = title.slice(0, room) + '…';
   }
-  const message = `Watching: ${title} ${sub.url}`;
+  const message = `Watching: ${title} ${shareUrl}`;
 
   const result = await sendChatMessage(
     accessToken,
