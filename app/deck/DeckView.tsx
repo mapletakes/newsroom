@@ -38,13 +38,17 @@ const byPosition = (a: Submission, b: Submission) =>
 function SortableQueueItem({
   s,
   isActive,
+  selected,
   onSelect,
   onRemove,
+  onToggleSelect,
 }: {
   s: Submission;
   isActive: boolean;
+  selected: boolean;
   onSelect: () => void;
   onRemove: () => void;
+  onToggleSelect: (shiftKey: boolean) => void;
 }) {
   const {
     attributes,
@@ -63,7 +67,20 @@ function SortableQueueItem({
 
   return (
     <div ref={setNodeRef} style={style}>
-      <div className="flex items-stretch gap-0">
+      <div className={`flex items-stretch gap-0 ${selected ? 'bg-ink/5' : ''}`}>
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleSelect(e.shiftKey); }}
+          className={`shrink-0 w-6 flex items-center justify-center select-none ${
+            selected ? 'text-rust' : 'text-ink/25 hover:text-ink/50'
+          }`}
+          aria-label={selected ? 'Deselect' : 'Select'}
+          aria-pressed={selected}
+          tabIndex={-1}
+        >
+          <span className="material-icons text-base">
+            {selected ? 'check_box' : 'check_box_outline_blank'}
+          </span>
+        </button>
         <button
           {...attributes}
           {...listeners}
@@ -76,7 +93,7 @@ function SortableQueueItem({
         <button
           onClick={onSelect}
           className={`flex-1 text-left card-paper ${kindTint(s.kind)} p-3 min-w-0 ${
-            isActive ? 'ring-2 ring-rust ring-inset' : ''
+            isActive ? 'ring-2 ring-rust ring-inset' : selected ? 'ring-2 ring-rust/40 ring-inset' : ''
           }`}
         >
           <div className="flex gap-3">
@@ -136,8 +153,10 @@ function SegmentBlock({
   draggingSourceContainer,
   overContainerId,
   sortable,
+  selectedIds,
   onSelectItem,
   onRemoveItem,
+  onToggleSelect,
   onRenameLocal,
   onRenameCommit,
   onToggleCollapse,
@@ -154,8 +173,10 @@ function SegmentBlock({
   draggingSourceContainer: string | null; // container of the item being dragged, if any
   overContainerId: string | null; // container currently under the cursor
   sortable: boolean; // whether this block can be drag-reordered (has a header)
+  selectedIds: Set<string>;
   onSelectItem: (id: string) => void;
   onRemoveItem: (id: string) => void;
+  onToggleSelect: (id: string, shiftKey: boolean) => void;
   onRenameLocal?: (name: string) => void;
   onRenameCommit?: () => void;
   onToggleCollapse?: () => void;
@@ -261,8 +282,10 @@ function SegmentBlock({
                 key={s.id}
                 s={s}
                 isActive={s.id === activeId}
+                selected={selectedIds.has(s.id)}
                 onSelect={() => onSelectItem(s.id)}
                 onRemove={() => onRemoveItem(s.id)}
+                onToggleSelect={(shiftKey) => onToggleSelect(s.id, shiftKey)}
               />
             ))}
             {isDropTarget && (
@@ -308,6 +331,8 @@ export function DeckView({
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [overContainer, setOverContainer] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const lastSelectedRef = useRef<string | null>(null);
 
   const [addUrl, setAddUrl] = useState('');
   const [adding, setAdding] = useState(false);
@@ -413,6 +438,18 @@ export function DeckView({
     }
   }, [orderedQueue, activeId]);
 
+  // Drop any selected ids that have left the queue (played/removed/reassigned).
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const live = new Set(orderedQueue.map((s) => s.id));
+      let changed = false;
+      const next = new Set<string>();
+      prev.forEach((id) => (live.has(id) ? next.add(id) : (changed = true)));
+      return changed ? next : prev;
+    });
+  }, [orderedQueue]);
+
   // Report the now-playing item to the server so the mod view can show it.
   // Curators don't drive the live show, so they never set "on air".
   const lastSentNowPlaying = useRef<string | null>(null);
@@ -472,6 +509,42 @@ export function DeckView({
     for (const s of orderedQueue) c[kindCategory(s.kind)]++;
     return c;
   }, [orderedQueue]);
+
+  // How many of the selected items are still in the deck (selection can hold
+  // stale ids briefly before the prune effect runs).
+  const selectedCount = useMemo(
+    () => orderedQueue.reduce((n, s) => (selectedIds.has(s.id) ? n + 1 : n), 0),
+    [orderedQueue, selectedIds],
+  );
+
+  // Toggle one item in the multi-select; shift-click extends a range over the
+  // current play order from the last-clicked item.
+  const toggleSelect = (id: string, shiftKey: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const order = orderedQueue.map((s) => s.id);
+      const anchor = lastSelectedRef.current;
+      if (shiftKey && anchor) {
+        const a = order.indexOf(anchor);
+        const b = order.indexOf(id);
+        if (a >= 0 && b >= 0) {
+          const [lo, hi] = a < b ? [a, b] : [b, a];
+          for (let i = lo; i <= hi; i++) next.add(order[i]);
+          lastSelectedRef.current = id;
+          return next;
+        }
+      }
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      lastSelectedRef.current = id;
+      return next;
+    });
+  };
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+    lastSelectedRef.current = null;
+  };
 
   // Block ids that actually render under the current filter (so the block-level
   // SortableContext doesn't reference hidden blocks).
@@ -553,6 +626,13 @@ export function DeckView({
     const el = e.target as HTMLElement | null;
     const tag = el?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return;
+
+    // Escape clears a multi-selection.
+    if (e.key === 'Escape' && selectedIds.size > 0) {
+      e.preventDefault();
+      clearSelection();
+      return;
+    }
     if (orderedQueue.length === 0) return;
 
     const withMod = e.ctrlKey || e.metaKey;
@@ -704,16 +784,38 @@ export function DeckView({
     });
   };
 
-  // Move an item into a segment (or back to ungrouped), landing at the bottom.
-  const moveItemToSegment = async (id: string, segmentId: string | null) => {
-    // Optimistic: reassign segment and sort to the bottom of the target group.
-    setQueue((prev) => prev.map((s) => (s.id === id ? { ...s, segment_id: segmentId, position: 1e6 } : s)));
+  // Move one or more items into a block and set that block's full order. Used
+  // for single drags, multi-select drags, and the "Move to…" picker.
+  const moveItems = (movingIds: string[], segmentId: string | null, orderedTargetIds: string[]) => {
+    const posMap = new Map<string, number>(orderedTargetIds.map((id, i) => [id, i + 1] as [string, number]));
+    const movingSet = new Set(movingIds);
+    setQueue((prev) =>
+      prev.map((s) => {
+        const inMoving = movingSet.has(s.id);
+        const pos = posMap.get(s.id);
+        if (!inMoving && pos === undefined) return s;
+        return { ...s, segment_id: inMoving ? segmentId : s.segment_id, position: pos ?? s.position };
+      }),
+    );
     holdAndReconcile();
-    await fetch('/api/queue', {
-      method: 'PATCH',
+    return fetch('/api/queue/move', {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, segment_id: segmentId }),
+      body: JSON.stringify({ ids: movingIds, segmentId, orderedIds: orderedTargetIds }),
     });
+  };
+
+  // Move the current selection to the bottom of a chosen block (the "Move to…"
+  // picker); drag handles precise placement like the top of a segment.
+  const moveSelectedTo = (target: string) => {
+    const movingIds = orderedQueue.filter((s) => selectedIds.has(s.id)).map((s) => s.id);
+    if (movingIds.length === 0) return;
+    const movingSet = new Set(movingIds);
+    const remaining = containerItems(target).filter((s) => !movingSet.has(s.id));
+    const movingItems = orderedQueue.filter((s) => movingSet.has(s.id));
+    const segId = target === 'ungrouped' ? null : target;
+    moveItems(movingIds, segId, [...remaining, ...movingItems].map((s) => s.id));
+    clearSelection();
   };
 
   // Persist a new within-group order (positions 1..N).
@@ -789,24 +891,42 @@ export function DeckView({
       return;
     }
 
-    // Item drag.
+    // Item drag — moves the whole multi-selection if the dragged item is part
+    // of it, otherwise just the dragged item.
     const sourceContainer = containerOf(draggedId);
     const isContainer = isBlockId(overId);
     const targetContainer = isContainer ? overId : containerOf(overId);
 
-    if (sourceContainer === targetContainer) {
-      // Reorder within the same block.
-      if (isContainer || overId === draggedId) return;
-      const groupItems = containerItems(sourceContainer);
-      const oldIndex = groupItems.findIndex((s) => s.id === draggedId);
-      const newIndex = groupItems.findIndex((s) => s.id === overId);
-      if (oldIndex === -1 || newIndex === -1) return;
-      persistGroupOrder(arrayMove(groupItems, oldIndex, newIndex));
-    } else {
-      // Move into another block, at the bottom.
-      const segId = targetContainer === 'ungrouped' ? null : targetContainer;
-      moveItemToSegment(draggedId, segId);
+    const movingIds =
+      selectedIds.has(draggedId) && selectedCount > 1
+        ? orderedQueue.filter((s) => selectedIds.has(s.id)).map((s) => s.id)
+        : [draggedId];
+    const movingSet = new Set(movingIds);
+    const movingItems = orderedQueue.filter((s) => movingSet.has(s.id)); // stable order
+
+    // Build the target block's new order: existing items minus the moving ones,
+    // with the moving group inserted at the hovered item's slot (so dropping on
+    // the top card lands the group at the top of that block).
+    const targetItems = containerItems(targetContainer);
+    const remaining = targetItems.filter((s) => !movingSet.has(s.id));
+    let originalIdx = isContainer ? targetItems.length : targetItems.findIndex((s) => s.id === overId);
+    if (originalIdx < 0) originalIdx = targetItems.length;
+    const movingBefore = targetItems.slice(0, originalIdx).filter((s) => movingSet.has(s.id)).length;
+    const insertAt = originalIdx - movingBefore;
+    const result = [...remaining.slice(0, insertAt), ...movingItems, ...remaining.slice(insertAt)];
+
+    // No-op: a same-block drag that didn't actually change the order.
+    if (
+      sourceContainer === targetContainer &&
+      result.length === targetItems.length &&
+      result.every((s, i) => targetItems[i].id === s.id)
+    ) {
+      return;
     }
+
+    const segId = targetContainer === 'ungrouped' ? null : targetContainer;
+    moveItems(movingIds, segId, result.map((s) => s.id));
+    if (movingIds.length > 1) clearSelection();
   };
 
   // --- Direct add ---
@@ -857,6 +977,10 @@ export function DeckView({
     ? blocks.find((b) => b.id === activeDragId) || null
     : null;
   const draggingSourceContainer = activeDragItem ? containerOf(activeDragItem.id) : null;
+  // How many cards the current drag is carrying (the whole selection if the
+  // grabbed card is part of it).
+  const dragCount =
+    activeDragItem && selectedIds.has(activeDragItem.id) && selectedCount > 1 ? selectedCount : 1;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -1148,6 +1272,29 @@ export function DeckView({
             ))}
           </div>
 
+          {/* Multi-select action bar */}
+          {selectedCount > 0 && (
+            <div className="flex items-center gap-2 mb-2 px-2 py-1.5 bg-ink text-paper font-mono text-xs uppercase tracking-widest">
+              <span className="font-bold">{selectedCount} selected</span>
+              <span className="opacity-50 normal-case tracking-normal">— drag to move, or</span>
+              <select
+                value=""
+                onChange={(e) => { if (e.target.value) moveSelectedTo(e.target.value); }}
+                className="bg-paper text-ink px-1 py-0.5 border border-paper focus:outline-none"
+                aria-label="Move selected to block"
+              >
+                <option value="">Move to…</option>
+                <option value="ungrouped">Ungrouped</option>
+                {segments.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+              <button onClick={clearSelection} className="ml-auto underline hover:opacity-70">
+                Clear
+              </button>
+            </div>
+          )}
+
           <div className="flex-1 overflow-y-auto">
             <DndContext
               sensors={sensors}
@@ -1179,8 +1326,10 @@ export function DeckView({
                         draggingSourceContainer={draggingSourceContainer}
                         overContainerId={overContainer}
                         sortable={hasSegments}
+                        selectedIds={selectedIds}
                         onSelectItem={selectItem}
                         onRemoveItem={removeFromQueue}
+                        onToggleSelect={toggleSelect}
                         onToggleCollapse={hasSegments ? () => setUngroupedCollapsed((c) => !c) : undefined}
                         onClearItems={hasSegments ? () => clearBlock('ungrouped', 'the Ungrouped list') : undefined}
                       />
@@ -1203,8 +1352,10 @@ export function DeckView({
                       draggingSourceContainer={draggingSourceContainer}
                       overContainerId={overContainer}
                       sortable
+                      selectedIds={selectedIds}
                       onSelectItem={selectItem}
                       onRemoveItem={removeFromQueue}
+                      onToggleSelect={toggleSelect}
                       onRenameLocal={(name) => renameSegmentLocal(seg.id, name)}
                       onRenameCommit={() => commitRename(seg.id)}
                       onToggleCollapse={() => toggleCollapse(seg)}
@@ -1216,14 +1367,27 @@ export function DeckView({
               </SortableContext>
               <DragOverlay>
                 {activeDragItem ? (
-                  <div className="card-paper p-2 shadow-lg bg-paper w-[300px] opacity-95 cursor-grabbing">
-                    <div className="font-mono text-xs uppercase tracking-widest text-ink/60 mb-1">
-                      {activeDragItem.kind.replace('_', ' ')}
-                      {activeDragItem.duration_seconds ? ` · ${formatDuration(activeDragItem.duration_seconds)}` : ''}
+                  <div className="relative w-[300px]">
+                    {dragCount > 1 && (
+                      <>
+                        <div className="absolute inset-0 translate-x-1.5 translate-y-1.5 card-paper bg-paper" />
+                        <div className="absolute inset-0 translate-x-0.5 translate-y-0.5 card-paper bg-paper" />
+                      </>
+                    )}
+                    <div className="relative card-paper p-2 shadow-lg bg-paper opacity-95 cursor-grabbing">
+                      <div className="font-mono text-xs uppercase tracking-widest text-ink/60 mb-1">
+                        {activeDragItem.kind.replace('_', ' ')}
+                        {activeDragItem.duration_seconds ? ` · ${formatDuration(activeDragItem.duration_seconds)}` : ''}
+                      </div>
+                      <div className="font-display text-base font-bold leading-tight line-clamp-2">
+                        {activeDragItem.title || activeDragItem.url}
+                      </div>
                     </div>
-                    <div className="font-display text-base font-bold leading-tight line-clamp-2">
-                      {activeDragItem.title || activeDragItem.url}
-                    </div>
+                    {dragCount > 1 && (
+                      <span className="absolute -top-2 -right-2 z-10 min-w-[1.5rem] h-6 px-1.5 flex items-center justify-center rounded-full bg-rust text-paper font-mono text-xs font-bold shadow">
+                        {dragCount}
+                      </span>
+                    )}
                   </div>
                 ) : activeDragBlock ? (
                   <div className="bg-ink/10 border border-ink/30 shadow-lg px-2 py-1.5 w-[300px] opacity-95 cursor-grabbing font-mono text-xs uppercase tracking-widest font-bold text-ink/70">
