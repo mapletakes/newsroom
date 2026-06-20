@@ -12,7 +12,9 @@ import {
   DragOverlay,
   closestCorners,
   KeyboardSensor,
+  MeasuringStrategy,
   PointerSensor,
+  useDroppable,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -34,6 +36,14 @@ type Segment = { id: string; name: string; position: number; collapsed: boolean 
 const byPosition = (a: Submission, b: Submission) =>
   (a.position ?? 1e9) - (b.position ?? 1e9) ||
   new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+
+// An "append to the end" drop target below the last card. It grows while an
+// item is being dragged so the bottom slot is easy to hit without overshooting.
+const END_SUFFIX = '::end';
+function EndDropZone({ containerId, tall }: { containerId: string; tall: boolean }) {
+  const { setNodeRef } = useDroppable({ id: `${containerId}${END_SUFFIX}` });
+  return <div ref={setNodeRef} className={tall ? 'h-12' : 'h-1'} aria-hidden />;
+}
 
 // A thin marker showing exactly where a drag will land.
 function DropLine() {
@@ -305,6 +315,9 @@ function SegmentBlock({
               </div>
             ))}
             {drop && drop.overId === null && items.length > 0 && <DropLine />}
+            {items.length > 0 && (
+              <EndDropZone containerId={containerId} tall={draggingSourceContainer !== null} />
+            )}
             {isDropTarget && items.length === 0 && (
               <div className="border-2 border-dashed border-rust bg-rust/10 px-2 py-2 text-center font-mono text-[10px] uppercase tracking-widest text-rust">
                 Drop here
@@ -902,9 +915,11 @@ export function DeckView({
     if (isBlockId(String(active.id))) { setOverContainer(null); setDropTarget(null); return; }
     if (!over) { setOverContainer(null); setDropTarget(null); return; }
     const overId = String(over.id);
-    if (isBlockId(overId)) {
-      setOverContainer(overId);
-      setDropTarget({ containerId: overId, overId: null, after: false });
+    // The end zone, or an (empty) block itself → append to that block's end.
+    if (overId.endsWith(END_SUFFIX) || isBlockId(overId)) {
+      const container = overId.endsWith(END_SUFFIX) ? overId.slice(0, -END_SUFFIX.length) : overId;
+      setOverContainer(container);
+      setDropTarget({ containerId: container, overId: null, after: false });
       return;
     }
     const container = containerOf(overId);
@@ -934,7 +949,11 @@ export function DeckView({
 
     // Block reorder.
     if (isBlockId(draggedId)) {
-      const overBlockId = isBlockId(overId) ? overId : containerOf(overId);
+      const overBlockId = overId.endsWith(END_SUFFIX)
+        ? overId.slice(0, -END_SUFFIX.length)
+        : isBlockId(overId)
+          ? overId
+          : containerOf(overId);
       if (draggedId === overBlockId) return;
       const oldIndex = blocks.findIndex((b) => b.id === draggedId);
       const newIndex = blocks.findIndex((b) => b.id === overBlockId);
@@ -1352,6 +1371,7 @@ export function DeckView({
             <DndContext
               sensors={sensors}
               collisionDetection={closestCorners}
+              measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
               onDragStart={handleDragStart}
               onDragOver={handleDragOver}
               onDragEnd={handleDragEnd}
