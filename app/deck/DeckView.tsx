@@ -35,6 +35,16 @@ const byPosition = (a: Submission, b: Submission) =>
   (a.position ?? 1e9) - (b.position ?? 1e9) ||
   new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
 
+// A thin marker showing exactly where a drag will land.
+function DropLine() {
+  return (
+    <div className="relative h-0 my-1" aria-hidden>
+      <div className="absolute -top-[2px] left-0 right-1 h-1 bg-rust rounded-full" />
+      <div className="absolute -top-1 -left-0.5 w-2.5 h-2.5 rounded-full bg-rust" />
+    </div>
+  );
+}
+
 function SortableQueueItem({
   s,
   isActive,
@@ -50,19 +60,18 @@ function SortableQueueItem({
   onRemove: () => void;
   onToggleSelect: (shiftKey: boolean) => void;
 }) {
+  // We drive placement with an explicit insertion line + DragOverlay, so we
+  // deliberately don't apply the sortable transform here — siblings shouldn't
+  // shift around (that competed with the line and couldn't express "drop last").
   const {
     attributes,
     listeners,
     setNodeRef,
-    transform,
-    transition,
     isDragging,
   } = useSortable({ id: s.id });
 
   const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0.4 : 1,
   };
 
   return (
@@ -154,6 +163,7 @@ function SegmentBlock({
   overContainerId,
   sortable,
   selectedIds,
+  drop,
   onSelectItem,
   onRemoveItem,
   onToggleSelect,
@@ -174,6 +184,9 @@ function SegmentBlock({
   overContainerId: string | null; // container currently under the cursor
   sortable: boolean; // whether this block can be drag-reordered (has a header)
   selectedIds: Set<string>;
+  // Live insertion point while dragging into this block (null otherwise).
+  // overId null → at the end; otherwise before/after that item.
+  drop: { overId: string | null; after: boolean } | null;
   onSelectItem: (id: string) => void;
   onRemoveItem: (id: string) => void;
   onToggleSelect: (id: string, shiftKey: boolean) => void;
@@ -278,17 +291,21 @@ function SegmentBlock({
         <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
           <div className="space-y-1 min-h-[2rem]">
             {items.map((s) => (
-              <SortableQueueItem
-                key={s.id}
-                s={s}
-                isActive={s.id === activeId}
-                selected={selectedIds.has(s.id)}
-                onSelect={() => onSelectItem(s.id)}
-                onRemove={() => onRemoveItem(s.id)}
-                onToggleSelect={(shiftKey) => onToggleSelect(s.id, shiftKey)}
-              />
+              <div key={s.id}>
+                {drop && drop.overId === s.id && !drop.after && <DropLine />}
+                <SortableQueueItem
+                  s={s}
+                  isActive={s.id === activeId}
+                  selected={selectedIds.has(s.id)}
+                  onSelect={() => onSelectItem(s.id)}
+                  onRemove={() => onRemoveItem(s.id)}
+                  onToggleSelect={(shiftKey) => onToggleSelect(s.id, shiftKey)}
+                />
+                {drop && drop.overId === s.id && drop.after && <DropLine />}
+              </div>
             ))}
-            {isDropTarget && (
+            {drop && drop.overId === null && items.length > 0 && <DropLine />}
+            {isDropTarget && items.length === 0 && (
               <div className="border-2 border-dashed border-rust bg-rust/10 px-2 py-2 text-center font-mono text-[10px] uppercase tracking-widest text-rust">
                 Drop here
               </div>
@@ -333,6 +350,12 @@ export function DeckView({
   const [overContainer, setOverContainer] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const lastSelectedRef = useRef<string | null>(null);
+  // Live insertion point during a drag: which block, and before/after which item.
+  const [dropTarget, setDropTarget] = useState<
+    { containerId: string; overId: string | null; after: boolean } | null
+  >(null);
+  // The items the current drag is carrying (the whole selection, or just one).
+  const movingIdsRef = useRef<string[]>([]);
 
   const [addUrl, setAddUrl] = useState('');
   const [adding, setAdding] = useState(false);
@@ -849,7 +872,14 @@ export function DeckView({
   );
 
   const handleDragStart = (event: DragStartEvent) => {
-    setActiveDragId(String(event.active.id));
+    const id = String(event.active.id);
+    setActiveDragId(id);
+    // Lock in what this drag carries (the whole selection if the grabbed card
+    // is part of it), so over/end agree.
+    movingIdsRef.current =
+      !isBlockId(id) && selectedIds.has(id) && selectedCount > 1
+        ? orderedQueue.filter((s) => selectedIds.has(s.id)).map((s) => s.id)
+        : [id];
   };
 
   const isBlockId = useCallback(
@@ -857,25 +887,47 @@ export function DeckView({
     [knownSegmentIds],
   );
 
-  // Track which container is under the cursor (resolving items → their block)
-  // so the whole target block can highlight, not just the area under it.
-  // Skipped while dragging a whole block.
+  const endDrag = () => {
+    setActiveDragId(null);
+    setOverContainer(null);
+    setDropTarget(null);
+    movingIdsRef.current = [];
+  };
+
+  // Track the live drop position: which block, and before/after which item
+  // (decided by the dragged card's centre vs the hovered card's centre, so the
+  // slot after the last item is reachable).
   const handleDragOver = (event: DragOverEvent) => {
     const { active, over } = event;
-    if (isBlockId(String(active.id))) { setOverContainer(null); return; }
-    if (!over) { setOverContainer(null); return; }
+    if (isBlockId(String(active.id))) { setOverContainer(null); setDropTarget(null); return; }
+    if (!over) { setOverContainer(null); setDropTarget(null); return; }
     const overId = String(over.id);
-    setOverContainer(isBlockId(overId) ? overId : containerOf(overId));
+    if (isBlockId(overId)) {
+      setOverContainer(overId);
+      setDropTarget({ containerId: overId, overId: null, after: false });
+      return;
+    }
+    const container = containerOf(overId);
+    setOverContainer(container);
+    let after = false;
+    const overRect = over.rect;
+    const activeRect = active.rect.current.translated;
+    if (overRect && activeRect) {
+      after = activeRect.top + activeRect.height / 2 > overRect.top + overRect.height / 2;
+    }
+    setDropTarget({ containerId: container, overId, after });
   };
 
   // Single drag handler for the whole sidebar:
   //  - drag a block (by its grip) to reorder blocks
-  //  - reorder items within a block
-  //  - drag an item into another block (lands at the bottom)
+  //  - reorder items within a block (single or multi-select)
+  //  - drag item(s) into another block, landing at the marked insertion point
   const handleDragEnd = (event: DragEndEvent) => {
-    setActiveDragId(null);
-    setOverContainer(null);
     const { active: dragged, over } = event;
+    // Snapshot drag state before endDrag() resets it.
+    const dt = dropTarget;
+    const grabbed = movingIdsRef.current;
+    endDrag();
     if (!over) return;
     const draggedId = String(dragged.id);
     const overId = String(over.id);
@@ -891,28 +943,29 @@ export function DeckView({
       return;
     }
 
-    // Item drag — moves the whole multi-selection if the dragged item is part
-    // of it, otherwise just the dragged item.
-    const sourceContainer = containerOf(draggedId);
-    const isContainer = isBlockId(overId);
-    const targetContainer = isContainer ? overId : containerOf(overId);
-
-    const movingIds =
-      selectedIds.has(draggedId) && selectedCount > 1
-        ? orderedQueue.filter((s) => selectedIds.has(s.id)).map((s) => s.id)
-        : [draggedId];
+    // Item drag — carries the whole multi-selection if the grabbed card was
+    // part of it (resolved at drag start).
+    const movingIds = grabbed.length ? grabbed : [draggedId];
     const movingSet = new Set(movingIds);
     const movingItems = orderedQueue.filter((s) => movingSet.has(s.id)); // stable order
 
-    // Build the target block's new order: existing items minus the moving ones,
-    // with the moving group inserted at the hovered item's slot (so dropping on
-    // the top card lands the group at the top of that block).
+    const sourceContainer = containerOf(draggedId);
+    const targetContainer = dt ? dt.containerId : containerOf(overId);
     const targetItems = containerItems(targetContainer);
     const remaining = targetItems.filter((s) => !movingSet.has(s.id));
-    let originalIdx = isContainer ? targetItems.length : targetItems.findIndex((s) => s.id === overId);
-    if (originalIdx < 0) originalIdx = targetItems.length;
-    const movingBefore = targetItems.slice(0, originalIdx).filter((s) => movingSet.has(s.id)).length;
-    const insertAt = originalIdx - movingBefore;
+
+    // Resolve the marked drop point to an index within `remaining`. Work in
+    // full-list coordinates (so hovering a moving card or the last slot both
+    // behave), then count how many non-moving items sit before that boundary.
+    let insertAt: number;
+    if (!dt || dt.overId === null) {
+      insertAt = remaining.length;
+    } else {
+      const fidx = targetItems.findIndex((s) => s.id === dt.overId);
+      const boundary = (fidx < 0 ? targetItems.length : fidx) + (dt.after ? 1 : 0);
+      insertAt = targetItems.slice(0, boundary).filter((s) => !movingSet.has(s.id)).length;
+    }
+    insertAt = Math.max(0, Math.min(insertAt, remaining.length));
     const result = [...remaining.slice(0, insertAt), ...movingItems, ...remaining.slice(insertAt)];
 
     // No-op: a same-block drag that didn't actually change the order.
@@ -1302,7 +1355,7 @@ export function DeckView({
               onDragStart={handleDragStart}
               onDragOver={handleDragOver}
               onDragEnd={handleDragEnd}
-              onDragCancel={() => { setActiveDragId(null); setOverContainer(null); }}
+              onDragCancel={endDrag}
             >
               <SortableContext items={visibleBlockIds} strategy={verticalListSortingStrategy}>
                 {blocks.map((b) => {
@@ -1327,6 +1380,7 @@ export function DeckView({
                         overContainerId={overContainer}
                         sortable={hasSegments}
                         selectedIds={selectedIds}
+                        drop={dropTarget?.containerId === 'ungrouped' ? dropTarget : null}
                         onSelectItem={selectItem}
                         onRemoveItem={removeFromQueue}
                         onToggleSelect={toggleSelect}
@@ -1353,6 +1407,7 @@ export function DeckView({
                       overContainerId={overContainer}
                       sortable
                       selectedIds={selectedIds}
+                      drop={dropTarget?.containerId === seg.id ? dropTarget : null}
                       onSelectItem={selectItem}
                       onRemoveItem={removeFromQueue}
                       onToggleSelect={toggleSelect}
