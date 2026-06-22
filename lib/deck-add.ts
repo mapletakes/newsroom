@@ -19,12 +19,26 @@ export async function addToDeck(
   streamId: string,
   rawUrl: string,
   submitterLogin: string,
+  segmentId?: string | null,
 ): Promise<AddToDeckResult> {
   const url = rawUrl.trim();
   if (!url) return { ok: false, expanded: false, count: 0, error: 'missing url' };
 
   const kind = detectKind(url);
   const sb = supabaseAdmin();
+
+  // Resolve the requested segment, ignoring anything that isn't a real segment
+  // on this stream (so a stale id just falls back to ungrouped).
+  let segId: string | null = null;
+  if (segmentId) {
+    const { data: seg } = await sb
+      .from('segments')
+      .select('id')
+      .eq('id', segmentId)
+      .eq('stream_id', streamId)
+      .maybeSingle();
+    segId = seg?.id ?? null;
+  }
 
   // ── Playlist → expand into individual approved videos ───────────
   if (kind === 'youtube_playlist') {
@@ -67,6 +81,7 @@ export async function addToDeck(
           kind: 'youtube',
           status: 'approved',
           approved_at: new Date().toISOString(),
+          segment_id: segId,
           title: v.title,
           thumbnail_url: v.thumbnail,
           publisher: v.publisher,
@@ -112,6 +127,7 @@ export async function addToDeck(
       kind,
       status: 'approved',
       approved_at: new Date().toISOString(),
+      segment_id: segId,
       submitter_login: submitterLogin,
     })
     .select('id')

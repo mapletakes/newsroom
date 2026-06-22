@@ -19,11 +19,12 @@ export async function OPTIONS() {
 }
 
 export async function POST(req: NextRequest) {
-  let body: { url?: string; token?: string } = {};
+  let body: { url?: string; token?: string; segmentId?: string | null } = {};
   try { body = await req.json(); } catch { /* ignore */ }
 
   const token = req.headers.get('x-add-token') || body.token || '';
   const url = String(body.url || '').trim();
+  const segmentId = body.segmentId ? String(body.segmentId) : null;
   if (!token || !url) {
     return NextResponse.json({ ok: false, error: 'missing token or url' }, { status: 400, headers: CORS });
   }
@@ -38,6 +39,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'invalid token' }, { status: 401, headers: CORS });
   }
 
-  const result = await addToDeck(stream.id, url, stream.twitch_login);
+  const result = await addToDeck(stream.id, url, stream.twitch_login, segmentId);
   return NextResponse.json(result, { status: result.ok ? 200 : 400, headers: CORS });
 }
