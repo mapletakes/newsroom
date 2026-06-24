@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSession } from '@/lib/session';
+import { sessionCanCurate } from '@/lib/curate';
 import { broadcastQueueChange } from '@/lib/realtime';
 
 export const dynamic = 'force-dynamic';
@@ -39,6 +40,9 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
+  if (!(await sessionCanCurate(session))) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
 
   const body = await req.json().catch(() => ({}));
   const name = (typeof body.name === 'string' && body.name.trim()) || 'New segment';
@@ -77,6 +81,9 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
+  if (!(await sessionCanCurate(session))) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
 
   const body = await req.json();
   const id = String(body.id || '');
@@ -103,6 +110,9 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
+  if (!(await sessionCanCurate(session))) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
 
   const body = await req.json();
   const id = String(body.id || '');

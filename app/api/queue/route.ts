@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSession } from '@/lib/session';
+import { sessionCanCurate } from '@/lib/curate';
 import { searchRelatedCoverage } from '@/lib/search-coverage';
 import { submitUrlToQueue } from '@/lib/submit-url';
 import { broadcastQueueChange } from '@/lib/realtime';
@@ -97,6 +98,13 @@ export async function PATCH(req: NextRequest) {
   const body = await req.json();
   const id = String(body.id || '');
   if (!id) return NextResponse.json({ error: 'missing id' }, { status: 400 });
+
+  // Status/notes are mod triage; reassigning a segment or position is curation,
+  // so gate those fields behind curate permission (the streamer always passes).
+  const isCuration = 'segment_id' in body || typeof body.position === 'number';
+  if (isCuration && !(await sessionCanCurate(session))) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
 
   const patch: Record<string, unknown> = {};
   if (body.status) {
