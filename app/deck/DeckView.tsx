@@ -334,6 +334,9 @@ export function DeckView({
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [overContainer, setOverContainer] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Explicit display order set at drag end so SortableContext.items reflects the new
+  // arrangement in the same render that clears transforms — prevents the snap-back flash.
+  const [pendingOrder, setPendingOrder] = useState<Record<string, string[]> | null>(null);
   const lastSelectedRef = useRef<string | null>(null);
   // The items the current drag is carrying (the whole selection, or just one).
   const movingIdsRef = useRef<string[]>([]);
@@ -356,6 +359,7 @@ export function DeckView({
     if (qr.ok) {
       const data = await qr.json();
       setQueue(data.submissions || []);
+      setPendingOrder(null); // server state is now authoritative
     }
     if (sr.ok) {
       const data = await sr.json();
@@ -847,16 +851,20 @@ export function DeckView({
   );
 
   const containerItems = useCallback(
-    (containerId: string): Submission[] =>
-      containerId === 'ungrouped' ? ungroupedItems : itemsForSegment(containerId),
-    [ungroupedItems, itemsForSegment],
+    (containerId: string): Submission[] => {
+      const base = containerId === 'ungrouped' ? ungroupedItems : itemsForSegment(containerId);
+      const order = pendingOrder?.[containerId];
+      if (!order) return base;
+      const map = new Map(base.map((s) => [s.id, s]));
+      return order.map((id) => map.get(id)).filter((s): s is Submission => s !== undefined);
+    },
+    [ungroupedItems, itemsForSegment, pendingOrder],
   );
 
   const handleDragStart = (event: DragStartEvent) => {
     const id = String(event.active.id);
     setActiveDragId(id);
-    // Lock in what this drag carries (the whole selection if the grabbed card
-    // is part of it), so over/end agree.
+    setPendingOrder(null); // clear stale override so containerItems reads live queue state
     movingIdsRef.current =
       !isBlockId(id) && selectedIds.has(id) && selectedCount > 1
         ? orderedQueue.filter((s) => selectedIds.has(s.id)).map((s) => s.id)
@@ -885,19 +893,22 @@ export function DeckView({
   const handleDragEnd = (event: DragEndEvent) => {
     const { active: dragged, over } = event;
     const grabbed = movingIdsRef.current;
-    endDrag();
-    if (!over) return;
+
+    if (!over) { endDrag(); return; }
     const draggedId = String(dragged.id);
     const overId = String(over.id);
 
     // Block reorder.
     if (isBlockId(draggedId)) {
       const overBlockId = isBlockId(overId) ? overId : containerOf(overId);
-      if (draggedId === overBlockId) return;
-      const oldIndex = blocks.findIndex((b) => b.id === draggedId);
-      const newIndex = blocks.findIndex((b) => b.id === overBlockId);
-      if (oldIndex < 0 || newIndex < 0) return;
-      persistBlockOrder(arrayMove(blocks, oldIndex, newIndex).map((b) => b.id));
+      if (draggedId !== overBlockId) {
+        const oldIndex = blocks.findIndex((b) => b.id === draggedId);
+        const newIndex = blocks.findIndex((b) => b.id === overBlockId);
+        if (oldIndex >= 0 && newIndex >= 0) {
+          persistBlockOrder(arrayMove(blocks, oldIndex, newIndex).map((b) => b.id));
+        }
+      }
+      endDrag();
       return;
     }
 
@@ -914,8 +925,13 @@ export function DeckView({
     if (sourceContainer === targetContainer && movingIds.length === 1 && !isBlockId(overId)) {
       const fromIdx = targetItems.findIndex((s) => s.id === draggedId);
       const toIdx = targetItems.findIndex((s) => s.id === overId);
-      if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return;
-      persistGroupOrder(arrayMove(targetItems, fromIdx, toIdx));
+      if (fromIdx >= 0 && toIdx >= 0 && fromIdx !== toIdx) {
+        const reordered = arrayMove(targetItems, fromIdx, toIdx);
+        // Set display order immediately — same render as endDrag() clears transforms.
+        setPendingOrder({ [targetContainer]: reordered.map((s) => s.id) });
+        persistGroupOrder(reordered);
+      }
+      endDrag();
       return;
     }
 
@@ -930,11 +946,21 @@ export function DeckView({
       sourceContainer === targetContainer &&
       result.length === targetItems.length &&
       result.every((s, i) => targetItems[i].id === s.id)
-    ) return;
+    ) { endDrag(); return; }
+
+    // Set display order immediately for both affected containers.
+    const newPending: Record<string, string[]> = { [targetContainer]: result.map((s) => s.id) };
+    if (sourceContainer !== targetContainer) {
+      newPending[sourceContainer] = containerItems(sourceContainer)
+        .filter((s) => !movingSet.has(s.id))
+        .map((s) => s.id);
+    }
+    setPendingOrder(newPending);
 
     const segId = targetContainer === 'ungrouped' ? null : targetContainer;
     moveItems(movingIds, segId, result.map((s) => s.id));
     if (movingIds.length > 1) clearSelection();
+    endDrag();
   };
 
   // --- Direct add ---
@@ -1320,7 +1346,7 @@ export function DeckView({
                     // Ungrouped block. Only gets a header (and drag handle) once
                     // at least one segment exists; otherwise renders flat.
                     const hasSegments = segments.length > 0;
-                    const items = filterItems(ungroupedItems);
+                    const items = filterItems(containerItems('ungrouped'));
                     if (filtering && hasSegments && items.length === 0) return null;
                     return (
                       <SegmentBlock
@@ -1345,7 +1371,7 @@ export function DeckView({
                     );
                   }
                   const seg = b.segment;
-                  const items = filterItems(itemsForSegment(seg.id));
+                  const items = filterItems(containerItems(seg.id));
                   // Hide segments with nothing matching the active filter.
                   if (filtering && items.length === 0) return null;
                   return (
