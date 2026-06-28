@@ -1020,7 +1020,7 @@ export function DeckView({
   return (
     <div className="min-h-screen flex flex-col">
       {!curateOnly && <QuickLinksDrawer />}
-      <header className="sticky top-0 z-20 bg-paper border-b-2 border-ink px-6 py-3 flex items-center gap-6 flex-wrap">
+      <header className="sticky top-0 z-20 bg-paper border-b-2 border-ink pl-10 pr-6 py-3 flex items-center gap-6 flex-wrap">
         <Link href="/" className="font-display text-2xl font-black">
           Newsroom
         </Link>
@@ -1052,7 +1052,7 @@ export function DeckView({
         </div>
       </header>
 
-      <main className="flex-1 grid lg:grid-cols-2 gap-0">
+      <main className="flex-1 grid lg:grid-cols-2 gap-0 pl-3">
         {/* Active card */}
         <section className="p-8 border-r border-ink/20">
           {!active && (
