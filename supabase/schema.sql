@@ -53,6 +53,18 @@ create table if not exists public.segments (
 );
 create index if not exists segments_stream_idx on public.segments(stream_id, position);
 
+-- Quick links: a streamer's personal "on-hand" links (fossabot, fundraisers,
+-- etc.) shown in a popout drawer. Entirely separate from the deck/submissions.
+create table if not exists public.quick_links (
+  id uuid primary key default gen_random_uuid(),
+  stream_id uuid references public.streams(id) on delete cascade,
+  label text not null,
+  url text not null,
+  position int default 0,
+  created_at timestamptz default now()
+);
+create index if not exists quick_links_stream_idx on public.quick_links(stream_id, position);
+
 -- Submissions: every link harvested from chat
 -- Status flow:  pending -> approved -> played | pending -> rejected
 create type submission_status as enum ('pending', 'approved', 'rejected', 'played');
@@ -136,6 +148,7 @@ create index if not exists show_notes_stream_idx
 alter table public.streams enable row level security;
 alter table public.moderators enable row level security;
 alter table public.segments enable row level security;
+alter table public.quick_links enable row level security;
 alter table public.submissions enable row level security;
 alter table public.show_notes enable row level security;
 

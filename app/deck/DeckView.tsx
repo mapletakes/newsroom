@@ -6,6 +6,7 @@ import type { Submission } from '@/components/SubmissionCard';
 import { extractYouTubeId, formatDuration, formatDate, kindTint, kindCategory, type KindCategory } from '@/lib/url';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { ArchiveButton } from '@/components/ArchiveButton';
+import { QuickLinksDrawer } from './QuickLinksDrawer';
 import { useQueueRealtime } from '@/lib/use-queue-realtime';
 import {
   DndContext,
@@ -1018,6 +1019,7 @@ export function DeckView({
 
   return (
     <div className="min-h-screen flex flex-col">
+      {!curateOnly && <QuickLinksDrawer />}
       <header className="border-b-2 border-ink px-6 py-3 flex items-center gap-6 flex-wrap">
         <Link href="/" className="font-display text-2xl font-black">
           Newsroom
