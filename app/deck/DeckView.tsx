@@ -1020,7 +1020,7 @@ export function DeckView({
   return (
     <div className="min-h-screen flex flex-col">
       {!curateOnly && <QuickLinksDrawer />}
-      <header className="border-b-2 border-ink px-6 py-3 flex items-center gap-6 flex-wrap">
+      <header className="sticky top-0 z-20 bg-paper border-b-2 border-ink px-6 py-3 flex items-center gap-6 flex-wrap">
         <Link href="/" className="font-display text-2xl font-black">
           Newsroom
         </Link>

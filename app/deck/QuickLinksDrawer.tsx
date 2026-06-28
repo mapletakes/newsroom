@@ -82,7 +82,7 @@ export function QuickLinksDrawer() {
       {/* Left-edge launcher tab — always reachable while running the show. */}
       <button
         onClick={() => setOpen(true)}
-        className="fixed left-0 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-1.5 bg-ink text-paper px-1.5 py-3 rounded-r-sm shadow-lg hover:bg-rust transition-colors"
+        className="fixed left-0 top-20 z-30 flex flex-col items-center gap-1.5 bg-ink text-paper px-1.5 py-3 rounded-r-sm shadow-lg hover:bg-rust transition-colors"
         aria-label="Open on-hand links"
         title="On-hand links"
       >
