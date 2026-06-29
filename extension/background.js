@@ -3,7 +3,7 @@
 // link, video, or selected URL — and, when segments exist, lets you pick which
 // segment of the deck to drop it into. Auth is the personal add token.
 
-const DEFAULT_APP_URL = 'https://newsroom-psi-five.vercel.app';
+const DEFAULT_APP_URL = 'https://thebroadside.net';
 const CONTEXTS = ['page', 'link', 'selection', 'video'];
 const SEG_PREFIX = 'nr-seg:';
 

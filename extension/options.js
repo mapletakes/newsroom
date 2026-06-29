@@ -1,4 +1,4 @@
-const DEFAULT_APP_URL = 'https://newsroom-psi-five.vercel.app';
+const DEFAULT_APP_URL = 'https://thebroadside.net';
 
 const tokenEl = document.getElementById('token');
 const appUrlEl = document.getElementById('appUrl');

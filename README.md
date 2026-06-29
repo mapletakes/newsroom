@@ -66,7 +66,7 @@ supabase/
 
 1. Push to your repo and import in Vercel.
 2. Set the env vars in **Project Settings → Environment Variables**:
-   - `NEXT_PUBLIC_APP_URL` = your production URL (e.g. `https://newsroom.vercel.app`)
+   - `NEXT_PUBLIC_APP_URL` = your production URL (e.g. `https://thebroadside.net`)
    - `EVENTSUB_SECRET` = the secret generated above
    - All other vars from `.env.example`
 3. Update the **Twitch app OAuth Redirect URL** to `{NEXT_PUBLIC_APP_URL}/api/twitch/callback`.
