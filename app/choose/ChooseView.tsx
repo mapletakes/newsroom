@@ -25,11 +25,11 @@ export function ChooseView({
   return (
     <div className="min-h-screen px-6 py-10 max-w-2xl mx-auto">
       <header className="mb-8">
-        <Link href="/" className="font-display text-2xl font-black">Newsroom</Link>
+        <Link href="/" className="font-display text-2xl font-black">The Broadside</Link>
       </header>
 
       <h1 className="font-display text-4xl font-bold mb-2">Welcome, {displayName}</h1>
-      <p className="text-ink/60 mb-2">Choose how you want to use Newsroom.</p>
+      <p className="text-ink/60 mb-2">Choose how you want to use The Broadside.</p>
       <div className="rule-double mb-8" />
 
       {ownStream && (

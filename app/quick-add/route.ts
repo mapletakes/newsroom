@@ -19,7 +19,7 @@ function escapeHtml(s: string): string {
 }
 
 function page(inner: string, autoClose = false): Response {
-  const body = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Newsroom</title></head><body style="font-family:ui-sans-serif,system-ui,sans-serif;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f7f4ee;color:#16151a"><div style="text-align:center;padding:28px;max-width:380px">${inner}</div>${
+  const body = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>The Broadside</title></head><body style="font-family:ui-sans-serif,system-ui,sans-serif;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f7f4ee;color:#16151a"><div style="text-align:center;padding:28px;max-width:380px">${inner}</div>${
     autoClose ? '<script>setTimeout(function(){window.close();},1200);</script>' : ''
   }</body></html>`;
   return new Response(body, {
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
 
   if (!stream) {
     return page(
-      '<h2 style="margin:0 0 8px">Invalid add link</h2><p style="opacity:.6;font-size:14px">Regenerate it in Newsroom → Settings.</p>',
+      '<h2 style="margin:0 0 8px">Invalid add link</h2><p style="opacity:.6;font-size:14px">Regenerate it in The Broadside → Settings.</p>',
     );
   }
 

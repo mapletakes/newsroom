@@ -12,7 +12,7 @@ export default function BlockedPage() {
         <h1 className="font-display text-4xl font-bold mb-2">Access pending</h1>
         <div className="rule-double mb-6" />
         <p className="leading-relaxed mb-6">
-          Your channel isn&apos;t approved for Newsroom yet, or access has been
+          Your channel isn&apos;t approved for The Broadside yet, or access has been
           paused. If you think this is a mistake, reach out to an admin.
         </p>
         <button

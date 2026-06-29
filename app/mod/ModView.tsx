@@ -107,7 +107,7 @@ export function ModView({
     <div className="min-h-screen flex flex-col">
       {/* Bar */}
       <header className="border-b-2 border-ink px-6 py-3 flex items-center gap-6 flex-wrap">
-        <Link href="/" className="font-display text-2xl font-black">Newsroom</Link>
+        <Link href="/" className="font-display text-2xl font-black">The Broadside</Link>
         <span className="font-mono text-xs uppercase tracking-widest text-ink/60">
           / mod triage{isMod && <> · {streamDisplayName}</>}
         </span>

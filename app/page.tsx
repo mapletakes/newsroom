@@ -16,7 +16,7 @@ export default function Home() {
           </div>
         </div>
         <h1 className="font-display text-6xl md:text-8xl font-black tracking-tight leading-none text-center my-4">
-          The Newsroom
+          The Broadside
         </h1>
         <div className="text-center font-mono text-xs uppercase tracking-widest">
           A deck for political &amp; news react streamers
@@ -32,7 +32,7 @@ export default function Home() {
             <span className="text-rust">Which one is worth reacting to?</span>
           </h2>
           <p className="text-lg leading-relaxed mb-6">
-            Newsroom listens to your Twitch chat, pulls every link your mods or subs
+            The Broadside listens to your Twitch chat, pulls every link your mods or subs
             submit, fetches the article or video, writes a 3-sentence summary, tags
             the source&apos;s credibility, and flags the ones likely to draw a copyright strike
             <em> before</em> you hit play.

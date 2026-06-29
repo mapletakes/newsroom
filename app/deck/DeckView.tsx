@@ -1024,7 +1024,7 @@ export function DeckView({
       {!curateOnly && <QuickLinksDrawer />}
       <header className="sticky top-0 z-20 bg-paper border-b-2 border-ink pl-10 pr-6 py-3 flex items-center gap-6 flex-wrap">
         <Link href="/" className="font-display text-2xl font-black">
-          Newsroom
+          The Broadside
         </Link>
         <span className="font-mono text-xs uppercase tracking-widest text-ink/60">
           / {curateOnly ? 'curating deck' : 'streamer deck'}

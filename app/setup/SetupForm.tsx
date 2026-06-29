@@ -59,7 +59,7 @@ export function SetupForm({
   return (
     <div className="min-h-screen flex flex-col">
       <header className="border-b-2 border-ink px-6 py-3 flex items-center gap-6 flex-wrap">
-        <Link href="/" className="font-display text-2xl font-black">Newsroom</Link>
+        <Link href="/" className="font-display text-2xl font-black">The Broadside</Link>
         <span className="font-mono text-xs uppercase tracking-widest text-ink/60">/ settings</span>
         <div className="ml-auto flex items-center gap-4 font-mono text-xs">
           <Link href="/deck" className="underline hover:text-rust">Streamer Deck</Link>
@@ -314,7 +314,7 @@ function Curators({ initial }: { initial: { twitchUserId: string; login: string;
       <p className="text-sm text-ink/70 leading-relaxed mb-4 max-w-prose">
         Let a mod help organize your deck — arrange segments, reorder, and add links — without
         controlling live playback. They get a curate-only view of the deck. Mods appear here once
-        they&apos;ve signed in to Newsroom and are a moderator of your channel.
+        they&apos;ve signed in to The Broadside and are a moderator of your channel.
       </p>
       {mods.length === 0 ? (
         <p className="font-mono text-xs text-ink/50">No mods have signed in yet.</p>
@@ -424,7 +424,7 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
               className="inline-block cursor-grab active:cursor-grabbing font-mono text-sm uppercase tracking-widest bg-moss text-paper px-4 py-2 select-none"
               title="Drag me to your bookmarks bar"
             >
-              + Add to Newsroom
+              + Add to The Broadside
             </a>
             <p className="text-xs text-ink/50 mt-2">
               Then on any page, click the bookmark — a small window confirms and closes.
