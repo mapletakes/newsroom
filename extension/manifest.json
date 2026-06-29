@@ -1,11 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "Newsroom Quick Add",
-  "version": "1.1.0",
-  "description": "Add the current page, a link, or a video to your Newsroom streamer deck.",
+  "name": "The Broadside Quick Add",
+  "version": "1.2.0",
+  "description": "Add the current page, a link, or a video to your Broadside streamer deck.",
   "permissions": ["contextMenus", "activeTab", "storage", "alarms"],
   "host_permissions": ["https://newsroom-psi-five.vercel.app/*"],
   "background": { "service_worker": "background.js" },
-  "action": { "default_title": "Add to Newsroom" },
+  "action": { "default_title": "Add to The Broadside" },
   "options_page": "options.html"
 }

@@ -1,4 +1,4 @@
-// Newsroom Quick Add — MV3 background service worker.
+// The Broadside Quick Add — MV3 background service worker.
 // Toolbar click adds the current tab; right-click context menu adds a page,
 // link, video, or selected URL — and, when segments exist, lets you pick which
 // segment of the deck to drop it into. Auth is the personal add token.
@@ -66,14 +66,14 @@ async function rebuildMenus() {
     const segments = await fetchSegments();
     await chrome.contextMenus.removeAll();
 
-    // No segments (or not signed in) → a single plain "Add to Newsroom".
+    // No segments (or not signed in) → a single plain "Add to The Broadside".
     if (segments.length === 0) {
-      chrome.contextMenus.create({ id: 'nr-add', title: 'Add to Newsroom', contexts: CONTEXTS });
+      chrome.contextMenus.create({ id: 'nr-add', title: 'Add to The Broadside', contexts: CONTEXTS });
       return;
     }
 
     // Otherwise a submenu: ungrouped first, then each segment.
-    chrome.contextMenus.create({ id: 'nr-add', title: 'Add to Newsroom', contexts: CONTEXTS });
+    chrome.contextMenus.create({ id: 'nr-add', title: 'Add to The Broadside', contexts: CONTEXTS });
     chrome.contextMenus.create({
       id: `${SEG_PREFIX}ungrouped`,
       parentId: 'nr-add',
