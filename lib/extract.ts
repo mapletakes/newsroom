@@ -3,6 +3,7 @@ import { extractArticle } from './extract-article';
 import { fetchYouTubeMeta, expandPlaylist } from './extract-youtube';
 import { extractTwitter } from './extract-twitter';
 import { enrichContent, hostDMCARisk } from './enrich';
+import { scanContentWarning } from './content-warning';
 import { detectKind, normalizeUrl } from './url';
 
 export async function runExtraction(submissionId: string) {
@@ -73,7 +74,7 @@ export async function runExtraction(submissionId: string) {
     // and just keep the tweet text (stored as `description`).
     const enriched =
       sub.kind === 'twitter'
-        ? { summary: null, credibility: null, topics: null as string[] | null, dmcaRisk: null }
+        ? { summary: null, credibility: null, topics: null as string[] | null, dmcaRisk: null, contentWarning: false }
         : await enrichContent({ url: sub.url, title, publisher, body: bodyText });
 
     await sb.from('submissions').update({
@@ -89,6 +90,21 @@ export async function runExtraction(submissionId: string) {
       topics: enriched.topics,
       dmca_risk: enriched.dmcaRisk || hostDMCARisk(sub.url),
     }).eq('id', sub.id);
+
+    // Graphic-content flag: explicit warning words in the title/description, or
+    // the AI judging the content likely shows disturbing imagery. Written
+    // separately and guarded so a database without the column (migration not
+    // yet run) still gets the full enrichment above.
+    const contentWarning =
+      scanContentWarning(title, description) ||
+      (enriched.contentWarning ? 'Possible graphic content (AI-flagged)' : null);
+    if (contentWarning) {
+      const { error: cwErr } = await sb
+        .from('submissions')
+        .update({ content_warning: contentWarning })
+        .eq('id', sub.id);
+      if (cwErr) console.warn('content_warning not written (run the migration?):', cwErr.message);
+    }
   } catch (err) {
     console.error('extraction failed for', submissionId, err);
     await sb.from('submissions').update({

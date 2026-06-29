@@ -116,6 +116,9 @@ function SortableQueueItem({
                 {s.duration_seconds ? ` · ${formatDuration(s.duration_seconds)}` : ''}
                 {s.published_at ? ` · ${formatDate(s.published_at)}` : ''}
                 {s.dmca_risk === 'high' && <span className="text-rust ml-1">⚠</span>}
+                {s.content_warning && (
+                  <span className="text-rust font-bold ml-1" title={s.content_warning}>⚠ CW</span>
+                )}
               </div>
               <div className="font-display text-lg font-bold leading-tight line-clamp-2">
                 {s.title || s.url}
@@ -1084,6 +1087,11 @@ export function DeckView({
                 {active.dmca_risk === 'medium' && (
                   <span className="border-2 border-ochre text-ochre px-2 py-1">
                     ◐ Medium risk
+                  </span>
+                )}
+                {active.content_warning && (
+                  <span className="bg-rust text-paper px-2 py-1" title={active.content_warning}>
+                    ⚠ Content warning
                   </span>
                 )}
                 {active.publisher && <span className="text-ink/60">· {active.publisher}</span>}

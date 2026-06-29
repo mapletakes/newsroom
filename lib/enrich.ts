@@ -5,6 +5,7 @@ export type EnrichmentResult = {
   credibility: string | null;
   topics: string[];
   dmcaRisk: 'low' | 'medium' | 'high' | null;
+  contentWarning: boolean;
 };
 
 function getClient(): Anthropic | null {
@@ -42,7 +43,8 @@ Output STRICT JSON only, no prose, no markdown fences. Schema:
   "summary": "3-5 sentence neutral summary of what the piece actually says. Focus on the news/argument, not the framing.",
   "credibility": "one of: mainstream | partisan-left | partisan-right | tabloid | trade | blog | social | unknown",
   "topics": ["3-6 short topic tags, lowercase, hyphen-separated, e.g. 'gaza', 'us-foreign-policy', 'tech-layoffs'"],
-  "dmca_risk": "one of: low | medium | high  — based on whether reacting to this on a live Twitch stream could draw a copyright strike. Articles=low. News-org video=medium. Studio/label/sports/full-episode-TV=high."
+  "dmca_risk": "one of: low | medium | high  — based on whether reacting to this on a live Twitch stream could draw a copyright strike. Articles=low. News-org video=medium. Studio/label/sports/full-episode-TV=high.",
+  "content_warning": "boolean — true ONLY if the content likely SHOWS graphic violence, gore, death/dead bodies, a killing, or other disturbing imagery a streamer should be warned about before putting it on screen. Ordinary political/news discussion, opinion, or text reporting about violent events is false. When unsure, false."
 }
 
 Be honest about credibility. 'partisan-left' and 'partisan-right' are not insults; they describe the outlet's editorial stance. 'mainstream' means broad-spectrum legacy outlets (Reuters, AP, NYT, BBC, Globe and Mail, etc.) regardless of perceived lean.`;
@@ -62,6 +64,7 @@ export async function enrichContent(input: {
       credibility: null,
       topics: [],
       dmcaRisk: hostRisk,
+      contentWarning: false,
     };
   }
 
@@ -94,9 +97,10 @@ ${input.body.slice(0, 5500)}`;
       credibility: typeof parsed.credibility === 'string' ? parsed.credibility : null,
       topics: Array.isArray(parsed.topics) ? parsed.topics.slice(0, 6) : [],
       dmcaRisk: finalRisk,
+      contentWarning: parsed.content_warning === true,
     };
   } catch (err) {
     console.error('enrichContent failed', err);
-    return { summary: null, credibility: null, topics: [], dmcaRisk: hostRisk };
+    return { summary: null, credibility: null, topics: [], dmcaRisk: hostRisk, contentWarning: false };
   }
 }

@@ -90,6 +90,7 @@ create table if not exists public.submissions (
   credibility_tag text, -- 'mainstream' | 'partisan-left' | 'partisan-right' | 'tabloid' | 'blog' | 'social' | null
   topics text[],
   dmca_risk text, -- 'low' | 'medium' | 'high' | null
+  content_warning text, -- short reason if title/description/AI flags graphic material; null otherwise
   -- Submission context
   submitter_login text,
   submitter_is_sub boolean default false,
@@ -117,6 +118,9 @@ create index if not exists submissions_stream_created_idx
   on public.submissions(stream_id, created_at desc);
 create index if not exists submissions_stream_url_idx
   on public.submissions(stream_id, normalized_url);
+
+-- For databases created before content_warning existed.
+alter table public.submissions add column if not exists content_warning text;
 
 -- Show notes: persisted artifacts of what was reacted to
 create table if not exists public.show_notes (

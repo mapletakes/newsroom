@@ -19,6 +19,7 @@ type Submission = {
   credibility_tag: string | null;
   topics: string[] | null;
   dmca_risk: string | null;
+  content_warning: string | null;
   related_coverage: { title: string; url: string; publisher: string; snippet: string }[] | null;
   archive_url: string | null;
   mod_notes: string | null;
@@ -98,6 +99,14 @@ export function SubmissionCard({
           {s.dmca_risk && (
             <span className={`font-mono text-xs uppercase tracking-widest dmca-${s.dmca_risk}`}>
               {RISK_LABELS[s.dmca_risk]}
+            </span>
+          )}
+          {s.content_warning && (
+            <span
+              className="font-mono text-xs uppercase tracking-widest bg-rust text-paper px-1.5 py-0.5"
+              title={s.content_warning}
+            >
+              ⚠ Content warning
             </span>
           )}
         </div>
