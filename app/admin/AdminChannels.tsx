@@ -82,7 +82,7 @@ export function AdminChannels({ initial }: { initial: ChannelRow[] }) {
             <th className="py-2 pr-4">Last active</th>
             <th className="py-2 pr-4">Pending</th>
             <th className="py-2 pr-4">Total</th>
-            <th className="py-2 pr-4" title="AI summaries · coverage searches">Usage</th>
+            <th className="py-2 pr-4" title="AI enrichment calls · coverage searches">Usage</th>
             <th className="py-2 pr-4">Est. $</th>
             <th className="py-2 pr-4">Chat</th>
             <th className="py-2 pr-4">EventSub</th>
@@ -109,8 +109,8 @@ export function AdminChannels({ initial }: { initial: ChannelRow[] }) {
               </td>
               <td className="py-2 pr-4 font-mono">{row.pending || ''}</td>
               <td className="py-2 pr-4 font-mono text-ink/60">{row.total}</td>
-              <td className="py-2 pr-4 font-mono text-[11px] text-ink/60 whitespace-nowrap" title="AI summaries · coverage searches">
-                {row.summaries} <span className="text-ink/30">sum</span> · {row.searches} <span className="text-ink/30">srch</span>
+              <td className="py-2 pr-4 font-mono text-[11px] text-ink/60 whitespace-nowrap" title="AI enrichment calls · coverage searches">
+                {row.summaries} <span className="text-ink/30">enr</span> · {row.searches} <span className="text-ink/30">srch</span>
               </td>
               <td className="py-2 pr-4 font-mono text-ink/70 whitespace-nowrap">~${row.estCost.toFixed(2)}</td>
               <td className="py-2 pr-4">

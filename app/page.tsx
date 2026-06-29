@@ -33,7 +33,7 @@ export default function Home() {
           </h2>
           <p className="text-lg leading-relaxed mb-6">
             The Broadside listens to your Twitch chat, pulls every link your mods or subs
-            submit, fetches the article or video, writes a 3-sentence summary, tags
+            submit, fetches the article or video, tags
             the source&apos;s credibility, and flags the ones likely to draw a copyright strike
             <em> before</em> you hit play.
           </p>
