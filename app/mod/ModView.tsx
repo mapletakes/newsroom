@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { SubmissionCard, type Submission } from '@/components/SubmissionCard';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { useQueueRealtime } from '@/lib/use-queue-realtime';
+import { useVisiblePoll } from '@/lib/use-visible-poll';
 import { formatDuration, sanitizeShareUrl } from '@/lib/url';
 
 export function ModView({
@@ -53,10 +54,8 @@ export function ModView({
   useQueueRealtime(streamId, refresh);
 
   // Slow fallback poll in case a broadcast is missed or the socket drops.
-  useEffect(() => {
-    const id = setInterval(refresh, 30000);
-    return () => clearInterval(id);
-  }, [refresh]);
+  // Only ticks while the tab is visible; realtime is the primary path.
+  useVisiblePoll(refresh, 120000);
 
   const mutate = async (
     id: string,

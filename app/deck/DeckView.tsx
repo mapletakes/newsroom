@@ -8,6 +8,7 @@ import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { ArchiveButton } from '@/components/ArchiveButton';
 import { QuickLinksDrawer } from './QuickLinksDrawer';
 import { useQueueRealtime } from '@/lib/use-queue-realtime';
+import { useVisiblePoll } from '@/lib/use-visible-poll';
 import {
   DndContext,
   DragOverlay,
@@ -399,10 +400,8 @@ export function DeckView({
   useQueueRealtime(streamId, refresh);
 
   // Slow fallback poll in case a broadcast is missed or the socket drops.
-  useEffect(() => {
-    const id = setInterval(refresh, 30000);
-    return () => clearInterval(id);
-  }, [refresh]);
+  // Only ticks while the tab is visible; realtime is the primary path.
+  useVisiblePoll(refresh, 120000);
 
   // Ordered list of blocks (ungrouped + segments), sorted by position.
   // The ungrouped block participates via a sentinel id so segments can sit
