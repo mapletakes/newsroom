@@ -1,3 +1,5 @@
+import { recordUsage } from './usage';
+
 export type CoverageResult = {
   title: string;
   url: string;
@@ -10,6 +12,7 @@ export async function searchRelatedCoverage(input: {
   publisher: string | null;
   url: string;
   preferredSources?: string[];
+  streamId?: string | null; // for usage metering
 }): Promise<CoverageResult[]> {
   const apiKey = process.env.BRAVE_SEARCH_API_KEY;
   if (!apiKey) return [];
@@ -41,6 +44,14 @@ export async function searchRelatedCoverage(input: {
       const siteQuery = `${query} (${preferred.map((s) => `site:${s}`).join(' OR ')})`;
       fetches.push(braveSearch(siteQuery, inputHost, apiKey, 5));
     }
+
+    // Each braveSearch is one billable request (1 general, +1 if preferred).
+    await recordUsage({
+      streamId: input.streamId ?? null,
+      kind: 'coverage_search',
+      units: fetches.length,
+      meta: { preferred: preferred.length > 0 },
+    });
 
     const [general, targeted] = await Promise.all(fetches);
 

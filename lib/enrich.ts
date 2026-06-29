@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { recordUsage } from './usage';
 
 export type EnrichmentResult = {
   summary: string | null;
@@ -54,6 +55,7 @@ export async function enrichContent(input: {
   title: string | null;
   publisher: string | null;
   body: string | null; // article body OR youtube description+transcript
+  streamId?: string | null; // for usage metering
 }): Promise<EnrichmentResult> {
   const client = getClient();
   const hostRisk = hostDMCARisk(input.url);
@@ -76,11 +78,24 @@ Content:
 ${input.body.slice(0, 5500)}`;
 
   try {
+    const model = 'claude-haiku-4-5-20251001';
     const resp = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model,
       max_tokens: 600,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userText }],
+    });
+    // Record the AI cost as soon as the call returns — the tokens are billed
+    // whether or not parsing below succeeds.
+    await recordUsage({
+      streamId: input.streamId ?? null,
+      kind: 'ai_enrich',
+      units: 1,
+      meta: {
+        model,
+        input_tokens: resp.usage?.input_tokens ?? null,
+        output_tokens: resp.usage?.output_tokens ?? null,
+      },
     });
     const text = resp.content
       .filter((b) => b.type === 'text')

@@ -142,6 +142,21 @@ create table if not exists public.show_notes (
 create index if not exists show_notes_stream_idx
   on public.show_notes(stream_id, played_at);
 
+-- Usage events: one row per metered/paid operation (AI enrichment, coverage
+-- search, extraction). Used to understand per-stream cost and volume — purely
+-- observational, written best-effort and never on the critical path.
+create table if not exists public.usage_events (
+  id uuid primary key default gen_random_uuid(),
+  -- Keep cost history even if the stream is later deleted.
+  stream_id uuid references public.streams(id) on delete set null,
+  kind text not null,             -- 'ai_enrich' | 'coverage_search' | 'extract'
+  units int not null default 1,   -- billable requests, or 1 per processed item
+  meta jsonb default '{}'::jsonb, -- model, token counts, item kind, etc.
+  created_at timestamptz default now()
+);
+create index if not exists usage_events_stream_idx on public.usage_events(stream_id, created_at);
+create index if not exists usage_events_kind_idx on public.usage_events(kind, created_at);
+
 -- ============================================================
 -- Row Level Security
 -- ============================================================
@@ -153,6 +168,7 @@ alter table public.streams enable row level security;
 alter table public.moderators enable row level security;
 alter table public.segments enable row level security;
 alter table public.quick_links enable row level security;
+alter table public.usage_events enable row level security;
 alter table public.submissions enable row level security;
 alter table public.show_notes enable row level security;
 

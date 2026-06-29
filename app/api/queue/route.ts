@@ -181,6 +181,7 @@ export async function PATCH(req: NextRequest) {
         publisher: sub.publisher,
         url: sub.url,
         preferredSources: streamSettings?.preferred_sources ?? [],
+        streamId: session.streamId,
       });
       if (coverage.length > 0) patch.related_coverage = coverage;
     }

@@ -4,6 +4,7 @@ import { fetchYouTubeMeta, expandPlaylist } from './extract-youtube';
 import { extractTwitter } from './extract-twitter';
 import { enrichContent, hostDMCARisk } from './enrich';
 import { scanContentWarning } from './content-warning';
+import { recordUsage } from './usage';
 import { detectKind, normalizeUrl } from './url';
 
 export async function runExtraction(submissionId: string) {
@@ -75,7 +76,7 @@ export async function runExtraction(submissionId: string) {
     const enriched =
       sub.kind === 'twitter'
         ? { summary: null, credibility: null, topics: null as string[] | null, dmcaRisk: null, contentWarning: false }
-        : await enrichContent({ url: sub.url, title, publisher, body: bodyText });
+        : await enrichContent({ url: sub.url, title, publisher, body: bodyText, streamId: sub.stream_id });
 
     await sb.from('submissions').update({
       title,
@@ -90,6 +91,9 @@ export async function runExtraction(submissionId: string) {
       topics: enriched.topics,
       dmca_risk: enriched.dmcaRisk || hostDMCARisk(sub.url),
     }).eq('id', sub.id);
+
+    // One extract event per processed item (covers the YouTube/article fetches).
+    await recordUsage({ streamId: sub.stream_id, kind: 'extract', meta: { kind: sub.kind } });
 
     // Graphic-content flag: explicit warning words in the title/description, or
     // the AI judging the content likely shows disturbing imagery. Written
