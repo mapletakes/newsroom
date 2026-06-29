@@ -1,6 +1,6 @@
 # newsroom
 
-A deck for political &amp; news react streamers. Triage chat-submitted links, get AI summaries and DMCA risk signals, and turn your stream into show notes.
+A deck for political &amp; news react streamers. Triage chat-submitted links, get DMCA risk signals, and turn your stream into show notes.
 
 Built with Next.js 14 (App Router), Supabase, Anthropic Claude, and Twitch EventSub webhooks. Deploys entirely on Vercel — no separate worker needed.
 
