@@ -1,7 +1,12 @@
 import Link from 'next/link';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
+import { getSession } from '@/lib/session';
 
-export default function Home() {
+// Reads the session cookie to tailor the CTA, so render per-request.
+export const dynamic = 'force-dynamic';
+
+export default async function Home() {
+  const session = await getSession();
   return (
     <main className="min-h-screen flex flex-col">
       {/* Masthead */}
@@ -42,12 +47,29 @@ export default function Home() {
             becomes timestamped show notes you can post to Substack or Discord the moment
             you go offline.
           </p>
-          <a
-            href="/api/twitch/oauth"
-            className="inline-block bg-ink text-paper px-8 py-4 font-mono text-sm uppercase tracking-widest hover:bg-rust transition-colors"
-          >
-            Connect Twitch →
-          </a>
+          {session ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <Link
+                href="/deck"
+                className="inline-block bg-ink text-paper px-8 py-4 font-mono text-sm uppercase tracking-widest hover:bg-rust transition-colors"
+              >
+                Go to your deck →
+              </Link>
+              <Link
+                href="/mod"
+                className="inline-block border-2 border-ink px-8 py-4 font-mono text-sm uppercase tracking-widest hover:bg-ink hover:text-paper transition-colors"
+              >
+                Mod view
+              </Link>
+            </div>
+          ) : (
+            <a
+              href="/api/twitch/oauth"
+              className="inline-block bg-ink text-paper px-8 py-4 font-mono text-sm uppercase tracking-widest hover:bg-rust transition-colors"
+            >
+              Connect Twitch →
+            </a>
+          )}
         </div>
 
         <aside className="border-l-2 border-ink pl-6 hidden md:block">
