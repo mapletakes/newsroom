@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from 'react';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { Wordmark } from '@/components/ui/wordmark';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 export function SetupForm({
   streamId,
@@ -82,11 +84,11 @@ export function SetupForm({
           <span className="font-mono text-xs uppercase tracking-widest text-ink/60">
             Submit command (leave blank to capture every URL)
           </span>
-          <input
+          <Input
             value={cmd}
             onChange={(e) => setCmd(e.target.value)}
             placeholder="!submit"
-            className="w-full mt-1 border border-ink/30 bg-paper p-3 font-mono text-sm focus:outline-none focus:border-ink"
+            className="w-full mt-1 p-3"
           />
           <span className="block mt-1 text-xs text-ink/60">
             With a command, viewers must type e.g. <code>!submit https://...</code>. Without one, every URL in chat is captured.
@@ -131,7 +133,7 @@ export function SetupForm({
             Links from these users (e.g. bots) will be silently dropped.
           </span>
           <div className="flex gap-1 mb-2">
-            <input
+            <Input
               value={ignoreInput}
               onChange={(e) => setIgnoreInput(e.target.value)}
               onKeyDown={(e) => {
@@ -143,19 +145,20 @@ export function SetupForm({
                 }
               }}
               placeholder="nightbot"
-              className="flex-1 border border-ink/30 bg-paper p-2 font-mono text-sm focus:outline-none focus:border-ink"
+              className="flex-1 p-2"
             />
-            <button
+            <Button
               type="button"
+              size="sm"
+              className="py-2"
               onClick={() => {
                 const name = ignoreInput.trim().toLowerCase();
                 if (name && !ignored.includes(name)) setIgnored([...ignored, name]);
                 setIgnoreInput('');
               }}
-              className="font-mono text-xs uppercase tracking-widest bg-ink text-paper px-3 py-2 hover:bg-rust"
             >
               Add
-            </button>
+            </Button>
           </div>
           {ignored.length > 0 && (
             <div className="flex flex-wrap gap-1">
@@ -191,7 +194,7 @@ export function SetupForm({
             Domains to prioritise when searching for related articles (e.g. reuters.com, apnews.com). Results from these sites will appear first in the streamer deck.
           </span>
           <div className="flex gap-1 mb-2">
-            <input
+            <Input
               value={sourceInput}
               onChange={(e) => setSourceInput(e.target.value)}
               onKeyDown={(e) => {
@@ -203,19 +206,20 @@ export function SetupForm({
                 }
               }}
               placeholder="reuters.com"
-              className="flex-1 border border-ink/30 bg-paper p-2 font-mono text-sm focus:outline-none focus:border-ink"
+              className="flex-1 p-2"
             />
-            <button
+            <Button
               type="button"
+              size="sm"
+              className="py-2"
               onClick={() => {
                 const domain = sourceInput.trim().toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, '');
                 if (domain && !sources.includes(domain)) setSources([...sources, domain]);
                 setSourceInput('');
               }}
-              className="font-mono text-xs uppercase tracking-widest bg-ink text-paper px-3 py-2 hover:bg-rust"
             >
               Add
-            </button>
+            </Button>
           </div>
           {sources.length > 0 && (
             <div className="flex flex-wrap gap-1">
@@ -239,13 +243,9 @@ export function SetupForm({
           )}
         </div>
 
-        <button
-          onClick={save}
-          disabled={saving}
-          className="font-mono text-sm uppercase tracking-widest bg-ink text-paper px-6 py-3 hover:bg-rust disabled:opacity-50"
-        >
+        <Button onClick={save} disabled={saving} className="px-6 py-3">
           {saving ? 'Saving...' : 'Save'}
-        </button>
+        </Button>
         {saved && <span className="ml-3 font-mono text-xs text-moss">Saved</span>}
       </section>
 
@@ -272,12 +272,9 @@ export function SetupForm({
         <div className="font-mono text-xs text-ink/60 mb-4">
           Stream ID: <code>{streamId}</code>
         </div>
-        <button
-          onClick={logout}
-          className="font-mono text-sm uppercase tracking-widest border border-ink/40 px-4 py-2 hover:bg-ink hover:text-paper"
-        >
+        <Button variant="outline" onClick={logout}>
           Sign out
-        </button>
+        </Button>
       </section>
 
       <section>
@@ -413,13 +410,9 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
       </p>
 
       {!token ? (
-        <button
-          onClick={generate}
-          disabled={busy}
-          className="font-mono text-sm uppercase tracking-widest bg-ink text-paper px-4 py-2 hover:bg-rust disabled:opacity-50"
-        >
+        <Button onClick={generate} disabled={busy}>
           {busy ? 'Generating…' : 'Generate add link'}
-        </button>
+        </Button>
       ) : (
         <div className="space-y-4">
           <div>
@@ -447,28 +440,26 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
               Token (for the browser extension)
             </p>
             <div className="flex gap-1 items-center">
-              <input
+              <Input
                 readOnly
                 value={token ?? ''}
                 onFocus={(e) => e.currentTarget.select()}
-                className="flex-1 min-w-0 font-mono text-xs bg-ink/10 border border-ink/20 px-2 py-1.5 focus:outline-none focus:border-ink"
+                className="flex-1 min-w-0 text-xs bg-ink/10 border-ink/20"
                 aria-label="Add token"
               />
-              <button
-                type="button"
-                onClick={copyToken}
-                className="shrink-0 font-mono text-xs uppercase tracking-widest bg-ink text-paper px-3 py-1.5 hover:bg-rust transition-colors"
-              >
+              <Button type="button" size="sm" className="shrink-0" onClick={copyToken}>
                 {tokenCopied ? 'Copied!' : 'Copy'}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
                 onClick={generate}
                 disabled={busy}
-                className="shrink-0 font-mono text-xs uppercase tracking-widest border border-ink/40 px-3 py-1.5 hover:bg-ink hover:text-paper disabled:opacity-50"
               >
                 {busy ? '…' : 'Regenerate'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -540,13 +531,9 @@ function EventSubStatus() {
           {status === 'error' && 'Unable to connect'}
         </span>
         {(status === 'disconnected' || status === 'error') && (
-          <button
-            onClick={reconnect}
-            disabled={reconnecting}
-            className="font-mono text-xs uppercase tracking-widest border border-ink/40 px-3 py-1.5 hover:bg-ink hover:text-paper disabled:opacity-50"
-          >
+          <Button variant="outline" size="sm" onClick={reconnect} disabled={reconnecting}>
             {reconnecting ? 'Connecting...' : 'Reconnect'}
-          </button>
+          </Button>
         )}
       </div>
       {detail && (status === 'error' || status === 'disconnected') && (
