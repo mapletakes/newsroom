@@ -8,6 +8,7 @@ import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { ArchiveButton } from '@/components/ArchiveButton';
 import { QuickLinksDrawer } from './QuickLinksDrawer';
 import { Wordmark } from '@/components/ui/wordmark';
+import { Input, Textarea } from '@/components/ui/input';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import {
   DropdownMenu,
@@ -1272,11 +1273,11 @@ export function DeckView({
                   <span className="font-mono text-xs uppercase tracking-widest text-ink/60">
                     Takeaway for show notes (optional)
                   </span>
-                  <textarea
+                  <Textarea
                     value={takeaway}
                     onChange={(e) => setTakeaway(e.target.value)}
                     rows={3}
-                    className="w-full mt-1 border border-ink/30 bg-paper p-3 font-mono text-sm focus:outline-none focus:border-ink"
+                    className="w-full mt-1"
                     placeholder="Add a one-liner about what you said about this on stream..."
                   />
                 </label>
@@ -1290,12 +1291,12 @@ export function DeckView({
           {/* Add link */}
           <form onSubmit={handleAddLink} className="mb-4">
             <div className="flex gap-1">
-              <input
+              <Input
                 type="url"
                 value={addUrl}
                 onChange={(e) => setAddUrl(e.target.value)}
                 placeholder="Paste link or playlist URL..."
-                className="flex-1 min-w-0 font-mono text-xs border border-ink/30 bg-paper px-2 py-1.5 focus:outline-none focus:border-ink"
+                className="flex-1 min-w-0 text-xs"
                 disabled={adding}
               />
               <button

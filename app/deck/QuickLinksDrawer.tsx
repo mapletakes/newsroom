@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { Input } from '@/components/ui/input';
 
 type QuickLink = { id: string; label: string; url: string; position: number };
 
@@ -121,19 +122,19 @@ export function QuickLinksDrawer() {
         </div>
 
         <form onSubmit={add} className="border-b border-ink/20 p-4 space-y-2">
-          <input
+          <Input
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             placeholder="Label (optional)"
-            className="w-full font-mono text-xs border border-ink/30 bg-paper px-2 py-1.5 focus:outline-none focus:border-ink"
+            className="w-full text-xs"
           />
           <div className="flex gap-1">
-            <input
+            <Input
               type="text"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="Paste a URL…"
-              className="flex-1 min-w-0 font-mono text-xs border border-ink/30 bg-paper px-2 py-1.5 focus:outline-none focus:border-ink"
+              className="flex-1 min-w-0 text-xs"
               disabled={adding}
             />
             <button
