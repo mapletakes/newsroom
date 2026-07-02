@@ -19,7 +19,10 @@ function escapeHtml(s: string): string {
 }
 
 function page(inner: string, autoClose = false): Response {
-  const body = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>The Broadside</title></head><body style="font-family:ui-sans-serif,system-ui,sans-serif;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f7f4ee;color:#16151a"><div style="text-align:center;padding:28px;max-width:380px">${inner}</div>${
+  // Standalone popup outside the React app, so it can't use the theme tokens —
+  // but honour the OS light/dark preference so it isn't a jarring white flash.
+  const style = `:root{color-scheme:light dark;--bg:#f7f4ee;--fg:#16151a}@media(prefers-color-scheme:dark){:root{--bg:#141416;--fg:#e8e4db}}body{font-family:ui-sans-serif,system-ui,sans-serif;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--fg)}`;
+  const body = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>The Broadside</title><style>${style}</style></head><body><div style="text-align:center;padding:28px;max-width:380px">${inner}</div>${
     autoClose ? '<script>setTimeout(function(){window.close();},1200);</script>' : ''
   }</body></html>`;
   return new Response(body, {
