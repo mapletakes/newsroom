@@ -22,6 +22,26 @@ html.dark {
   --slate: 107 143 170;
 }
 
+/* Warm vintage newsprint — aged paper, espresso ink. */
+html.sepia {
+  --ink: 46 34 24;
+  --paper: 240 227 202;
+  --rust: 166 74 44;
+  --ochre: 176 128 38;
+  --moss: 86 96 56;
+  --slate: 74 72 88;
+}
+
+/* Maximum-legibility black-on-white with punchy accents. */
+html.contrast {
+  --ink: 0 0 0;
+  --paper: 255 255 255;
+  --rust: 198 32 12;
+  --ochre: 150 96 0;
+  --moss: 0 104 0;
+  --slate: 0 32 140;
+}
+
 html, body {
   background-color: rgb(var(--paper));
   color: rgb(var(--ink));
