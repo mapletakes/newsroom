@@ -60,7 +60,6 @@ export function SetupForm({
 
   return (
     <div className="min-h-screen flex flex-col">
-      {confirmDialog}
       <header className="border-b-2 border-ink px-6 py-3 flex items-center gap-6 flex-wrap">
         <Wordmark />
         <span className="font-mono text-xs uppercase tracking-widest text-ink/60">/ settings</span>
@@ -406,6 +405,7 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
 
   return (
     <div>
+      {confirmDialog}
       <p className="text-sm text-ink/70 leading-relaxed mb-4 max-w-prose">
         Add the page you&apos;re on straight to your deck while prepping — no copy/paste or
         tab-switching. Works on articles, tweets, and YouTube videos (paste a playlist URL to
