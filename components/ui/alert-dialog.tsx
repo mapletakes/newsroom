@@ -33,7 +33,11 @@ const AlertDialogContent = React.forwardRef<
     <AlertDialogPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed left-1/2 top-1/2 z-50 grid w-full max-w-md -translate-x-1/2 -translate-y-1/2 gap-4 border-2 border-ink bg-paper p-6 shadow-[6px_6px_0_rgb(var(--ink))] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
+        // Fade + a small downward slide. left-1/2 slide keeps it horizontally
+        // centred during the animation; the top-[N%] pair (paired with the base
+        // -translate-y-1/2) makes it descend a few % into place rather than
+        // zooming in from a corner.
+        'fixed left-1/2 top-1/2 z-50 grid w-full max-w-md -translate-x-1/2 -translate-y-1/2 gap-4 border-2 border-ink bg-paper p-6 shadow-[6px_6px_0_rgb(var(--ink))] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:slide-in-from-left-1/2 data-[state=closed]:slide-out-to-left-1/2 data-[state=open]:slide-in-from-top-[54%] data-[state=closed]:slide-out-to-top-[54%]',
         className,
       )}
       {...props}
