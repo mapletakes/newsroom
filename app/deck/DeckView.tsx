@@ -395,6 +395,29 @@ export function DeckView({
       refresh();
     }, ms);
   }, [refresh]);
+
+  // Reconcile only AFTER all in-flight edit writes resolve, so the refetch
+  // never reads pre-write state and clobbers the optimistic/pending order —
+  // the cause of the "wrong for a few seconds" flash when a write is slow.
+  // (holdAndReconcile's fixed timer could fire before the write landed.)
+  const inflightWrites = useRef(0);
+  const reconcileAfterWrites = useCallback(<T,>(p: Promise<T>): Promise<T> => {
+    inflightWrites.current += 1;
+    suppressRefreshUntil.current = Date.now() + 15000; // pause refetches while writing
+    const settle = () => {
+      inflightWrites.current -= 1;
+      if (inflightWrites.current > 0) return; // more writes pending; wait for them
+      if (reconcileTimer.current) clearTimeout(reconcileTimer.current);
+      reconcileTimer.current = setTimeout(() => {
+        if (inflightWrites.current > 0) return; // a new write started; it will reconcile
+        suppressRefreshUntil.current = 0;
+        refresh();
+      }, 250);
+    };
+    p.then(settle, settle);
+    return p;
+  }, [refresh]);
+
   useEffect(() => () => { if (reconcileTimer.current) clearTimeout(reconcileTimer.current); }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
@@ -756,12 +779,11 @@ export function DeckView({
     setSegments((prev) => prev.map((s) => ({ ...s, position: pos.get(s.id) ?? s.position })));
     if (pos.has('ungrouped')) setUngroupedPosition(pos.get('ungrouped')!);
 
-    holdAndReconcile();
-    return fetch('/api/segments/reorder', {
+    return reconcileAfterWrites(fetch('/api/segments/reorder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ids: orderedIds }),
-    });
+    }));
   };
 
   const deleteSegment = async (id: string) => {
@@ -808,12 +830,11 @@ export function DeckView({
         return { ...s, segment_id: inMoving ? segmentId : s.segment_id, position: pos ?? s.position };
       }),
     );
-    holdAndReconcile();
-    return fetch('/api/queue/move', {
+    return reconcileAfterWrites(fetch('/api/queue/move', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ids: movingIds, segmentId, orderedIds: orderedTargetIds }),
-    });
+    }));
   };
 
   // Move the current selection to the bottom of a chosen block (the "Move to…"
@@ -835,12 +856,11 @@ export function DeckView({
       const pos = new Map(reordered.map((s, i) => [s.id, i + 1]));
       return prev.map((s) => (pos.has(s.id) ? { ...s, position: pos.get(s.id)! } : s));
     });
-    holdAndReconcile();
-    return fetch('/api/queue/reorder', {
+    return reconcileAfterWrites(fetch('/api/queue/reorder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ids: reordered.map((s) => s.id) }),
-    });
+    }));
   };
 
   // Which block holds a given item id ('ungrouped' or a segment id).
