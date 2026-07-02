@@ -8,6 +8,8 @@ import { useQueueRealtime } from '@/lib/use-queue-realtime';
 import { useVisiblePoll } from '@/lib/use-visible-poll';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { Wordmark } from '@/components/ui/wordmark';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { formatDuration, sanitizeShareUrl } from '@/lib/url';
 
 export function ModView({
@@ -190,27 +192,18 @@ export function ModView({
             {k} ({tabCount(k)})
           </button>
         ))}
-        <button
-          onClick={() => clear('pending')}
-          className="px-3 py-1.5 tracking-widest border border-rust/50 text-rust hover:bg-rust hover:text-paper transition-colors"
-        >
+        <Button variant="outlineDestructive" size="sm" onClick={() => clear('pending')}>
           Clear pending
-        </button>
+        </Button>
         {counts.rejected > 0 && (
-          <button
-            onClick={() => clear('rejected')}
-            className="px-3 py-1.5 tracking-widest border border-rust/50 text-rust hover:bg-rust hover:text-paper transition-colors"
-          >
+          <Button variant="outlineDestructive" size="sm" onClick={() => clear('rejected')}>
             Clear rejected ({counts.rejected})
-          </button>
+          </Button>
         )}
         {counts.played > 0 && (
-          <button
-            onClick={() => clear('played')}
-            className="px-3 py-1.5 tracking-widest border border-rust/50 text-rust hover:bg-rust hover:text-paper transition-colors"
-          >
+          <Button variant="outlineDestructive" size="sm" onClick={() => clear('played')}>
             Clear played ({counts.played})
-          </button>
+          </Button>
         )}
         <span className="ml-auto text-ink/60">
           {displayName} · {submitCommand ? `command: ${submitCommand}` : 'any URL'}
@@ -258,12 +251,9 @@ export function ModView({
                     </div>
                   )}
                   {s.status === 'rejected' && (
-                    <button
-                      onClick={() => mutate(s.id, { status: 'pending' })}
-                      className="font-mono text-xs uppercase tracking-widest border border-ink/40 px-3 py-1.5 hover:bg-ink hover:text-paper"
-                    >
+                    <Button variant="outline" size="sm" onClick={() => mutate(s.id, { status: 'pending' })}>
                       Unreject
-                    </button>
+                    </Button>
                   )}
                   {s.status === 'played' && (
                     <span className="font-mono text-xs uppercase tracking-widest text-ink/50">
@@ -312,14 +302,10 @@ function AnnounceButton({ submissionId }: { submissionId: string }) {
   };
   return (
     <span className="shrink-0 flex items-center gap-2">
-      <button
-        onClick={post}
-        className="font-mono text-xs uppercase tracking-widest border border-ink/40 px-2 py-1 hover:bg-ink hover:text-paper transition-colors inline-flex items-center gap-1"
-        title="Post 'Watching: …' to chat"
-      >
+      <Button variant="outline" size="xs" onClick={post} className="text-xs" title="Post 'Watching: …' to chat">
         <span className="material-icons text-sm">campaign</span>
         Post to chat
-      </button>
+      </Button>
       {status && <span className="font-mono text-xs text-ink/60">{status}</span>}
     </span>
   );
@@ -328,7 +314,10 @@ function AnnounceButton({ submissionId }: { submissionId: string }) {
 function CopyButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
   return (
-    <button
+    <Button
+      variant="outline"
+      size="xs"
+      className="shrink-0 text-xs"
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(value);
@@ -338,10 +327,9 @@ function CopyButton({ value }: { value: string }) {
           /* clipboard unavailable */
         }
       }}
-      className="shrink-0 font-mono text-xs uppercase tracking-widest border border-ink/40 px-2 py-1 hover:bg-ink hover:text-paper transition-colors"
     >
       {copied ? 'Copied!' : 'Copy'}
-    </button>
+    </Button>
   );
 }
 
@@ -368,19 +356,12 @@ function ModActions({
   return (
     <div className="flex flex-col gap-2 w-full">
       <div className="flex gap-2 flex-wrap items-center">
-        <button
-          onClick={approve}
-          disabled={approving}
-          className="font-mono text-xs uppercase tracking-widest bg-moss text-paper px-3 py-1.5 hover:opacity-90 disabled:opacity-60"
-        >
+        <Button variant="moss" size="sm" onClick={approve} disabled={approving}>
           {approving ? 'Approving…' : 'Approve'}
-        </button>
-        <button
-          onClick={() => mutate(id, { status: 'rejected' })}
-          className="font-mono text-xs uppercase tracking-widest border border-ink/40 px-3 py-1.5 hover:bg-ink hover:text-paper"
-        >
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => mutate(id, { status: 'rejected' })}>
           Reject
-        </button>
+        </Button>
         <button
           onClick={() => setShowNote(!showNote)}
           className="font-mono text-xs uppercase tracking-widest text-ink/50 hover:text-ink"
@@ -392,11 +373,11 @@ function ModActions({
         <div className="font-mono text-xs text-rust">⚠ {error}</div>
       )}
       {showNote && (
-        <input
+        <Input
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="e.g. skip to 4:32, check the replies, paywalled..."
-          className="w-full border border-ink/30 bg-paper px-2 py-1.5 font-mono text-xs focus:outline-none focus:border-ink"
+          className="w-full text-xs"
         />
       )}
     </div>
