@@ -11,6 +11,8 @@ import { Wordmark } from '@/components/ui/wordmark';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input, Textarea } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Card } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import {
   DropdownMenu,
@@ -108,12 +110,14 @@ function SortableQueueItem({
         >
           ⠿
         </button>
-        <button
-          onClick={onSelect}
-          className={`flex-1 text-left card-paper ${kindTint(s.kind)} p-3 min-w-0 ${
-            isActive ? 'ring-2 ring-rust ring-inset' : selected ? 'ring-2 ring-rust/40 ring-inset' : ''
-          }`}
+        <Card
+          asChild
+          className={cn(
+            kindTint(s.kind),
+            isActive ? 'ring-2 ring-rust ring-inset' : selected ? 'ring-2 ring-rust/40 ring-inset' : '',
+          )}
         >
+          <button onClick={onSelect} className="flex-1 text-left p-3 min-w-0">
           <div className="flex gap-3">
             {s.thumbnail_url && (
               <img
@@ -149,7 +153,8 @@ function SortableQueueItem({
               )}
             </div>
           </div>
-        </button>
+          </button>
+        </Card>
         <button
           onClick={(e) => { e.stopPropagation(); onRemove(); }}
           className="shrink-0 w-6 flex items-center justify-center text-ink/20 hover:text-rust transition-colors"

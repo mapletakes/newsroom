@@ -1,6 +1,8 @@
 'use client';
 
 import { formatDuration, formatDate, formatDateTime, relativeTime, kindTint } from '@/lib/url';
+import { cn } from '@/lib/utils';
+import { Card } from './ui/card';
 import { ArchiveButton } from './ArchiveButton';
 
 type Submission = {
@@ -72,7 +74,8 @@ export function SubmissionCard({
   })();
 
   return (
-    <article className={`card-paper ${kindTint(s.kind)} ${compact ? 'p-3' : 'p-4'} flex gap-4`}>
+    <Card asChild className={cn(kindTint(s.kind), compact ? 'p-3' : 'p-4', 'flex gap-4')}>
+      <article>
       {s.thumbnail_url && (
         <img
           src={s.thumbnail_url}
@@ -145,7 +148,8 @@ export function SubmissionCard({
         </div>
         {actions && <div className="mt-2 flex gap-2 flex-wrap">{actions}</div>}
       </div>
-    </article>
+      </article>
+    </Card>
   );
 }
 
