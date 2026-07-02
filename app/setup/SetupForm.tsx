@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 
 export function SetupForm({
   streamId,
@@ -58,6 +59,7 @@ export function SetupForm({
 
   return (
     <div className="min-h-screen flex flex-col">
+      {confirmDialog}
       <header className="border-b-2 border-ink px-6 py-3 flex items-center gap-6 flex-wrap">
         <Link href="/" className="font-display text-2xl font-black">The Broadside</Link>
         <span className="font-mono text-xs uppercase tracking-widest text-ink/60">/ settings</span>
@@ -359,8 +361,15 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
     if (linkRef.current && bookmarklet) linkRef.current.setAttribute('href', bookmarklet);
   }, [bookmarklet]);
 
+  const { confirm, confirmDialog } = useConfirm();
+
   const generate = async () => {
-    if (token && !window.confirm('Regenerate? Your existing bookmarklet will stop working until you replace it.')) return;
+    if (token && !(await confirm({
+      title: 'Regenerate add token?',
+      description: 'Your existing bookmarklet and extension will stop working until you replace the token.',
+      confirmText: 'Regenerate',
+      destructive: true,
+    }))) return;
     setBusy(true);
     try {
       const r = await fetch('/api/deck/token', { method: 'POST' });

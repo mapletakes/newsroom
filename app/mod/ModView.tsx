@@ -6,6 +6,7 @@ import { SubmissionCard, type Submission } from '@/components/SubmissionCard';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { useQueueRealtime } from '@/lib/use-queue-realtime';
 import { useVisiblePoll } from '@/lib/use-visible-poll';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { formatDuration, sanitizeShareUrl } from '@/lib/url';
 
 export function ModView({
@@ -86,15 +87,22 @@ export function ModView({
 
   const tabCount = (k: 'pending' | 'approved' | 'played' | 'rejected') => counts[k];
 
+  const { confirm, confirmDialog } = useConfirm();
+
   const clear = async (status: 'pending' | 'rejected' | 'played') => {
     const label =
       status === 'pending' ? 'pending submissions' :
       status === 'rejected' ? 'rejected links' :
       'played items';
     const extra = status === 'played'
-      ? ' Your exported show notes are kept.'
-      : ' Approved deck items are not affected.';
-    if (!window.confirm(`Permanently delete all ${label}? This can't be undone.${extra}`)) return;
+      ? 'Your exported show notes are kept.'
+      : 'Approved deck items are not affected.';
+    if (!(await confirm({
+      title: `Permanently delete all ${label}?`,
+      description: `This can't be undone. ${extra}`,
+      confirmText: 'Delete all',
+      destructive: true,
+    }))) return;
     await fetch('/api/queue/clear', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -105,6 +113,7 @@ export function ModView({
 
   return (
     <div className="min-h-screen flex flex-col">
+      {confirmDialog}
       {/* Bar */}
       <header className="border-b-2 border-ink px-6 py-3 flex items-center gap-6 flex-wrap">
         <Link href="/" className="font-display text-2xl font-black">The Broadside</Link>
