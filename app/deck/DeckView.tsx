@@ -8,6 +8,7 @@ import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { ArchiveButton } from '@/components/ArchiveButton';
 import { QuickLinksDrawer } from './QuickLinksDrawer';
 import { Wordmark } from '@/components/ui/wordmark';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input, Textarea } from '@/components/ui/input';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import {
@@ -1224,47 +1225,32 @@ export function DeckView({
                 )}
 
               <div className="flex gap-3 flex-wrap mb-6">
-                <a
-                  href={active.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-mono text-sm uppercase tracking-widest bg-ink text-paper px-4 py-2 hover:bg-rust transition-colors"
-                >
+                <a href={active.url} target="_blank" rel="noreferrer" className={buttonVariants()}>
                   Open source ↗
                 </a>
                 {!curateOnly && (
-                  <button
-                    onClick={markPlayed}
-                    className="font-mono text-sm uppercase tracking-widest bg-moss text-paper px-4 py-2 hover:opacity-90"
-                  >
+                  <Button variant="moss" onClick={markPlayed}>
                     ✓ Played — next
-                  </button>
+                  </Button>
                 )}
                 {!curateOnly && (
-                  <button
-                    onClick={skip}
-                    className="font-mono text-sm uppercase tracking-widest border border-ink/40 px-4 py-2 hover:bg-ink hover:text-paper"
-                  >
+                  <Button variant="outline" onClick={skip}>
                     Skip
-                  </button>
+                  </Button>
                 )}
-                <button
-                  onClick={rejectActive}
-                  className="font-mono text-sm uppercase tracking-widest border border-rust/50 text-rust px-4 py-2 hover:bg-rust hover:text-paper transition-colors inline-flex items-center gap-1"
-                  title="Remove from deck"
-                >
+                <Button variant="outlineDestructive" onClick={rejectActive} title="Remove from deck">
                   <span className="material-icons text-base">delete</span>
                   Remove
-                </button>
+                </Button>
                 {!curateOnly && (
-                  <button
+                  <Button
+                    variant="outline"
                     onClick={announce}
-                    className="font-mono text-sm uppercase tracking-widest border border-ink/40 px-4 py-2 hover:bg-ink hover:text-paper transition-colors inline-flex items-center gap-1"
                     title="Post 'Watching: …' to your chat so a mod can pin it"
                   >
                     <span className="material-icons text-base">campaign</span>
                     Post to chat
-                  </button>
+                  </Button>
                 )}
               </div>
 
@@ -1299,13 +1285,9 @@ export function DeckView({
                 className="flex-1 min-w-0 text-xs"
                 disabled={adding}
               />
-              <button
-                type="submit"
-                disabled={adding || !addUrl.trim()}
-                className="shrink-0 font-mono text-xs uppercase tracking-widest bg-ink text-paper px-3 py-1.5 hover:bg-rust transition-colors disabled:opacity-40"
-              >
+              <Button type="submit" size="sm" disabled={adding || !addUrl.trim()} className="shrink-0">
                 {adding ? '...' : 'Add'}
-              </button>
+              </Button>
             </div>
           </form>
 
@@ -1316,12 +1298,9 @@ export function DeckView({
             <span className="min-w-0 truncate font-mono text-[10px] text-ink/40">
               ↑/↓ select · Ctrl+↑/↓ reorder · Enter open{!curateOnly && ' · P played'} · Del remove
             </span>
-            <button
-              onClick={addSegment}
-              className="shrink-0 ml-auto font-mono text-[10px] uppercase tracking-widest border border-ink/30 px-2 py-1 hover:bg-ink hover:text-paper transition-colors"
-            >
+            <Button variant="outline" size="xs" onClick={addSegment} className="shrink-0 ml-auto border-ink/30">
               + Segment
-            </button>
+            </Button>
           </div>
 
           {/* Quick type filter */}
