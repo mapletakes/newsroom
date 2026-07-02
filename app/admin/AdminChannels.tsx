@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { formatDateTime, relativeTime } from '@/lib/url';
 
 export type ChannelRow = {
@@ -34,18 +35,18 @@ export function AdminChannels({ initial }: { initial: ChannelRow[] }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<Record<string, string>>({});
   const [pruning, setPruning] = useState(false);
-  const [pruneMsg, setPruneMsg] = useState('');
 
   const pruneStale = async () => {
     setPruning(true);
-    setPruneMsg('');
     const r = await fetch('/api/admin/eventsub/prune', { method: 'POST' });
     const data = await r.json().catch(() => ({}));
     setPruning(false);
     if (r.ok && data.ok) {
-      setPruneMsg(`Deleted ${data.deleted} stale sub(s), kept ${data.kept}. Keeping callback: ${data.expectedCallback}`);
+      toast.success(`Deleted ${data.deleted} stale sub(s), kept ${data.kept}.`, {
+        description: `Keeping callback: ${data.expectedCallback}`,
+      });
     } else {
-      setPruneMsg(data.error ? `Failed: ${String(data.error).slice(0, 80)}` : 'Failed');
+      toast.error(data.error ? `Failed: ${String(data.error).slice(0, 80)}` : 'Failed');
     }
   };
 
@@ -98,7 +99,6 @@ export function AdminChannels({ initial }: { initial: ChannelRow[] }) {
         >
           {pruning ? 'Pruning…' : 'Prune stale EventSub subs'}
         </button>
-        {pruneMsg && <span className="font-mono text-[11px] text-ink/60">{pruneMsg}</span>}
       </div>
       <table className="w-full text-sm border-collapse">
         <thead>

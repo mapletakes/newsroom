@@ -8,6 +8,7 @@ import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { ArchiveButton } from '@/components/ArchiveButton';
 import { QuickLinksDrawer } from './QuickLinksDrawer';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { toast } from 'sonner';
 import { useQueueRealtime } from '@/lib/use-queue-realtime';
 import { useVisiblePoll } from '@/lib/use-visible-poll';
 import {
@@ -351,8 +352,7 @@ export function DeckView({
 
   const [addUrl, setAddUrl] = useState('');
   const [adding, setAdding] = useState(false);
-  const [addStatus, setAddStatus] = useState('');
-  const [announceStatus, setAnnounceStatus] = useState('');
+  const announcingRef = useRef(false);
 
   const suppressRefreshUntil = useRef(0);
   // The segment whose name is being edited, so a refresh doesn't clobber it.
@@ -717,8 +717,9 @@ export function DeckView({
 
   // Post "Watching: <title> <url>" to the streamer's chat for pinning.
   const announce = async () => {
-    if (!active || announceStatus === 'Posting…') return;
-    setAnnounceStatus('Posting…');
+    if (!active || announcingRef.current) return;
+    announcingRef.current = true;
+    const id = toast.loading('Posting to chat…');
     try {
       const r = await fetch('/api/deck/announce', {
         method: 'POST',
@@ -726,15 +727,16 @@ export function DeckView({
         body: JSON.stringify({ id: active.id }),
       });
       if (r.ok) {
-        setAnnounceStatus('Posted to chat ✓');
+        toast.success('Posted to chat', { id });
       } else {
         const e = await r.json().catch(() => ({}));
-        setAnnounceStatus(e.detail || e.error || 'Failed to post');
+        toast.error(e.detail || e.error || 'Failed to post', { id });
       }
     } catch {
-      setAnnounceStatus('Failed to post');
+      toast.error('Failed to post', { id });
+    } finally {
+      announcingRef.current = false;
     }
-    setTimeout(() => setAnnounceStatus(''), 4000);
   };
 
   // --- Segment handlers ---
@@ -1003,7 +1005,6 @@ export function DeckView({
     const url = addUrl.trim();
     if (!url || adding) return;
     setAdding(true);
-    setAddStatus('');
     try {
       const r = await fetch('/api/deck/add', {
         method: 'POST',
@@ -1013,16 +1014,11 @@ export function DeckView({
       if (r.ok) {
         const data = await r.json();
         setAddUrl('');
-        if (data.expanded) {
-          setAddStatus(`Added ${data.count} videos from playlist`);
-        } else {
-          setAddStatus('Added');
-        }
+        toast.success(data.expanded ? `Added ${data.count} videos from playlist` : 'Added to deck');
         refresh();
-        setTimeout(() => setAddStatus(''), 3000);
       } else {
         const err = await r.json().catch(() => ({}));
-        setAddStatus(err.error || 'Failed to add');
+        toast.error(err.error || 'Failed to add');
       }
     } finally {
       setAdding(false);
@@ -1262,9 +1258,6 @@ export function DeckView({
                     Post to chat
                   </button>
                 )}
-                {!curateOnly && announceStatus && (
-                  <span className="self-center font-mono text-xs text-ink/60">{announceStatus}</span>
-                )}
               </div>
 
               {!curateOnly && (
@@ -1306,9 +1299,6 @@ export function DeckView({
                 {adding ? '...' : 'Add'}
               </button>
             </div>
-            {addStatus && (
-              <div className="font-mono text-[10px] mt-1 text-ink/60">{addStatus}</div>
-            )}
           </form>
 
           <div className="flex items-center gap-3 mb-3 flex-wrap">
