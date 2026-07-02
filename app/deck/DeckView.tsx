@@ -10,6 +10,7 @@ import { QuickLinksDrawer } from './QuickLinksDrawer';
 import { Wordmark } from '@/components/ui/wordmark';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input, Textarea } from '@/components/ui/input';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import {
   DropdownMenu,
@@ -1304,7 +1305,12 @@ export function DeckView({
           </div>
 
           {/* Quick type filter */}
-          <div className="flex items-center gap-1 mb-3 flex-wrap font-mono text-[10px] uppercase tracking-widest">
+          <ToggleGroup
+            type="single"
+            value={typeFilter}
+            onValueChange={(v) => { if (v) setTypeFilter(v as 'all' | KindCategory); }}
+            className="mb-3 text-[10px]"
+          >
             {([
               ['all', 'All'],
               ['video', 'Videos'],
@@ -1312,17 +1318,11 @@ export function DeckView({
               ['article', 'Articles'],
               ['other', 'Other'],
             ] as const).map(([key, label]) => (
-              <button
-                key={key}
-                onClick={() => setTypeFilter(key)}
-                className={`px-2 py-1 border ${
-                  typeFilter === key ? 'bg-ink text-paper border-ink' : 'border-ink/30 hover:border-ink'
-                }`}
-              >
+              <ToggleGroupItem key={key} value={key}>
                 {label} ({catCounts[key]})
-              </button>
+              </ToggleGroupItem>
             ))}
-          </div>
+          </ToggleGroup>
 
           {/* Multi-select action bar */}
           {selectedCount > 0 && (

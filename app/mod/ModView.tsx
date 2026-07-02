@@ -10,6 +10,7 @@ import { useConfirm } from '@/components/ui/confirm-dialog';
 import { Wordmark } from '@/components/ui/wordmark';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { formatDuration, sanitizeShareUrl } from '@/lib/url';
 
 export function ModView({
@@ -181,17 +182,17 @@ export function ModView({
 
       {/* Filter tabs */}
       <div className="px-6 py-3 border-b border-ink/20 flex items-center gap-1 flex-wrap font-mono text-xs uppercase">
-        {(['pending', 'approved', 'played', 'rejected'] as const).map((k) => (
-          <button
-            key={k}
-            onClick={() => setFilter(k)}
-            className={`px-3 py-1.5 tracking-widest border ${
-              filter === k ? 'bg-ink text-paper border-ink' : 'border-ink/30 hover:border-ink'
-            }`}
-          >
-            {k} ({tabCount(k)})
-          </button>
-        ))}
+        <ToggleGroup
+          type="single"
+          value={filter}
+          onValueChange={(v) => { if (v) setFilter(v as 'pending' | 'approved' | 'played' | 'rejected'); }}
+        >
+          {(['pending', 'approved', 'played', 'rejected'] as const).map((k) => (
+            <ToggleGroupItem key={k} value={k} className="px-3 py-1.5">
+              {k} ({tabCount(k)})
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
         <Button variant="outlineDestructive" size="sm" onClick={() => clear('pending')}>
           Clear pending
         </Button>
