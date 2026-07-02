@@ -8,6 +8,14 @@ import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { ArchiveButton } from '@/components/ArchiveButton';
 import { QuickLinksDrawer } from './QuickLinksDrawer';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { useQueueRealtime } from '@/lib/use-queue-realtime';
 import { useVisiblePoll } from '@/lib/use-visible-poll';
@@ -1342,18 +1350,27 @@ export function DeckView({
             <div className="flex items-center gap-2 mb-2 px-2 py-1.5 bg-ink text-paper font-mono text-xs uppercase tracking-widest">
               <span className="font-bold">{selectedCount} selected</span>
               <span className="opacity-50 normal-case tracking-normal">— drag to move, or</span>
-              <select
-                value=""
-                onChange={(e) => { if (e.target.value) moveSelectedTo(e.target.value); }}
-                className="bg-paper text-ink px-1 py-0.5 border border-paper focus:outline-none"
-                aria-label="Move selected to block"
-              >
-                <option value="">Move to…</option>
-                <option value="ungrouped">Ungrouped</option>
-                {segments.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  className="inline-flex items-center gap-1 bg-paper text-ink px-2 py-0.5 hover:bg-rust hover:text-paper transition-colors focus:outline-none"
+                  aria-label="Move selected to block"
+                >
+                  Move to…
+                  <span className="material-icons text-sm leading-none">arrow_drop_down</span>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuLabel>Move to</DropdownMenuLabel>
+                  <DropdownMenuItem onSelect={() => moveSelectedTo('ungrouped')}>
+                    Ungrouped
+                  </DropdownMenuItem>
+                  {segments.length > 0 && <DropdownMenuSeparator />}
+                  {segments.map((s) => (
+                    <DropdownMenuItem key={s.id} onSelect={() => moveSelectedTo(s.id)}>
+                      {s.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <button onClick={clearSelection} className="ml-auto underline hover:opacity-70">
                 Clear
               </button>
