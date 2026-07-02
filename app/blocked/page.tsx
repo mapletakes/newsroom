@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
+
 export default function BlockedPage() {
   const logout = async () => {
     await fetch('/api/auth', { method: 'POST' });
@@ -15,12 +17,9 @@ export default function BlockedPage() {
           Your channel isn&apos;t approved for The Broadside yet, or access has been
           paused. If you think this is a mistake, reach out to an admin.
         </p>
-        <button
-          onClick={logout}
-          className="inline-block font-mono text-sm uppercase tracking-widest border border-ink/40 px-4 py-2 hover:bg-ink hover:text-paper"
-        >
+        <Button variant="outline" onClick={logout}>
           Sign out
-        </button>
+        </Button>
       </div>
     </main>
   );

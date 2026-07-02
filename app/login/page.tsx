@@ -1,3 +1,6 @@
+import { buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+
 export default function Login({ searchParams }: { searchParams: { error?: string; detail?: string } }) {
   const errorMap: Record<string, string> = {
     state: 'OAuth state mismatch — please try again.',
@@ -21,10 +24,7 @@ export default function Login({ searchParams }: { searchParams: { error?: string
             {detail && <div className="mt-1 text-xs opacity-75">{detail}</div>}
           </div>
         )}
-        <a
-          href="/api/twitch/oauth"
-          className="block text-center bg-ink text-paper px-6 py-4 font-mono text-sm uppercase tracking-widest hover:bg-rust transition-colors"
-        >
+        <a href="/api/twitch/oauth" className={cn(buttonVariants({ size: 'lg' }), 'w-full')}>
           Continue with Twitch
         </a>
       </div>
