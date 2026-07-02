@@ -159,6 +159,57 @@ export async function listSubscriptions(type?: string) {
   return data.data || [];
 }
 
+/**
+ * Delete every webhook subscription whose callback doesn't match the current
+ * NEXT_PUBLIC_APP_URL — i.e. leftovers pointing at an old domain that would
+ * otherwise keep delivering (causing duplicate chat ingestion after a domain
+ * change). Paginates through all subscriptions. Guarded: refuses to run if the
+ * app URL is unset, so it can never delete the live subscriptions by mistake.
+ */
+export async function pruneStaleSubscriptions(): Promise<{
+  deleted: number;
+  kept: number;
+  expectedCallback: string;
+  deletedCallbacks: Record<string, number>;
+}> {
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/+$/, '');
+  if (!appUrl) throw new Error('NEXT_PUBLIC_APP_URL is not set — refusing to prune');
+  const expectedCallback = `${appUrl}/api/twitch/eventsub`;
+
+  const token = await getAppAccessToken();
+  const clientId = process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID!;
+
+  let deleted = 0;
+  let kept = 0;
+  const deletedCallbacks: Record<string, number> = {};
+  let cursor: string | undefined;
+
+  do {
+    const u = new URL('https://api.twitch.tv/helix/eventsub/subscriptions');
+    if (cursor) u.searchParams.set('after', cursor);
+    const r = await fetch(u, {
+      headers: { Authorization: `Bearer ${token}`, 'Client-Id': clientId },
+    });
+    if (!r.ok) throw new Error(`List subscriptions failed: ${r.status}`);
+    const data = await r.json();
+    for (const sub of data.data || []) {
+      const cb: string = sub.transport?.callback || '';
+      // Only webhook subs have a callback; mismatch → stale → delete.
+      if (cb && cb !== expectedCallback) {
+        if (await deleteSubscription(sub.id)) {
+          deleted++;
+          deletedCallbacks[cb] = (deletedCallbacks[cb] || 0) + 1;
+        }
+      } else {
+        kept++;
+      }
+    }
+    cursor = data.pagination?.cursor;
+  } while (cursor);
+
+  return { deleted, kept, expectedCallback, deletedCallbacks };
+}
+
 /** Delete an EventSub subscription by ID. */
 export async function deleteSubscription(subscriptionId: string): Promise<boolean> {
   const token = await getAppAccessToken();
