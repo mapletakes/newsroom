@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
 import { formatDateTime, relativeTime } from '@/lib/url';
 
 export type ChannelRow = {
@@ -91,14 +92,16 @@ export function AdminChannels({ initial }: { initial: ChannelRow[] }) {
   return (
     <div className="overflow-x-auto">
       <div className="mb-3 flex items-center gap-3 flex-wrap">
-        <button
+        <Button
+          variant="outline"
+          size="sm"
+          className="border-ink text-[11px]"
           onClick={pruneStale}
           disabled={pruning}
-          className="font-mono text-[11px] uppercase tracking-widest border border-ink px-3 py-1.5 hover:bg-ink hover:text-paper transition-colors disabled:opacity-40"
           title="Delete EventSub subscriptions pointing at an old domain (fixes duplicate chat ingestion)"
         >
           {pruning ? 'Pruning…' : 'Prune stale EventSub subs'}
-        </button>
+        </Button>
       </div>
       <table className="w-full text-sm border-collapse">
         <thead>
@@ -156,20 +159,24 @@ export function AdminChannels({ initial }: { initial: ChannelRow[] }) {
               </td>
               <td className="py-2">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <button
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    className="text-[11px]"
                     onClick={() => toggleApproved(row)}
                     disabled={busy === row.id + ':access'}
-                    className="font-mono text-[11px] uppercase tracking-widest border border-ink/40 px-2 py-1 hover:bg-ink hover:text-paper disabled:opacity-50"
                   >
                     {row.approved ? 'Block' : 'Approve'}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    className="text-[11px]"
                     onClick={() => resubscribe(row)}
                     disabled={busy === row.id + ':sub'}
-                    className="font-mono text-[11px] uppercase tracking-widest border border-ink/40 px-2 py-1 hover:bg-ink hover:text-paper disabled:opacity-50"
                   >
                     {busy === row.id + ':sub' ? '…' : 'Re-sub'}
-                  </button>
+                  </Button>
                   {note[row.id] && <span className="font-mono text-[10px] text-ink/60">{note[row.id]}</span>}
                 </div>
               </td>
