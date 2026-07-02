@@ -7,6 +7,7 @@ import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { useQueueRealtime } from '@/lib/use-queue-realtime';
 import { useVisiblePoll } from '@/lib/use-visible-poll';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { Wordmark } from '@/components/ui/wordmark';
 import { formatDuration, sanitizeShareUrl } from '@/lib/url';
 
 export function ModView({
@@ -116,7 +117,7 @@ export function ModView({
       {confirmDialog}
       {/* Bar */}
       <header className="border-b-2 border-ink px-6 py-3 flex items-center gap-6 flex-wrap">
-        <Link href="/" className="font-display text-2xl font-black">The Broadside</Link>
+        <Wordmark />
         <span className="font-mono text-xs uppercase tracking-widest text-ink/60">
           / mod triage{isMod && <> · {streamDisplayName}</>}
         </span>

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { Wordmark } from '@/components/ui/wordmark';
 
 export function SetupForm({
   streamId,
@@ -61,7 +62,7 @@ export function SetupForm({
     <div className="min-h-screen flex flex-col">
       {confirmDialog}
       <header className="border-b-2 border-ink px-6 py-3 flex items-center gap-6 flex-wrap">
-        <Link href="/" className="font-display text-2xl font-black">The Broadside</Link>
+        <Wordmark />
         <span className="font-mono text-xs uppercase tracking-widest text-ink/60">/ settings</span>
         <div className="ml-auto flex items-center gap-4 font-mono text-xs">
           <Link href="/deck" className="underline hover:text-rust">Streamer Deck</Link>

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
+import { buttonVariants } from '@/components/ui/button';
 import { getSession } from '@/lib/session';
 
 // Reads the session cookie to tailor the CTA, so render per-request.
@@ -49,24 +50,15 @@ export default async function Home() {
           </p>
           {session ? (
             <div className="flex flex-wrap items-center gap-3">
-              <Link
-                href="/deck"
-                className="inline-block bg-ink text-paper px-8 py-4 font-mono text-sm uppercase tracking-widest hover:bg-rust transition-colors"
-              >
+              <Link href="/deck" className={buttonVariants({ size: 'lg' })}>
                 Go to your deck →
               </Link>
-              <Link
-                href="/mod"
-                className="inline-block border-2 border-ink px-8 py-4 font-mono text-sm uppercase tracking-widest hover:bg-ink hover:text-paper transition-colors"
-              >
+              <Link href="/mod" className={buttonVariants({ variant: 'outline', size: 'lg' })}>
                 Mod view
               </Link>
             </div>
           ) : (
-            <a
-              href="/api/twitch/oauth"
-              className="inline-block bg-ink text-paper px-8 py-4 font-mono text-sm uppercase tracking-widest hover:bg-rust transition-colors"
-            >
+            <a href="/api/twitch/oauth" className={buttonVariants({ size: 'lg' })}>
               Connect Twitch →
             </a>
           )}

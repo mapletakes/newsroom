@@ -7,6 +7,7 @@ import { extractYouTubeId, formatDuration, formatDate, kindTint, kindCategory, t
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { ArchiveButton } from '@/components/ArchiveButton';
 import { QuickLinksDrawer } from './QuickLinksDrawer';
+import { Wordmark } from '@/components/ui/wordmark';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import {
   DropdownMenu,
@@ -1059,9 +1060,7 @@ export function DeckView({
       {!curateOnly && <QuickLinksDrawer />}
       {confirmDialog}
       <header className="sticky top-0 z-20 bg-paper border-b-2 border-ink pl-10 pr-6 py-3 flex items-center gap-6 flex-wrap">
-        <Link href="/" className="font-display text-2xl font-black">
-          The Broadside
-        </Link>
+        <Wordmark />
         <span className="font-mono text-xs uppercase tracking-widest text-ink/60">
           / {curateOnly ? 'curating deck' : 'streamer deck'}
         </span>

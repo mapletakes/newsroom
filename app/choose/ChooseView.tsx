@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { Wordmark } from '@/components/ui/wordmark';
 
 type StreamOption = { id: string; login: string; name: string };
 
@@ -25,7 +25,7 @@ export function ChooseView({
   return (
     <div className="min-h-screen px-6 py-10 max-w-2xl mx-auto">
       <header className="mb-8">
-        <Link href="/" className="font-display text-2xl font-black">The Broadside</Link>
+        <Wordmark />
       </header>
 
       <h1 className="font-display text-4xl font-bold mb-2">Welcome, {displayName}</h1>

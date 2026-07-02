@@ -5,6 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { isAdmin, estimateCost } from '@/lib/admin';
 import { listSubscriptions } from '@/lib/twitch-eventsub';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
+import { Wordmark } from '@/components/ui/wordmark';
 import { AdminChannels, type ChannelRow } from './AdminChannels';
 
 export const dynamic = 'force-dynamic';
@@ -82,7 +83,7 @@ export default async function AdminPage({
   return (
     <div className="min-h-screen px-6 py-10 max-w-6xl mx-auto">
       <header className="mb-8 flex items-center gap-3 flex-wrap">
-        <Link href="/" className="font-display text-2xl font-black">The Broadside</Link>
+        <Wordmark />
         <span className="font-mono text-xs uppercase tracking-widest text-ink/60">/ admin</span>
         <div className="ml-auto flex items-center gap-4 font-mono text-xs text-ink/60">
           <span>{rows.length} channels · {activeChannels} listening · ~${totalCost.toFixed(2)} est.</span>
