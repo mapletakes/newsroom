@@ -88,28 +88,10 @@ function SortableQueueItem({
   return (
     <div ref={setNodeRef} style={style}>
       <div className={`flex items-stretch gap-0 ${selected ? 'bg-ink/5' : ''}`}>
-        <button
-          onClick={(e) => { e.stopPropagation(); onToggleSelect(e.shiftKey); }}
-          className={`shrink-0 w-6 flex items-center justify-center select-none ${
-            selected ? 'text-rust' : 'text-ink/25 hover:text-ink/50'
-          }`}
-          aria-label={selected ? 'Deselect' : 'Select'}
-          aria-pressed={selected}
-          tabIndex={-1}
-        >
-          <span className="material-icons text-base">
-            {selected ? 'check_box' : 'check_box_outline_blank'}
-          </span>
-        </button>
-        <button
-          {...attributes}
-          {...listeners}
-          className="shrink-0 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing text-ink/25 hover:text-ink/50 select-none"
-          aria-label="Drag to reorder"
-          tabIndex={-1}
-        >
-          ⠿
-        </button>
+        {/* The whole card is the drag source. Plain click activates (and clears
+            the multi-selection); Ctrl/Cmd-click toggles this card in the
+            selection; Shift-click extends a range. dnd-kit suppresses the click
+            after a real drag, so reordering never changes now-playing. */}
         <Card
           asChild
           className={cn(
@@ -117,7 +99,16 @@ function SortableQueueItem({
             isActive ? 'ring-2 ring-rust ring-inset' : selected ? 'ring-2 ring-rust/40 ring-inset' : '',
           )}
         >
-          <button onClick={onSelect} className="flex-1 text-left p-3 min-w-0">
+          <button
+            {...attributes}
+            {...listeners}
+            onClick={(e) => {
+              if (e.shiftKey) onToggleSelect(true);
+              else if (e.metaKey || e.ctrlKey) onToggleSelect(false);
+              else onSelect();
+            }}
+            className="flex-1 text-left p-3 min-w-0 cursor-grab active:cursor-grabbing"
+          >
           <div className="flex gap-3">
             {s.thumbnail_url && (
               <img
@@ -618,6 +609,12 @@ export function DeckView({
     setActiveId(id);
     setStartedAt(Date.now());
     setTakeaway('');
+  };
+
+  // Plain (unmodified) click on a card: activate it and drop any multi-selection.
+  const activateItem = (id: string) => {
+    clearSelection();
+    selectItem(id);
   };
 
   const markPlayed = async () => {
@@ -1302,7 +1299,7 @@ export function DeckView({
               Queue ({orderedQueue.length})
             </span>
             <span className="min-w-0 truncate font-mono text-[10px] text-ink/40">
-              ↑/↓ select · Ctrl+↑/↓ reorder · Enter open{!curateOnly && ' · P played'} · Del remove
+              click select · ⇧/⌃-click multi · drag to reorder{!curateOnly && ' · P played'} · Del remove
             </span>
             <Button variant="outline" size="xs" onClick={addSegment} className="shrink-0 ml-auto border-ink/30">
               + Segment
@@ -1394,7 +1391,7 @@ export function DeckView({
                         overContainerId={overContainer}
                         sortable={hasSegments}
                         selectedIds={selectedIds}
-                        onSelectItem={selectItem}
+                        onSelectItem={activateItem}
                         onRemoveItem={removeFromQueue}
                         onToggleSelect={toggleSelect}
                         onToggleCollapse={hasSegments ? () => setUngroupedCollapsed((c) => !c) : undefined}
@@ -1420,7 +1417,7 @@ export function DeckView({
                       overContainerId={overContainer}
                       sortable
                       selectedIds={selectedIds}
-                      onSelectItem={selectItem}
+                      onSelectItem={activateItem}
                       onRemoveItem={removeFromQueue}
                       onToggleSelect={toggleSelect}
                       onRenameLocal={(name) => renameSegmentLocal(seg.id, name)}
