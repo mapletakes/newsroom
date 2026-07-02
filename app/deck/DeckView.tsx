@@ -7,6 +7,7 @@ import { extractYouTubeId, formatDuration, formatDate, kindTint, kindCategory, t
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { ArchiveButton } from '@/components/ArchiveButton';
 import { QuickLinksDrawer } from './QuickLinksDrawer';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useQueueRealtime } from '@/lib/use-queue-realtime';
 import { useVisiblePoll } from '@/lib/use-visible-poll';
 import {
@@ -345,6 +346,8 @@ export function DeckView({
   const lastSelectedRef = useRef<string | null>(null);
   // The items the current drag is carrying (the whole selection, or just one).
   const movingIdsRef = useRef<string[]>([]);
+
+  const { confirm, confirmDialog } = useConfirm();
 
   const [addUrl, setAddUrl] = useState('');
   const [adding, setAdding] = useState(false);
@@ -787,7 +790,12 @@ export function DeckView({
   };
 
   const deleteSegment = async (id: string) => {
-    if (!window.confirm('Delete this segment? Its items move back to ungrouped.')) return;
+    if (!(await confirm({
+      title: 'Delete this segment?',
+      description: 'Its items move back to Ungrouped.',
+      confirmText: 'Delete',
+      destructive: true,
+    }))) return;
     await fetch('/api/segments', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
@@ -804,9 +812,12 @@ export function DeckView({
         : s.segment_id === containerId;
     const count = queue.filter(inBlock).length;
     if (count === 0) return;
-    if (!window.confirm(`Reject all ${count} item${count === 1 ? '' : 's'} in ${label}? They’ll be removed from the deck.`)) {
-      return;
-    }
+    if (!(await confirm({
+      title: `Reject all ${count} item${count === 1 ? '' : 's'} in ${label}?`,
+      description: 'They’ll be removed from the deck.',
+      confirmText: 'Reject all',
+      destructive: true,
+    }))) return;
     // Optimistic: drop them from the deck immediately.
     setQueue((prev) => prev.filter((s) => !inBlock(s)));
     holdAndReconcile();
@@ -1042,6 +1053,7 @@ export function DeckView({
   return (
     <div className="min-h-screen flex flex-col">
       {!curateOnly && <QuickLinksDrawer />}
+      {confirmDialog}
       <header className="sticky top-0 z-20 bg-paper border-b-2 border-ink pl-10 pr-6 py-3 flex items-center gap-6 flex-wrap">
         <Link href="/" className="font-display text-2xl font-black">
           The Broadside
