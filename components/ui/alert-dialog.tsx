@@ -87,7 +87,7 @@ const AlertDialogAction = React.forwardRef<
   <AlertDialogPrimitive.Action
     ref={ref}
     className={cn(
-      'font-mono text-xs uppercase tracking-widest px-4 py-2 transition-colors',
+      'font-mono text-xs uppercase tracking-widest px-4 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ochre focus-visible:ring-offset-2 focus-visible:ring-offset-paper',
       destructive ? 'bg-rust text-paper hover:opacity-90' : 'bg-ink text-paper hover:bg-rust',
       className,
     )}
@@ -103,7 +103,7 @@ const AlertDialogCancel = React.forwardRef<
   <AlertDialogPrimitive.Cancel
     ref={ref}
     className={cn(
-      'font-mono text-xs uppercase tracking-widest px-4 py-2 border border-ink/40 hover:bg-ink hover:text-paper transition-colors',
+      'font-mono text-xs uppercase tracking-widest px-4 py-2 border border-ink/40 hover:bg-ink hover:text-paper transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ochre focus-visible:ring-offset-2 focus-visible:ring-offset-paper',
       className,
     )}
     {...props}

@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 // the ink/paper/rust/moss tokens. Export buttonVariants too so <Link>s can be
 // styled as buttons via className without needing asChild/Slot.
 export const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-1.5 font-mono uppercase tracking-widest transition-colors disabled:opacity-40 disabled:pointer-events-none focus-visible:outline-none',
+  'inline-flex items-center justify-center gap-1.5 font-mono uppercase tracking-widest transition-colors disabled:opacity-40 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ochre focus-visible:ring-offset-2 focus-visible:ring-offset-paper',
   {
     variants: {
       variant: {
