@@ -125,6 +125,10 @@ export default async function Home() {
           <span>Built for the long-form political web</span>
           <span>Not legal advice · DMCA tags are heuristics</span>
         </div>
+        <div className="font-mono text-xs uppercase tracking-widest flex flex-wrap gap-4 mt-3 text-ink/50">
+          <Link href="/privacy" className="underline hover:text-rust">Privacy</Link>
+          <Link href="/terms" className="underline hover:text-rust">Terms</Link>
+        </div>
       </footer>
     </main>
   );

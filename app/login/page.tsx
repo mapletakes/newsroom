@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -27,6 +28,11 @@ export default function Login({ searchParams }: { searchParams: { error?: string
         <a href="/api/twitch/oauth" className={cn(buttonVariants({ size: 'lg' }), 'w-full')}>
           Continue with Twitch
         </a>
+        <p className="mt-4 font-mono text-xs text-ink/50 leading-relaxed">
+          By continuing, you agree to the{' '}
+          <Link href="/terms" className="underline hover:text-rust">Terms of Service</Link> and{' '}
+          <Link href="/privacy" className="underline hover:text-rust">Privacy Policy</Link>.
+        </p>
       </div>
     </main>
   );
