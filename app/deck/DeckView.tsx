@@ -1354,7 +1354,7 @@ export function DeckView({
             type="single"
             value={typeFilter}
             onValueChange={(v) => { if (v) setTypeFilter(v as 'all' | KindCategory); }}
-            className="mb-3 text-[10px]"
+            className="mb-3 pb-1 border-b border-ink/20 text-[10px]"
           >
             {([
               ['all', 'All'],
@@ -1363,7 +1363,7 @@ export function DeckView({
               ['article', 'Articles'],
               ['other', 'Other'],
             ] as const).map(([key, label]) => (
-              <ToggleGroupItem key={key} value={key}>
+              <ToggleGroupItem key={key} value={key} variant="tab">
                 {label} ({catCounts[key]})
               </ToggleGroupItem>
             ))}
