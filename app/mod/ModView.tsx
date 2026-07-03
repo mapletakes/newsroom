@@ -13,6 +13,12 @@ import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { formatDuration, sanitizeShareUrl } from '@/lib/url';
 
+const STATUS_KEYS = ['pending', 'approved', 'played', 'rejected'] as const;
+type StatusKey = (typeof STATUS_KEYS)[number];
+function isStatusKey(s: string): s is StatusKey {
+  return (STATUS_KEYS as readonly string[]).includes(s);
+}
+
 export function ModView({
   channel,
   displayName,
@@ -66,12 +72,37 @@ export function ModView({
     id: string,
     patch: Record<string, unknown>,
   ): Promise<{ ok: boolean; error?: string }> => {
+    // Optimistic: when the new status no longer matches the active tab, the
+    // item should leave this view instantly rather than wait for the round
+    // trip (that wait was the one place mod triage still felt sluggish).
+    // Reverted if the write fails; refresh() below is still the eventual
+    // source of truth for counts and any server-side outcome (e.g. a
+    // duplicate-on-deck conflict) we can't predict client-side.
+    const prevItem = submissions.find((s) => s.id === id);
+    const prevCounts = counts;
+    const newStatus = typeof patch.status === 'string' ? patch.status : null;
+    const changesView = newStatus !== null && newStatus !== filter;
+    if (changesView) {
+      setSubmissions((prev) => prev.filter((s) => s.id !== id));
+      if (prevItem && newStatus && isStatusKey(prevItem.status) && isStatusKey(newStatus)) {
+        setCounts((c) => ({
+          ...c,
+          [prevItem.status]: Math.max(0, c[prevItem.status as StatusKey] - 1),
+          [newStatus]: c[newStatus as StatusKey] + 1,
+        }));
+      }
+    }
+
     const r = await fetch('/api/queue', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, ...patch }),
     });
     if (!r.ok) {
+      if (changesView && prevItem) {
+        setSubmissions((prev) => [prevItem, ...prev]);
+        setCounts(prevCounts);
+      }
       const e = await r.json().catch(() => ({}));
       // e.g. trying to approve something already on the deck.
       return { ok: false, error: e.detail || e.error || 'Action failed' };
