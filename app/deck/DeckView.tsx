@@ -7,6 +7,8 @@ import { extractYouTubeId, formatDuration, formatDate, kindTint, kindCategory, t
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { ArchiveButton } from '@/components/ArchiveButton';
 import { QuickLinksDrawer } from './QuickLinksDrawer';
+import { ChatStatusBanner } from './ChatStatusBanner';
+import { GettingStarted } from './GettingStarted';
 import { Wordmark } from '@/components/ui/wordmark';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input, Textarea } from '@/components/ui/input';
@@ -1076,6 +1078,7 @@ export function DeckView({
           <DarkModeToggle />
         </div>
       </header>
+      {!curateOnly && <ChatStatusBanner />}
 
       <main className="flex-1 grid lg:grid-cols-2 gap-0 pl-3">
         {/* Active card */}
@@ -1260,6 +1263,7 @@ export function DeckView({
 
         {/* Sidebar */}
         <aside className="p-4 bg-ink/5 flex flex-col">
+          {!curateOnly && <GettingStarted />}
           {/* Add link */}
           <form onSubmit={handleAddLink} className="mb-4">
             <div className="flex gap-1">

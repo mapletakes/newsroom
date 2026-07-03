@@ -7,6 +7,7 @@ import { useConfirm } from '@/components/ui/confirm-dialog';
 import { Wordmark } from '@/components/ui/wordmark';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useEventSubStatus } from '@/lib/use-eventsub-status';
 
 export function SetupForm({
   streamId,
@@ -470,50 +471,8 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
 
 // -- EventSub status widget --
 
-type ESStatus = 'loading' | 'connected' | 'disconnected' | 'error';
-
 function EventSubStatus() {
-  const [status, setStatus] = useState<ESStatus>('loading');
-  const [detail, setDetail] = useState<string | null>(null);
-  const [reconnecting, setReconnecting] = useState(false);
-
-  const check = async () => {
-    try {
-      const r = await fetch('/api/twitch/eventsub/status');
-      if (!r.ok) { setStatus('error'); setDetail('HTTP ' + r.status); return; }
-      const data = await r.json();
-      setStatus(data.connected ? 'connected' : 'disconnected');
-      if (!data.connected && data.status && data.status !== 'none') {
-        setDetail('Subscription status: ' + data.status);
-      }
-    } catch {
-      setStatus('error');
-    }
-  };
-
-  useEffect(() => { check(); }, []);
-
-  const reconnect = async () => {
-    setReconnecting(true);
-    setDetail(null);
-    try {
-      const r = await fetch('/api/twitch/eventsub/status', { method: 'POST' });
-      const data = await r.json();
-      if (data.error) {
-        setDetail(data.error);
-        setStatus('error');
-      } else if (data.ok) {
-        setDetail('Callback: ' + data.callbackUrl);
-        await new Promise((resolve) => setTimeout(resolve, 3000));
-        await check();
-      }
-    } catch (err) {
-      setDetail(String(err));
-      setStatus('error');
-    } finally {
-      setReconnecting(false);
-    }
-  };
+  const { status, detail, reconnecting, reconnect } = useEventSubStatus();
 
   const dot =
     status === 'connected' ? 'bg-moss' :
