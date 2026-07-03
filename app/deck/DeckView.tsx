@@ -963,7 +963,11 @@ export function DeckView({
       if (fromIdx >= 0 && toIdx >= 0 && fromIdx !== toIdx) {
         const reordered = arrayMove(targetItems, fromIdx, toIdx);
         // Set display order immediately — same render as endDrag() clears transforms.
-        setPendingOrder({ [targetContainer]: reordered.map((s) => s.id) });
+        // Merge rather than replace: a rapid second drag on a different
+        // container must not wipe out this container's still-unresolved
+        // override (that was the "flashes back on quick successive drags"
+        // bug — a later setPendingOrder(newOnly) discarded earlier overrides).
+        setPendingOrder((prev) => ({ ...prev, [targetContainer]: reordered.map((s) => s.id) }));
         persistGroupOrder(reordered);
       }
       endDrag();
@@ -983,14 +987,17 @@ export function DeckView({
       result.every((s, i) => targetItems[i].id === s.id)
     ) { endDrag(); return; }
 
-    // Set display order immediately for both affected containers.
-    const newPending: Record<string, string[]> = { [targetContainer]: result.map((s) => s.id) };
-    if (sourceContainer !== targetContainer) {
-      newPending[sourceContainer] = containerItems(sourceContainer)
-        .filter((s) => !movingSet.has(s.id))
-        .map((s) => s.id);
-    }
-    setPendingOrder(newPending);
+    // Set display order immediately for both affected containers. Merge into
+    // any existing overrides — see the same-container branch above for why a
+    // blind replace is wrong when drags happen in quick succession.
+    const remainingAtSource = sourceContainer !== targetContainer
+      ? containerItems(sourceContainer).filter((s) => !movingSet.has(s.id)).map((s) => s.id)
+      : null;
+    setPendingOrder((prev) => {
+      const next = { ...prev, [targetContainer]: result.map((s) => s.id) };
+      if (remainingAtSource) next[sourceContainer] = remainingAtSource;
+      return next;
+    });
 
     const segId = targetContainer === 'ungrouped' ? null : targetContainer;
     moveItems(movingIds, segId, result.map((s) => s.id));
