@@ -2,6 +2,7 @@
 // Twitch POSTs chat messages here — no persistent connection needed.
 
 import { NextRequest, NextResponse } from 'next/server';
+import { waitUntil } from '@vercel/functions';
 import { verifySignature, isTimestampFresh } from '@/lib/twitch-eventsub';
 import { supabaseAdmin } from '@/lib/supabase';
 import { extractUrlsFromMessage } from '@/lib/url';
@@ -128,19 +129,27 @@ export async function POST(req: NextRequest) {
     return new NextResponse(null, { status: 204 });
   }
 
-  // Submit each URL to the queue (includes dedup + AI extraction)
-  await Promise.all(
-    urls.map((url) =>
-      submitUrlToQueue({
-        streamId: stream.id,
-        url,
-        submitter: chatterName,
-        isSub,
-        isMod,
-        isVip,
-        message: messageText,
-      }),
-    ),
+  // Submit each URL to the queue (includes dedup + AI extraction — several
+  // seconds). Twitch expects a fast ack and retries slow/failed deliveries
+  // (which is what caused duplicate ingestion before the idempotency guard
+  // above), and enough retries eventually gets a subscription revoked. So we
+  // respond immediately and let the work finish in the background; waitUntil
+  // keeps this invocation alive to do it instead of the platform freezing/
+  // recycling it right after the response is sent.
+  waitUntil(
+    Promise.all(
+      urls.map((url) =>
+        submitUrlToQueue({
+          streamId: stream.id,
+          url,
+          submitter: chatterName,
+          isSub,
+          isMod,
+          isVip,
+          message: messageText,
+        }),
+      ),
+    ).catch((err) => console.error('background submitUrlToQueue failed:', err)),
   );
 
   return new NextResponse(null, { status: 204 });
