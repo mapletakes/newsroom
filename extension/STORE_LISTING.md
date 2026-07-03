@@ -5,9 +5,13 @@ Dashboard](https://chrome.google.com/webstore/devconsole). The parts I can't do
 for you (they need your own Google account and a one-time $5 developer
 registration fee) are in **Manual steps**, at the end.
 
+This doc is Chrome-specific. The extension is also Firefox-compatible now (see
+`README.md`'s "Install on Firefox" section) — Firefox's equivalent to this whole
+doc would be a submission to Mozilla's Add-on Developer Hub, not yet prepared.
+
 ## Package
 
-`broadside-quick-add-v1.4.0.zip`, already built in this folder — manifest.json
+`broadside-quick-add-v1.5.0.zip`, already built in this folder — manifest.json
 is at the zip root as required. Rebuild it after any future manifest version
 bump with:
 
@@ -87,7 +91,7 @@ URL so it can be submitted. No access to tab content otherwise.
 **storage**
 ```
 Stores the user's personal Broadside add-token and app URL locally
-(chrome.storage.sync) so they don't have to re-enter it every time.
+(chrome.storage.local) so they don't have to re-enter it every time.
 ```
 
 **alarms**
@@ -126,7 +130,7 @@ Good candidates to capture locally before submitting:
 ## Manual steps (need your own Google account)
 
 1. Go to the [Developer Dashboard](https://chrome.google.com/webstore/devconsole), sign in, pay the one-time $5 registration fee if you haven't already.
-2. Click **New Item**, upload `broadside-quick-add-v1.4.0.zip`.
+2. Click **New Item**, upload `broadside-quick-add-v1.5.0.zip`.
 3. Fill in the listing fields above (Title, Summary, Description, Category, Language, Privacy policy URL).
 4. In **Privacy practices**, paste the single-purpose description and each permission justification above, and take the required data-usage disclosure (this extension: doesn't sell data, doesn't use data for purposes unrelated to its core function, doesn't use data to determine creditworthiness/lending).
 5. Upload the screenshots.

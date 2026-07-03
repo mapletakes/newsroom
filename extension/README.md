@@ -1,9 +1,9 @@
-# The Broadside Quick Add (Chrome/Edge extension)
+# The Broadside Quick Add (Chrome/Edge/Firefox extension)
 
 Add the current page, a link, or a video to your Broadside streamer deck without
 copy/paste or tab-switching.
 
-## Install (load unpacked)
+## Install on Chrome/Edge (load unpacked)
 
 1. In The Broadside, go to **Settings → Quick add** and **Generate add link**. Copy the
    **token** (`nr_…`).
@@ -13,6 +13,20 @@ copy/paste or tab-switching.
 5. Click the extension's **Details → Extension options** (or right-click the toolbar
    icon → Options) and paste your **token**. The Broadside URL is pre-filled; change it
    only if you use a custom domain.
+
+## Install on Firefox (temporary, for testing)
+
+1. Open `about:debugging#/runtime/this-firefox`.
+2. Click **Load Temporary Add-on…** and select `manifest.json` in this `extension/` folder.
+3. Right-click the toolbar icon → **Manage Extension → Preferences** (or find it in the
+   extension's card) to paste your **token**, same as Chrome.
+
+This only lasts until Firefox restarts — Firefox removes temporarily-loaded extensions on
+every restart, so you'll need to reload it each session. For a Firefox install that
+persists like Chrome's does, the extension needs to go through Mozilla's free
+self-distribution signing (see `STORE_LISTING.md` for the Chrome Web Store submission;
+the Firefox equivalent is the [Add-on Developer Hub](https://addons.mozilla.org/developers/) —
+not yet prepared here).
 
 ## Use
 
@@ -40,4 +54,11 @@ ready on your deck.
 - The segment submenu refreshes when you change the token/URL and every few minutes
   while the browser is running. If a segment you just created isn't there yet, reopen
   the menu in a moment (or toggle the extension off/on) to force a refresh.
-- This is a load-unpacked dev extension; no Web Store listing required.
+- Token/URL are stored in `storage.local` (not `storage.sync`) — deliberately, so it
+  doesn't depend on being signed into a Firefox Account, and stays per-machine rather
+  than syncing across browser profiles.
+- The manifest's `background` key lists both `service_worker` (Chrome/Edge) and
+  `scripts` (Firefox) so the same background.js runs on both — each browser uses the
+  one it understands and ignores the other.
+- Chrome Web Store submission is prepped in `STORE_LISTING.md`; there's no equivalent
+  prep for Firefox's Add-on Developer Hub yet.

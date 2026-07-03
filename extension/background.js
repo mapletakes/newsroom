@@ -1,4 +1,6 @@
-// The Broadside Quick Add — MV3 background service worker.
+// The Broadside Quick Add — MV3 background script (a true service worker on
+// Chrome/Edge; an event page on Firefox, which doesn't support service_worker
+// — see manifest.json's background key for both).
 // Toolbar click adds the current tab; right-click context menu adds a page,
 // link, video, or selected URL — and, when segments exist, lets you pick which
 // segment of the deck to drop it into. Auth is the personal add token.
@@ -8,7 +10,7 @@ const CONTEXTS = ['page', 'link', 'selection', 'video'];
 const SEG_PREFIX = 'nr-seg:';
 
 async function getConfig() {
-  const { token, appUrl } = await chrome.storage.sync.get(['token', 'appUrl']);
+  const { token, appUrl } = await chrome.storage.local.get(['token', 'appUrl']);
   return {
     token: token || '',
     appUrl: (appUrl || DEFAULT_APP_URL).replace(/\/+$/, ''),
@@ -113,7 +115,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 // Rebuild as soon as the token or app URL changes.
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'sync' && (changes.token || changes.appUrl)) rebuildMenus();
+  if (area === 'local' && (changes.token || changes.appUrl)) rebuildMenus();
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
