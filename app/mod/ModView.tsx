@@ -224,7 +224,7 @@ export function ModView({
           onValueChange={(v) => { if (v) setFilter(v as 'pending' | 'approved' | 'played' | 'rejected'); }}
         >
           {(['pending', 'approved', 'played', 'rejected'] as const).map((k) => (
-            <ToggleGroupItem key={k} value={k} className="px-3 py-1.5">
+            <ToggleGroupItem key={k} value={k} variant="tab">
               {k} ({tabCount(k)})
             </ToggleGroupItem>
           ))}
