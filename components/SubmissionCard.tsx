@@ -3,6 +3,7 @@
 import { formatDuration, formatDate, formatDateTime, relativeTime, kindTint } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { Card } from './ui/card';
+import { Badge } from './ui/badge';
 import { SimpleTooltip } from './ui/tooltip';
 import { ArchiveButton } from './ArchiveButton';
 
@@ -87,19 +88,13 @@ export function SubmissionCard({
       )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1 flex-wrap">
-          <span className="font-mono text-xs uppercase tracking-widest bg-ink text-paper px-1.5 py-0.5">
-            {KIND_LABELS[s.kind] || s.kind}
-          </span>
+          <Badge>{KIND_LABELS[s.kind] || s.kind}</Badge>
           {s.duration_seconds ? (
             <span className="font-mono text-xs uppercase tracking-widest text-ink/60">
               {formatDuration(s.duration_seconds)}
             </span>
           ) : null}
-          {s.credibility_tag && (
-            <span className="font-mono text-xs uppercase tracking-widest border border-ink/40 px-1.5 py-0.5">
-              {s.credibility_tag}
-            </span>
-          )}
+          {s.credibility_tag && <Badge variant="outline">{s.credibility_tag}</Badge>}
           {s.dmca_risk && (
             <span className={`font-mono text-xs uppercase tracking-widest dmca-${s.dmca_risk}`}>
               {RISK_LABELS[s.dmca_risk]}
@@ -107,9 +102,7 @@ export function SubmissionCard({
           )}
           {s.content_warning && (
             <SimpleTooltip content={s.content_warning}>
-              <span className="font-mono text-xs uppercase tracking-widest bg-rust text-paper px-1.5 py-0.5 cursor-default">
-                ⚠ Content warning
-              </span>
+              <Badge variant="destructive" className="cursor-default">⚠ Content warning</Badge>
             </SimpleTooltip>
           )}
         </div>

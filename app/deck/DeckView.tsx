@@ -16,6 +16,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SimpleTooltip } from '@/components/ui/tooltip';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import {
@@ -1148,28 +1149,24 @@ export function DeckView({
           {active && (
             <article>
               <div className="flex items-center gap-2 mb-3 flex-wrap font-mono text-xs uppercase tracking-widest">
-                <span className="bg-ink text-paper px-2 py-1">
-                  {active.kind.replace('_', ' ')}
-                </span>
+                <Badge size="default">{active.kind.replace('_', ' ')}</Badge>
                 {active.duration_seconds ? (
-                  <span className="border border-ink px-2 py-1">{formatDuration(active.duration_seconds)}</span>
+                  <Badge variant="outlineStrong" size="default">{formatDuration(active.duration_seconds)}</Badge>
                 ) : null}
                 {active.credibility_tag && (
-                  <span className="border border-ink px-2 py-1">{active.credibility_tag}</span>
+                  <Badge variant="outlineStrong" size="default">{active.credibility_tag}</Badge>
                 )}
                 {active.dmca_risk === 'high' && (
-                  <span className="bg-rust text-paper px-2 py-1">⚠ High DMCA risk</span>
+                  <Badge variant="destructive" size="default">⚠ High DMCA risk</Badge>
                 )}
                 {active.dmca_risk === 'medium' && (
-                  <span className="border-2 border-ochre text-ochre px-2 py-1">
-                    ◐ Medium risk
-                  </span>
+                  <Badge variant="warning" size="default">◐ Medium risk</Badge>
                 )}
                 {active.content_warning && (
                   <SimpleTooltip content={active.content_warning}>
-                    <span className="bg-rust text-paper px-2 py-1 cursor-default">
+                    <Badge variant="destructive" size="default" className="cursor-default">
                       ⚠ Content warning
-                    </span>
+                    </Badge>
                   </SimpleTooltip>
                 )}
                 {active.publisher && <span className="text-ink/60">· {active.publisher}</span>}
