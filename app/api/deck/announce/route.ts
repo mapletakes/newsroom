@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getSession } from '@/lib/session';
+import { getApprovedSession } from '@/lib/session';
 import { refreshAccessToken, sendChatMessage } from '@/lib/twitch-oauth';
 import { encryptSecret, decryptSecret } from '@/lib/crypto';
 import { sanitizeShareUrl } from '@/lib/url';
@@ -10,7 +10,7 @@ const MAX_CHARS = 500;
 // Post "Watching: <title> <url>" to the channel's chat, as the logged-in
 // user (streamer or mod) using their own stored token.
 export async function POST(req: NextRequest) {
-  const session = await getSession();
+  const session = await getApprovedSession();
   if (!session) {
     return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   }

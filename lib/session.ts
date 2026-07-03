@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers';
 import crypto from 'crypto';
+import { supabaseAdmin } from './supabase';
 
 const COOKIE = 'newsroom_session';
 
@@ -46,6 +47,27 @@ export async function getSession(): Promise<Session | null> {
   try {
     return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
   } catch { return null; }
+}
+
+/**
+ * Like getSession(), but also checks the acted-upon stream (session.streamId)
+ * hasn't been blocked/unapproved — page routes redirect to /blocked, but that
+ * doesn't stop the same session's API calls, so mutating endpoints should use
+ * this instead of getSession(). Deliberately not folded into getSession()
+ * itself: that would add a DB round-trip to every page render and read-only
+ * call in the app for a check that only matters on writes.
+ */
+export async function getApprovedSession(): Promise<Session | null> {
+  const session = await getSession();
+  if (!session) return null;
+  const sb = supabaseAdmin();
+  const { data } = await sb
+    .from('streams')
+    .select('approved')
+    .eq('id', session.streamId)
+    .maybeSingle();
+  if (data?.approved === false) return null;
+  return session;
 }
 
 export function signOAuthState(): string {

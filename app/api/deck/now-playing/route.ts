@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getSession } from '@/lib/session';
+import { getApprovedSession } from '@/lib/session';
 import { broadcastQueueChange } from '@/lib/realtime';
 
 // The streamer's deck reports which approved item it's currently showing so
 // the mod view can display what's on air.
 export async function POST(req: NextRequest) {
-  const session = await getSession();
+  const session = await getApprovedSession();
   if (!session || session.role !== 'streamer') {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }

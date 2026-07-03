@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getSession } from '@/lib/session';
+import { getApprovedSession } from '@/lib/session';
 import { sessionCanCurate } from '@/lib/curate';
 import { broadcastQueueChange } from '@/lib/realtime';
 
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 // Reject every approved item in one deck block (a segment, or 'ungrouped').
 export async function POST(req: NextRequest) {
-  const session = await getSession();
+  const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   if (!(await sessionCanCurate(session))) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });

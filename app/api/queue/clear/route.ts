@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getSession } from '@/lib/session';
+import { getApprovedSession } from '@/lib/session';
 import { broadcastQueueChange } from '@/lib/realtime';
 
 // Only these statuses can be bulk-cleared. Approved is protected (it's the
@@ -9,7 +9,7 @@ import { broadcastQueueChange } from '@/lib/realtime';
 const CLEARABLE = new Set(['pending', 'rejected', 'played']);
 
 export async function POST(req: NextRequest) {
-  const session = await getSession();
+  const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
 
   // Default to clearing pending (backward compatible). Pass { status: 'rejected' }

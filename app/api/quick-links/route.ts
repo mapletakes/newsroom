@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getSession } from '@/lib/session';
+import { getSession, getApprovedSession } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,7 +37,7 @@ export async function GET() {
 
 // POST — add a link, appended to the end. Streamer only (personal stash).
 export async function POST(req: NextRequest) {
-  const session = await getSession();
+  const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   if (session.role !== 'streamer') return NextResponse.json({ error: 'forbidden' }, { status: 403 });
 
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
 
 // PATCH — reorder (ids[] in new order) or rename/retarget a single link.
 export async function PATCH(req: NextRequest) {
-  const session = await getSession();
+  const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   if (session.role !== 'streamer') return NextResponse.json({ error: 'forbidden' }, { status: 403 });
 
@@ -112,7 +112,7 @@ export async function PATCH(req: NextRequest) {
 
 // DELETE — remove a link. Streamer only.
 export async function DELETE(req: NextRequest) {
-  const session = await getSession();
+  const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   if (session.role !== 'streamer') return NextResponse.json({ error: 'forbidden' }, { status: 403 });
 

@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getSession } from '@/lib/session';
+import { getApprovedSession } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
 // Generate (or regenerate) the streamer's personal quick-add token.
 export async function POST() {
-  const session = await getSession();
+  const session = await getApprovedSession();
   if (!session || session.role !== 'streamer') {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }

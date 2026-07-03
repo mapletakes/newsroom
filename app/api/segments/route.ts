@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getSession } from '@/lib/session';
+import { getSession, getApprovedSession } from '@/lib/session';
 import { sessionCanCurate } from '@/lib/curate';
 import { broadcastQueueChange } from '@/lib/realtime';
 
@@ -38,7 +38,7 @@ export async function GET() {
 
 // POST — create a segment, appended to the end.
 export async function POST(req: NextRequest) {
-  const session = await getSession();
+  const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   if (!(await sessionCanCurate(session))) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
 
 // PATCH — rename, collapse/expand, or reposition a segment.
 export async function PATCH(req: NextRequest) {
-  const session = await getSession();
+  const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   if (!(await sessionCanCurate(session))) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
@@ -108,7 +108,7 @@ export async function PATCH(req: NextRequest) {
 
 // DELETE — remove a segment. Its items fall back to ungrouped (FK SET NULL).
 export async function DELETE(req: NextRequest) {
-  const session = await getSession();
+  const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   if (!(await sessionCanCurate(session))) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });

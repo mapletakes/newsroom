@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getSession } from '@/lib/session';
+import { getApprovedSession } from '@/lib/session';
 import { requestArchive } from '@/lib/archive';
 import { broadcastQueueChange } from '@/lib/realtime';
 
@@ -9,7 +9,7 @@ export const maxDuration = 60;
 
 // Archive a submission's URL to the Wayback Machine and store the snapshot.
 export async function POST(req: NextRequest) {
-  const session = await getSession();
+  const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));

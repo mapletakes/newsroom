@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getSession } from '@/lib/session';
+import { getSession, getApprovedSession } from '@/lib/session';
 import { sessionCanCurate } from '@/lib/curate';
 import { searchRelatedCoverage } from '@/lib/search-coverage';
 import { submitUrlToQueue } from '@/lib/submit-url';
@@ -9,7 +9,7 @@ import { broadcastQueueChange } from '@/lib/realtime';
 export const maxDuration = 30;
 
 export async function POST(req: NextRequest) {
-  const session = await getSession();
+  const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
 
   const body = await req.json();
@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const session = await getSession();
+  const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
 
   const body = await req.json();
