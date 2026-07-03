@@ -3,6 +3,23 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Sheet, SheetClose, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 type QuickLink = { id: string; label: string; url: string; position: number };
 
@@ -13,6 +30,64 @@ const host = (u: string) => {
     return u;
   }
 };
+
+function SortableLinkRow({
+  link,
+  onRemove,
+}: {
+  link: QuickLink;
+  onRemove: (id: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: link.id,
+  });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="group flex items-center gap-2 card-paper p-2">
+      <button
+        {...attributes}
+        {...listeners}
+        className="shrink-0 w-5 flex items-center justify-center cursor-grab active:cursor-grabbing text-ink/30 hover:text-ink/60 select-none"
+        aria-label="Drag to reorder"
+        tabIndex={-1}
+      >
+        ⠿
+      </button>
+      <a
+        href={link.url}
+        target="_blank"
+        rel="noreferrer"
+        className="min-w-0 flex-1 hover:text-rust"
+      >
+        <div className="font-display text-sm font-bold leading-tight truncate">
+          {link.label}
+        </div>
+        <div className="font-mono text-[10px] text-ink/50 truncate">{host(link.url)}</div>
+      </a>
+      <a
+        href={link.url}
+        target="_blank"
+        rel="noreferrer"
+        className="shrink-0 text-ink/30 hover:text-ink"
+        aria-label="Open in new tab"
+      >
+        <span className="material-icons text-base">open_in_new</span>
+      </a>
+      <button
+        onClick={() => onRemove(link.id)}
+        className="shrink-0 text-ink/20 hover:text-rust transition-colors"
+        aria-label="Remove"
+      >
+        <span className="material-icons text-base">delete</span>
+      </button>
+    </div>
+  );
+}
 
 // A streamer's personal "on-hand" links (fossabot, fundraisers, etc.), in a
 // popout drawer that overlays the deck. Entirely separate from the queue.
@@ -65,6 +140,28 @@ export function QuickLinksDrawer() {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id }),
+    });
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setLinks((prev) => {
+      const oldIndex = prev.findIndex((l) => l.id === active.id);
+      const newIndex = prev.findIndex((l) => l.id === over.id);
+      if (oldIndex < 0 || newIndex < 0) return prev;
+      const reordered = arrayMove(prev, oldIndex, newIndex);
+      fetch('/api/quick-links', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: reordered.map((l) => l.id) }),
+      }).catch(() => {});
+      return reordered;
     });
   };
 
@@ -129,37 +226,17 @@ export function QuickLinksDrawer() {
               you want one click away during the show.
             </p>
           ) : (
-            links.map((l) => (
-              <div key={l.id} className="group flex items-center gap-2 card-paper p-2">
-                <a
-                  href={l.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="min-w-0 flex-1 hover:text-rust"
-                >
-                  <div className="font-display text-sm font-bold leading-tight truncate">
-                    {l.label}
-                  </div>
-                  <div className="font-mono text-[10px] text-ink/50 truncate">{host(l.url)}</div>
-                </a>
-                <a
-                  href={l.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="shrink-0 text-ink/30 hover:text-ink"
-                  aria-label="Open in new tab"
-                >
-                  <span className="material-icons text-base">open_in_new</span>
-                </a>
-                <button
-                  onClick={() => remove(l.id)}
-                  className="shrink-0 text-ink/20 hover:text-rust transition-colors"
-                  aria-label="Remove"
-                >
-                  <span className="material-icons text-base">delete</span>
-                </button>
-              </div>
-            ))
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext items={links.map((l) => l.id)} strategy={verticalListSortingStrategy}>
+                {links.map((l) => (
+                  <SortableLinkRow key={l.id} link={l} onRemove={remove} />
+                ))}
+              </SortableContext>
+            </DndContext>
           )}
         </div>
       </SheetContent>
