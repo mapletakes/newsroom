@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  typecheck-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # No package-lock.json is committed yet, so `npm ci` isn't usable here —
+      # falls back to `npm install`. Once a lockfile is added, switch this to
+      # `npm ci` for faster, reproducible installs.
+      - name: Install dependencies
+        run: npm install
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      # `next lint` isn't wired in yet — there's no ESLint config or
+      # dependency committed in this repo, so it would try to interactively
+      # bootstrap one on first run (which hangs/fails non-interactively in
+      # CI). Add an ESLint config as a follow-up, then re-enable this step.
+      # - name: Lint
+      #   run: npm run lint
