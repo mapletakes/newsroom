@@ -10,3 +10,6 @@ out/
 next-env.d.ts
 .claude/
 tsconfig.tsbuildinfo
+
+# Regeneratable Chrome Web Store submission package (see extension/STORE_LISTING.md)
+extension/*.zip
