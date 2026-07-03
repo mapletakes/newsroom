@@ -642,24 +642,46 @@ export function DeckView({
     setTakeaway('');
   };
 
-  const removeFromQueue = async (id: string) => {
+  // Removes instantly, but the actual reject write is delayed 5s behind an
+  // Undo toast — during a live show this is faster than a confirm dialog and
+  // makes the Del-key shortcut harmless if it's hit by accident.
+  const removeFromQueue = (id: string) => {
+    const removed = queue.find((s) => s.id === id);
+    if (!removed) return;
     setQueue((prev) => prev.filter((s) => s.id !== id));
-    await reconcileAfterWrites(fetch('/api/queue', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, status: 'rejected' }),
-    }));
+
+    let undone = false;
+    const timer = setTimeout(() => {
+      if (undone) return;
+      reconcileAfterWrites(fetch('/api/queue', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status: 'rejected' }),
+      }));
+    }, 5000);
+
+    toast('Removed from deck', {
+      duration: 5000,
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          undone = true;
+          clearTimeout(timer);
+          setQueue((prev) => [removed, ...prev]);
+        },
+      },
+    });
   };
 
   // Remove the active item entirely (without marking it played) and advance.
-  const rejectActive = async () => {
+  const rejectActive = () => {
     if (!active) return;
     const removedId = active.id;
     const next = nextAfterActive();
     setActiveId(next?.id || null);
     setStartedAt(next ? Date.now() : null);
     setTakeaway('');
-    await removeFromQueue(removedId);
+    removeFromQueue(removedId);
   };
 
   // Keyboard controls: ↑/↓ move the selection, Delete/Backspace trash it.
