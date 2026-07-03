@@ -393,24 +393,12 @@ export function DeckView({
     }
   }, []);
 
-  // While the user is actively editing (reorder/move/delete), hold off the
-  // realtime + poll refetches so optimistic updates aren't clobbered mid-burst,
-  // then reconcile with the server once, after things settle. Each edit pushes
-  // the window forward and reschedules the single reconcile.
+  // While the user is actively editing, hold off the realtime + poll refetches
+  // so optimistic updates aren't clobbered, then reconcile with the server once
+  // all in-flight writes resolve. Reconciling AFTER the writes (rather than on a
+  // fixed timer) means the refetch never reads pre-write state — that stale read
+  // was the cause of items flashing back in/out on played/remove/reorder.
   const reconcileTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const holdAndReconcile = useCallback((ms = 1500) => {
-    suppressRefreshUntil.current = Date.now() + ms;
-    if (reconcileTimer.current) clearTimeout(reconcileTimer.current);
-    reconcileTimer.current = setTimeout(() => {
-      suppressRefreshUntil.current = 0;
-      refresh();
-    }, ms);
-  }, [refresh]);
-
-  // Reconcile only AFTER all in-flight edit writes resolve, so the refetch
-  // never reads pre-write state and clobbers the optimistic/pending order —
-  // the cause of the "wrong for a few seconds" flash when a write is slow.
-  // (holdAndReconcile's fixed timer could fire before the write landed.)
   const inflightWrites = useRef(0);
   const reconcileAfterWrites = useCallback(<T,>(p: Promise<T>): Promise<T> => {
     inflightWrites.current += 1;
@@ -627,8 +615,7 @@ export function DeckView({
     setStartedAt(next ? Date.now() : null);
     setTakeaway('');
     setQueue((prev) => prev.filter((s) => s.id !== playedId)); // optimistic
-    holdAndReconcile();
-    await fetch('/api/queue', {
+    await reconcileAfterWrites(fetch('/api/queue', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -637,7 +624,7 @@ export function DeckView({
         takeaway: tk,
         duration_on_screen_s: duration,
       }),
-    });
+    }));
   };
 
   const skip = async () => {
@@ -650,12 +637,11 @@ export function DeckView({
 
   const removeFromQueue = async (id: string) => {
     setQueue((prev) => prev.filter((s) => s.id !== id));
-    holdAndReconcile();
-    await fetch('/api/queue', {
+    await reconcileAfterWrites(fetch('/api/queue', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, status: 'rejected' }),
-    });
+    }));
   };
 
   // Remove the active item entirely (without marking it played) and advance.
@@ -772,23 +758,21 @@ export function DeckView({
     const seg = segments.find((s) => s.id === id);
     editingSegmentRef.current = null;
     if (!seg) return;
-    holdAndReconcile();
-    await fetch('/api/segments', {
+    await reconcileAfterWrites(fetch('/api/segments', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, name: seg.name }),
-    });
+    }));
   };
 
   const toggleCollapse = async (seg: Segment) => {
     const collapsed = !seg.collapsed;
     setSegments((prev) => prev.map((s) => (s.id === seg.id ? { ...s, collapsed } : s)));
-    holdAndReconcile();
-    await fetch('/api/segments', {
+    await reconcileAfterWrites(fetch('/api/segments', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: seg.id, collapsed }),
-    });
+    }));
   };
 
   // Persist a new block order (ungrouped + segments) after a drag.
@@ -836,12 +820,11 @@ export function DeckView({
     }))) return;
     // Optimistic: drop them from the deck immediately.
     setQueue((prev) => prev.filter((s) => !inBlock(s)));
-    holdAndReconcile();
-    await fetch('/api/deck/clear-block', {
+    await reconcileAfterWrites(fetch('/api/deck/clear-block', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ containerId }),
-    });
+    }));
   };
 
   // Move one or more items into a block and set that block's full order. Used
