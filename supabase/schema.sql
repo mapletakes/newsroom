@@ -142,6 +142,15 @@ create table if not exists public.show_notes (
 create index if not exists show_notes_stream_idx
   on public.show_notes(stream_id, played_at);
 
+-- Processed EventSub messages: idempotency guard so each Twitch chat message is
+-- ingested exactly once, even if Twitch retries the webhook (slow handler) or a
+-- duplicate subscription delivers it again. Keyed on the chat message id.
+create table if not exists public.processed_events (
+  id text primary key,
+  created_at timestamptz default now()
+);
+create index if not exists processed_events_created_idx on public.processed_events(created_at);
+
 -- Usage events: one row per metered/paid operation (AI enrichment, coverage
 -- search, extraction). Used to understand per-stream cost and volume — purely
 -- observational, written best-effort and never on the critical path.
@@ -169,6 +178,7 @@ alter table public.moderators enable row level security;
 alter table public.segments enable row level security;
 alter table public.quick_links enable row level security;
 alter table public.usage_events enable row level security;
+alter table public.processed_events enable row level security;
 alter table public.submissions enable row level security;
 alter table public.show_notes enable row level security;
 

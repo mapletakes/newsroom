@@ -62,12 +62,29 @@ export async function POST(req: NextRequest) {
   const event = body.event;
   if (!event) return new NextResponse(null, { status: 204 });
 
+  const sb = supabaseAdmin();
+
+  // Idempotency: ingest each chat message exactly once, even if Twitch retries
+  // the webhook (slow handler) or a duplicate subscription delivers it again.
+  // event.message_id is stable across every delivery of the same chat message,
+  // so it dedups both cases while leaving allow_duplicates (separate messages
+  // posting the same URL) intact.
+  const eventId: string = event.message_id || msgId;
+  if (eventId) {
+    const { error: seenErr } = await sb.from('processed_events').insert({ id: eventId });
+    if (seenErr) {
+      // 23505 = unique violation = already handled this message → drop it.
+      if (seenErr.code === '23505') return new NextResponse(null, { status: 204 });
+      // Any other error (e.g. table not migrated yet) must not block ingestion.
+      console.warn('processed_events insert failed (run migration?):', seenErr.message);
+    }
+  }
+
   const broadcasterUserId = event.broadcaster_user_id;
   const chatterName = event.chatter_user_name || event.chatter_user_login || 'anon';
   const messageText = event.message?.text || '';
 
   // Look up stream
-  const sb = supabaseAdmin();
   const { data: stream } = await sb
     .from('streams')
     .select('id, submit_command, allow_anyone, ignored_users, approved')
