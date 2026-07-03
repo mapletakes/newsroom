@@ -382,6 +382,15 @@ export function DeckView({
       fetch('/api/queue?status=approved'),
       fetch('/api/segments'),
     ]);
+    // Re-check: an edit (e.g. toggling a segment's collapsed state) may have
+    // started its own suppression window WHILE these fetches were in flight,
+    // which means this response now predates that edit. Applying it would
+    // clobber the fresh optimistic state with stale data — the item-order
+    // case is shielded from this by pendingOrder, but segment fields
+    // (collapsed, position) aren't, which is why toggling collapse could
+    // flash back to the old state before correcting itself. Discard; the
+    // edit's own reconcileAfterWrites will do the real refresh once it settles.
+    if (Date.now() < suppressRefreshUntil.current) return;
     if (qr.ok) {
       const data = await qr.json();
       setQueue(data.submissions || []);
