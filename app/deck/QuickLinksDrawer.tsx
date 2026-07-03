@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
+import { Sheet, SheetClose, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 
 type QuickLink = { id: string; label: string; url: string; position: number };
 
@@ -16,7 +17,6 @@ const host = (u: string) => {
 // A streamer's personal "on-hand" links (fossabot, fundraisers, etc.), in a
 // popout drawer that overlays the deck. Entirely separate from the queue.
 export function QuickLinksDrawer() {
-  const [open, setOpen] = useState(false);
   const [links, setLinks] = useState<QuickLink[]>([]);
   const [label, setLabel] = useState('');
   const [url, setUrl] = useState('');
@@ -33,16 +33,6 @@ export function QuickLinksDrawer() {
   useEffect(() => {
     load();
   }, [load]);
-
-  // Esc closes the drawer.
-  useEffect(() => {
-    if (!open) return;
-    const h = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
-  }, [open]);
 
   const add = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,46 +69,30 @@ export function QuickLinksDrawer() {
   };
 
   return (
-    <>
+    <Sheet>
       {/* Left-edge launcher tab — always reachable while running the show. */}
-      <button
-        onClick={() => setOpen(true)}
-        className="fixed left-0 top-20 z-30 flex flex-col items-center gap-1.5 bg-ink text-paper px-1.5 py-3 rounded-r-sm shadow-lg hover:bg-rust transition-colors"
-        aria-label="Open on-hand links"
-        title="On-hand links"
-      >
-        <span className="material-icons text-lg">bookmarks</span>
-        <span className="[writing-mode:vertical-rl] font-mono text-[10px] uppercase tracking-widest">
-          Links
-        </span>
-      </button>
+      <SheetTrigger asChild>
+        <button
+          className="fixed left-0 top-20 z-30 flex flex-col items-center gap-1.5 bg-ink text-paper px-1.5 py-3 rounded-r-sm shadow-lg hover:bg-rust transition-colors"
+          aria-label="Open on-hand links"
+          title="On-hand links"
+        >
+          <span className="material-icons text-lg">bookmarks</span>
+          <span className="[writing-mode:vertical-rl] font-mono text-[10px] uppercase tracking-widest">
+            Links
+          </span>
+        </button>
+      </SheetTrigger>
 
-      {/* Backdrop */}
-      {open && (
-        <div
-          className="fixed inset-0 bg-ink/40 z-40"
-          onClick={() => setOpen(false)}
-          aria-hidden
-        />
-      )}
-
-      {/* Drawer */}
-      <aside
-        className={`fixed left-0 top-0 bottom-0 w-80 max-w-[85vw] bg-paper border-r-2 border-ink z-50 flex flex-col shadow-2xl transition-transform duration-200 ${
-          open ? 'translate-x-0' : '-translate-x-full'
-        }`}
-        aria-hidden={!open}
-      >
+      <SheetContent side="left">
         <div className="flex items-center gap-2 border-b-2 border-ink px-4 py-3">
           <span className="material-icons text-ink">bookmarks</span>
-          <h2 className="font-display text-xl font-black">On-hand links</h2>
-          <button
-            onClick={() => setOpen(false)}
-            className="ml-auto text-ink/50 hover:text-rust"
-            aria-label="Close"
-          >
-            <span className="material-icons">close</span>
-          </button>
+          <SheetTitle>On-hand links</SheetTitle>
+          <SheetClose asChild>
+            <button className="ml-auto text-ink/50 hover:text-rust" aria-label="Close">
+              <span className="material-icons">close</span>
+            </button>
+          </SheetClose>
         </div>
 
         <form onSubmit={add} className="border-b border-ink/20 p-4 space-y-2">
@@ -188,7 +162,7 @@ export function QuickLinksDrawer() {
             ))
           )}
         </div>
-      </aside>
-    </>
+      </SheetContent>
+    </Sheet>
   );
 }
