@@ -14,6 +14,7 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { Input, Textarea } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Card } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import {
@@ -343,6 +344,9 @@ export function DeckView({
 }) {
   const [queue, setQueue] = useState<Submission[]>([]);
   const [segments, setSegments] = useState<Segment[]>([]);
+  // True once the first fetch resolves — distinguishes "still loading" from
+  // "genuinely empty" so the deck doesn't flash a false empty state on load.
+  const [loaded, setLoaded] = useState(false);
   const [ungroupedPosition, setUngroupedPosition] = useState(0);
   const [ungroupedCollapsed, setUngroupedCollapsed] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -393,6 +397,7 @@ export function DeckView({
       });
       if (typeof data.ungroupedPosition === 'number') setUngroupedPosition(data.ungroupedPosition);
     }
+    setLoaded(true);
   }, []);
 
   // While the user is actively editing, hold off the realtime + poll refetches
@@ -1090,7 +1095,19 @@ export function DeckView({
       <main className="flex-1 grid lg:grid-cols-2 gap-0 pl-3">
         {/* Active card */}
         <section className="p-8 border-r border-ink/20">
-          {!active && (
+          {!loaded ? (
+            <div>
+              <div className="flex gap-2 mb-4">
+                <Skeleton className="h-6 w-24" />
+                <Skeleton className="h-6 w-20" />
+              </div>
+              <Skeleton className="h-9 w-full mb-2" />
+              <Skeleton className="h-9 w-2/3 mb-6" />
+              <Skeleton className="h-4 w-full mb-2" />
+              <Skeleton className="h-4 w-full mb-2" />
+              <Skeleton className="h-4 w-3/4" />
+            </div>
+          ) : !active ? (
             <div className="text-center py-24">
               <p className="font-display text-3xl mb-3">No approved items yet.</p>
               <p className="text-ink/60 font-mono text-sm mb-6">
@@ -1101,7 +1118,7 @@ export function DeckView({
                 , or add links directly from the sidebar.
               </p>
             </div>
-          )}
+          ) : null}
           {active && (
             <article>
               <div className="flex items-center gap-2 mb-3 flex-wrap font-mono text-xs uppercase tracking-widest">

@@ -11,6 +11,7 @@ import { Wordmark } from '@/components/ui/wordmark';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Skeleton } from '@/components/ui/skeleton';
 import { formatDuration, sanitizeShareUrl } from '@/lib/url';
 
 const STATUS_KEYS = ['pending', 'approved', 'played', 'rejected'] as const;
@@ -48,6 +49,9 @@ export function ModView({
     rejected: 0,
     total: 0,
   });
+  // True once the first fetch resolves — distinguishes "still loading" from
+  // "genuinely empty" so the queue doesn't flash a false empty state on load.
+  const [loaded, setLoaded] = useState(false);
 
   const refresh = useCallback(async () => {
     const r = await fetch(`/api/queue?status=${filter}`);
@@ -57,6 +61,7 @@ export function ModView({
       setNowPlaying(data.nowPlaying || null);
       if (data.counts) setCounts(data.counts);
     }
+    setLoaded(true);
   }, [filter]);
 
   useEffect(() => { refresh(); }, [refresh]);
@@ -244,6 +249,22 @@ export function ModView({
 
       {/* List */}
       <main className="px-6 py-6 max-w-5xl mx-auto w-full">
+        {!loaded ? (
+          <div className="space-y-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="card-paper p-4 flex gap-4">
+                <Skeleton className="w-40 h-24 shrink-0" />
+                <div className="flex-1 min-w-0 space-y-2">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-6 w-3/4" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-5/6" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
         {submissions.length === 0 && (
           <div className="text-center py-24">
             <p className="font-display text-2xl mb-2">
@@ -305,6 +326,8 @@ export function ModView({
             />
           ))}
         </div>
+          </>
+        )}
       </main>
     </div>
   );
