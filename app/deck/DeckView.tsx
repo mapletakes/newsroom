@@ -4,12 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { Submission } from '@/components/SubmissionCard';
 import { extractYouTubeId, formatDuration, formatDate, kindTint, kindCategory, type KindCategory } from '@/lib/url';
-import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { ArchiveButton } from '@/components/ArchiveButton';
 import { QuickLinksDrawer } from './QuickLinksDrawer';
 import { ChatStatusBanner } from './ChatStatusBanner';
 import { GettingStarted } from './GettingStarted';
-import { Wordmark } from '@/components/ui/wordmark';
+import { AppHeader } from '@/components/AppHeader';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input, Textarea } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -1088,35 +1087,34 @@ export function DeckView({
     <div className="min-h-screen flex flex-col">
       {!curateOnly && <QuickLinksDrawer />}
       {confirmDialog}
-      <header className="sticky top-0 z-20 bg-paper border-b-2 border-ink pl-10 pr-6 py-3 flex items-center gap-6 flex-wrap">
-        <Wordmark />
-        <span className="font-mono text-xs uppercase tracking-widest text-ink/60">
-          / {curateOnly ? 'curating deck' : 'streamer deck'}
-        </span>
-        <div className="ml-auto flex items-center gap-4 font-mono text-xs">
-          <span className="uppercase tracking-widest">{queue.length} approved</span>
-          <Link href="/mod" className="underline hover:text-rust">
-            Mod View &rarr;
-          </Link>
-          {!curateOnly && (
-            <a href="/api/notes?format=markdown&commit=1" className="underline hover:text-rust">
-              Export Notes
-            </a>
-          )}
-          {!curateOnly && (
-            <Link href="/setup" className="underline hover:text-rust">
-              Settings
+      <AppHeader
+        className="sticky top-0 z-20 bg-paper border-b-2 border-ink pl-10 pr-6 py-3 gap-6"
+        section={curateOnly ? 'curating deck' : 'streamer deck'}
+        right={
+          <>
+            <span className="uppercase tracking-widest">{queue.length} approved</span>
+            <Link href="/mod" className="underline hover:text-rust">
+              Mod View &rarr;
             </Link>
-          )}
-          {isAdmin && (
-            <Link href="/admin" className="underline hover:text-rust">
-              Admin
-            </Link>
-          )}
-          <span>{displayName}</span>
-          <DarkModeToggle />
-        </div>
-      </header>
+            {!curateOnly && (
+              <a href="/api/notes?format=markdown&commit=1" className="underline hover:text-rust">
+                Export Notes
+              </a>
+            )}
+            {!curateOnly && (
+              <Link href="/setup" className="underline hover:text-rust">
+                Settings
+              </Link>
+            )}
+            {isAdmin && (
+              <Link href="/admin" className="underline hover:text-rust">
+                Admin
+              </Link>
+            )}
+            <span>{displayName}</span>
+          </>
+        }
+      />
       {!curateOnly && <ChatStatusBanner />}
 
       <main className="flex-1 grid lg:grid-cols-2 gap-0 pl-3">

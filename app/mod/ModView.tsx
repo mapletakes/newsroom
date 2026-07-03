@@ -3,11 +3,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { SubmissionCard, type Submission } from '@/components/SubmissionCard';
-import { DarkModeToggle } from '@/components/DarkModeToggle';
+import { AppHeader } from '@/components/AppHeader';
 import { useQueueRealtime } from '@/lib/use-queue-realtime';
 import { useVisiblePoll } from '@/lib/use-visible-poll';
 import { useConfirm } from '@/components/ui/confirm-dialog';
-import { Wordmark } from '@/components/ui/wordmark';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -155,21 +154,20 @@ export function ModView({
     <div className="min-h-screen flex flex-col">
       {confirmDialog}
       {/* Bar */}
-      <header className="border-b-2 border-ink px-6 py-3 flex items-center gap-6 flex-wrap">
-        <Wordmark />
-        <span className="font-mono text-xs uppercase tracking-widest text-ink/60">
-          / mod triage{isMod && <> · {streamDisplayName}</>}
-        </span>
-        <div className="ml-auto flex items-center gap-4 font-mono text-xs">
-          <span className="uppercase tracking-widest">#{channel}</span>
-          <Link href="/choose" className="underline hover:text-rust">Switch Channel</Link>
-          {!isMod && <Link href="/deck" className="underline hover:text-rust">Streamer Deck →</Link>}
-          {isMod && canCurate && <Link href="/deck" className="underline hover:text-rust">Curate Deck →</Link>}
-          {!isMod && <Link href="/setup" className="underline hover:text-rust">Settings</Link>}
-          {isAdmin && <Link href="/admin" className="underline hover:text-rust">Admin</Link>}
-          <DarkModeToggle />
-        </div>
-      </header>
+      <AppHeader
+        className="border-b-2 border-ink px-6 py-3 gap-6"
+        section={<>mod triage{isMod && <> · {streamDisplayName}</>}</>}
+        right={
+          <>
+            <span className="uppercase tracking-widest">#{channel}</span>
+            <Link href="/choose" className="underline hover:text-rust">Switch Channel</Link>
+            {!isMod && <Link href="/deck" className="underline hover:text-rust">Streamer Deck →</Link>}
+            {isMod && canCurate && <Link href="/deck" className="underline hover:text-rust">Curate Deck →</Link>}
+            {!isMod && <Link href="/setup" className="underline hover:text-rust">Settings</Link>}
+            {isAdmin && <Link href="/admin" className="underline hover:text-rust">Admin</Link>}
+          </>
+        }
+      />
 
       {/* On air — what the streamer is currently showing on the deck */}
       <div className="px-6 py-2 bg-rust/10 border-b border-rust/30 flex items-center gap-3 flex-wrap min-h-[2.75rem]">

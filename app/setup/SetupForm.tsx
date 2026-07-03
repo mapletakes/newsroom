@@ -2,9 +2,8 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { DarkModeToggle } from '@/components/DarkModeToggle';
+import { AppHeader } from '@/components/AppHeader';
 import { useConfirm } from '@/components/ui/confirm-dialog';
-import { Wordmark } from '@/components/ui/wordmark';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useEventSubStatus } from '@/lib/use-eventsub-status';
@@ -63,16 +62,17 @@ export function SetupForm({
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="border-b-2 border-ink px-6 py-3 flex items-center gap-6 flex-wrap">
-        <Wordmark />
-        <span className="font-mono text-xs uppercase tracking-widest text-ink/60">/ settings</span>
-        <div className="ml-auto flex items-center gap-4 font-mono text-xs">
-          <Link href="/deck" className="underline hover:text-rust">Streamer Deck</Link>
-          <Link href="/mod" className="underline hover:text-rust">Mod View</Link>
-          {isAdmin && <Link href="/admin" className="underline hover:text-rust">Admin</Link>}
-          <DarkModeToggle />
-        </div>
-      </header>
+      <AppHeader
+        className="border-b-2 border-ink px-6 py-3 gap-6"
+        section="settings"
+        right={
+          <>
+            <Link href="/deck" className="underline hover:text-rust">Streamer Deck</Link>
+            <Link href="/mod" className="underline hover:text-rust">Mod View</Link>
+            {isAdmin && <Link href="/admin" className="underline hover:text-rust">Admin</Link>}
+          </>
+        }
+      />
 
       <main className="px-6 py-10 max-w-2xl mx-auto w-full">
       <h1 className="font-display text-4xl font-bold mb-2">Settings</h1>

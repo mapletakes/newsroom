@@ -4,8 +4,7 @@ import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase';
 import { isAdmin, estimateCost } from '@/lib/admin';
 import { listSubscriptions } from '@/lib/twitch-eventsub';
-import { DarkModeToggle } from '@/components/DarkModeToggle';
-import { Wordmark } from '@/components/ui/wordmark';
+import { AppHeader } from '@/components/AppHeader';
 import { AdminChannels, type ChannelRow } from './AdminChannels';
 
 export const dynamic = 'force-dynamic';
@@ -82,14 +81,15 @@ export default async function AdminPage({
 
   return (
     <div className="min-h-screen px-6 py-10 max-w-6xl mx-auto">
-      <header className="mb-8 flex items-center gap-3 flex-wrap">
-        <Wordmark />
-        <span className="font-mono text-xs uppercase tracking-widest text-ink/60">/ admin</span>
-        <div className="ml-auto flex items-center gap-4 font-mono text-xs text-ink/60">
-          <span>{rows.length} channels · {activeChannels} listening · ~${totalCost.toFixed(2)} est.</span>
-          <DarkModeToggle />
-        </div>
-      </header>
+      <AppHeader
+        className="mb-8 gap-3"
+        section="admin"
+        right={
+          <span className="text-ink/60">
+            {rows.length} channels · {activeChannels} listening · ~${totalCost.toFixed(2)} est.
+          </span>
+        }
+      />
 
       <h1 className="font-display text-4xl font-bold mb-2">Channels</h1>
       <div className="flex items-center gap-1 mb-3 font-mono text-xs uppercase tracking-widest">
