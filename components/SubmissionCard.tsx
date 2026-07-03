@@ -3,6 +3,7 @@
 import { formatDuration, formatDate, formatDateTime, relativeTime, kindTint } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { Card } from './ui/card';
+import { SimpleTooltip } from './ui/tooltip';
 import { ArchiveButton } from './ArchiveButton';
 
 type Submission = {
@@ -105,12 +106,11 @@ export function SubmissionCard({
             </span>
           )}
           {s.content_warning && (
-            <span
-              className="font-mono text-xs uppercase tracking-widest bg-rust text-paper px-1.5 py-0.5"
-              title={s.content_warning}
-            >
-              ⚠ Content warning
-            </span>
+            <SimpleTooltip content={s.content_warning}>
+              <span className="font-mono text-xs uppercase tracking-widest bg-rust text-paper px-1.5 py-0.5 cursor-default">
+                ⚠ Content warning
+              </span>
+            </SimpleTooltip>
           )}
         </div>
         <h3 className={`font-display ${compact ? 'text-lg' : 'text-xl'} font-bold leading-tight mb-1`}>

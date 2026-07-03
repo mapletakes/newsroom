@@ -15,6 +15,7 @@ import { Input, Textarea } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SimpleTooltip } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import {
@@ -129,7 +130,9 @@ function SortableQueueItem({
                 {s.published_at ? ` · ${formatDate(s.published_at)}` : ''}
                 {s.dmca_risk === 'high' && <span className="text-rust ml-1">⚠</span>}
                 {s.content_warning && (
-                  <span className="text-rust font-bold ml-1" title={s.content_warning}>⚠ CW</span>
+                  <SimpleTooltip content={s.content_warning}>
+                    <span className="text-rust font-bold ml-1 cursor-default">⚠ CW</span>
+                  </SimpleTooltip>
                 )}
               </div>
               <div className="font-display text-lg font-bold leading-tight line-clamp-2">
@@ -278,14 +281,15 @@ function SegmentBlock({
             ({items.length}{totalSeconds > 0 ? ` · ${formatDuration(totalSeconds)}` : ''})
           </span>
           {onClearItems && items.length > 0 && (
-            <button
-              onClick={onClearItems}
-              className="shrink-0 w-5 flex items-center justify-center text-ink/30 hover:text-rust"
-              aria-label="Reject all items in this block"
-              title="Reject all items here (clears the block)"
-            >
-              <span className="material-icons text-sm">playlist_remove</span>
-            </button>
+            <SimpleTooltip content="Reject all items here (clears the block)">
+              <button
+                onClick={onClearItems}
+                className="shrink-0 w-5 flex items-center justify-center text-ink/30 hover:text-rust"
+                aria-label="Reject all items in this block"
+              >
+                <span className="material-icons text-sm">playlist_remove</span>
+              </button>
+            </SimpleTooltip>
           )}
           {onDelete && (
             <button onClick={onDelete} className="shrink-0 w-5 flex items-center justify-center text-ink/30 hover:text-rust" aria-label="Delete segment">
@@ -1162,9 +1166,11 @@ export function DeckView({
                   </span>
                 )}
                 {active.content_warning && (
-                  <span className="bg-rust text-paper px-2 py-1" title={active.content_warning}>
-                    ⚠ Content warning
-                  </span>
+                  <SimpleTooltip content={active.content_warning}>
+                    <span className="bg-rust text-paper px-2 py-1 cursor-default">
+                      ⚠ Content warning
+                    </span>
+                  </SimpleTooltip>
                 )}
                 {active.publisher && <span className="text-ink/60">· {active.publisher}</span>}
                 {active.published_at && <span className="text-ink/60">· {formatDate(active.published_at)}</span>}
