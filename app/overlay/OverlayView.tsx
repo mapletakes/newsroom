@@ -30,7 +30,12 @@ export function OverlayView({
   const refresh = useCallback(async () => {
     if (!token) return;
     try {
-      const r = await fetch(`/api/deck/overlay?token=${encodeURIComponent(token)}`);
+      // no-store: this is a same-URL GET polled repeatedly, and the server
+      // already sends Cache-Control: no-store — belt-and-suspenders so the
+      // embedding browser's own HTTP cache can't serve a stale copy either.
+      const r = await fetch(`/api/deck/overlay?token=${encodeURIComponent(token)}`, {
+        cache: 'no-store',
+      });
       if (r.status === 401 || r.status === 400) {
         setInvalid(true);
         setNowPlaying(null);
@@ -50,12 +55,15 @@ export function OverlayView({
     refresh();
   }, [refresh]);
 
-  // Realtime pings when the deck changes (including now-playing switches),
-  // with a slow interval as the fallback. OBS's embedded browser always
-  // reports itself visible, so a plain interval is fine here.
+  // Realtime pings when the deck changes (including now-playing switches) are
+  // the primary path; this interval is just a safety net in case OBS's
+  // embedded browser ever drops the WebSocket subscription silently (a real
+  // risk in an embedded/sandboxed context — see the CHANNEL_ERROR/TIMED_OUT
+  // logging in useQueueRealtime). Kept fairly quick since the request is
+  // small and explicitly uncached either way.
   useQueueRealtime(streamId, refresh);
   useEffect(() => {
-    const id = setInterval(refresh, 60000);
+    const id = setInterval(refresh, 8000);
     return () => clearInterval(id);
   }, [refresh]);
 

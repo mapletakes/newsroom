@@ -37,7 +37,15 @@ export function useQueueRealtime(streamId: string | null, onChange: () => void) 
     const channel = sb
       .channel(`queue:${streamId}`)
       .on('broadcast', { event: 'changed' }, () => cb.current())
-      .subscribe();
+      .subscribe((status) => {
+        // Visibility for embedded/sandboxed contexts (e.g. OBS's browser
+        // source) where a WebSocket subscription can silently fail to
+        // connect or drop without erroring — previously undetectable short
+        // of waiting out a fallback poll.
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          console.warn(`Realtime channel queue:${streamId} — ${status}`);
+        }
+      });
 
     return () => {
       sb.removeChannel(channel);
