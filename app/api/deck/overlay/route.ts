@@ -31,11 +31,13 @@ export async function GET(req: NextRequest) {
 
   const { data: np } = await sb
     .from('submissions')
-    .select('title, url, kind, publisher, credibility_tag, duration_seconds')
+    .select('title, url, kind, publisher, duration_seconds')
     .eq('id', stream.now_playing_id)
     .eq('stream_id', stream.id)
     .maybeSingle();
 
+  // No credibility/leaning tag in the payload: that's a streamer/mod triage
+  // aid, not something the viewer-facing overlay should display.
   return NextResponse.json({
     ok: true,
     streamId: stream.id,
@@ -44,7 +46,6 @@ export async function GET(req: NextRequest) {
           title: np.title || np.url,
           kind: np.kind,
           publisher: np.publisher,
-          credibility: np.credibility_tag,
           durationSeconds: np.duration_seconds,
         }
       : null,

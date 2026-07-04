@@ -8,7 +8,6 @@ type NowPlaying = {
   title: string;
   kind: string;
   publisher: string | null;
-  credibility: string | null;
   durationSeconds: number | null;
 };
 
@@ -76,11 +75,12 @@ export function OverlayView({
 
   if (!nowPlaying) return null;
 
+  // Deliberately no credibility/leaning tag here: it's a triage aid for the
+  // streamer and mods, not something to put on stream in front of viewers.
   const meta = [
     nowPlaying.publisher,
     nowPlaying.kind.replace('_', ' '),
     nowPlaying.durationSeconds ? formatDuration(nowPlaying.durationSeconds) : null,
-    nowPlaying.credibility,
   ]
     .filter(Boolean)
     .join(' · ');
