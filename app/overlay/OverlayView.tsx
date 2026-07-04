@@ -16,12 +16,16 @@ type NowPlaying = {
 // as a slim OBS browser source. Disappears entirely between items.
 // `theme` forces one of the app palettes via a .theme-* scope class (see
 // globals.css); null follows the embedding browser's system preference.
+// `showBrand` toggles the small "The Broadside" mark — some streamers don't
+// want it on their own on-air graphic.
 export function OverlayView({
   token,
   theme,
+  showBrand,
 }: {
   token: string;
   theme: 'light' | 'dark' | 'sepia' | 'contrast' | null;
+  showBrand: boolean;
 }) {
   const [streamId, setStreamId] = useState<string | null>(null);
   const [nowPlaying, setNowPlaying] = useState<NowPlaying | null>(null);
@@ -102,9 +106,11 @@ export function OverlayView({
           <span className="inline-block w-2 h-2 rounded-full bg-rust live-dot" />
           On air
         </span>
-        <span className="font-mono text-[8px] uppercase tracking-widest text-ink/40">
-          The Broadside
-        </span>
+        {showBrand && (
+          <span className="font-mono text-[8px] uppercase tracking-widest text-ink/40">
+            The Broadside
+          </span>
+        )}
       </div>
       <div className="shrink-0 w-px self-stretch my-3 bg-ink/20" />
       <div className="min-w-0 flex-1">

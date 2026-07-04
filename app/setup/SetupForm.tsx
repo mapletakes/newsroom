@@ -351,6 +351,7 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
   const [overlayCopied, setOverlayCopied] = useState(false);
   // 'system' = no theme param; the overlay follows the embedding browser.
   const [overlayTheme, setOverlayTheme] = useState('system');
+  const [overlayBrand, setOverlayBrand] = useState(true);
   const linkRef = useRef<HTMLAnchorElement>(null);
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -358,7 +359,7 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
     ? `javascript:(function(){window.open('${origin}/quick-add?token=${token}&url='+encodeURIComponent(location.href),'nr_add','width=440,height=280');})();`
     : '';
   const overlayUrl = token
-    ? `${origin}/overlay?token=${token}${overlayTheme === 'system' ? '' : `&theme=${overlayTheme}`}`
+    ? `${origin}/overlay?token=${token}${overlayTheme === 'system' ? '' : `&theme=${overlayTheme}`}${overlayBrand ? '' : '&brand=0'}`
     : '';
 
   // React blocks javascript: hrefs, so set it on the DOM node directly.
@@ -505,6 +506,14 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
+            <label className="flex items-center gap-2 mb-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={overlayBrand}
+                onChange={(e) => setOverlayBrand(e.target.checked)}
+              />
+              <span className="font-mono text-xs">Show &ldquo;The Broadside&rdquo; mark on the card</span>
+            </label>
             <div className="flex gap-1 items-center">
               <Input
                 readOnly
@@ -520,8 +529,9 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
             <p className="text-xs text-ink/50 mt-2">
               Add this as a <strong>Browser Source</strong> in OBS (about 800×100). It shows the
               story you&apos;re reacting to as an on-air lower third — headline, outlet, and type —
-              and disappears between items. The theme is baked into the URL (an OBS source has no
-              UI to change it later); System follows the embedding browser, which in OBS means light.
+              and disappears between items. The theme and mark visibility are both baked into the
+              URL (an OBS source has no UI to change them later); System follows the embedding
+              browser, which in OBS means light.
             </p>
           </div>
         </div>
