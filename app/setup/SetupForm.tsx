@@ -347,12 +347,14 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [tokenCopied, setTokenCopied] = useState(false);
+  const [overlayCopied, setOverlayCopied] = useState(false);
   const linkRef = useRef<HTMLAnchorElement>(null);
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const bookmarklet = token
     ? `javascript:(function(){window.open('${origin}/quick-add?token=${token}&url='+encodeURIComponent(location.href),'nr_add','width=440,height=280');})();`
     : '';
+  const overlayUrl = token ? `${origin}/overlay?token=${token}` : '';
 
   // React blocks javascript: hrefs, so set it on the DOM node directly.
   useEffect(() => {
@@ -364,7 +366,7 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
   const generate = async () => {
     if (token && !(await confirm({
       title: 'Regenerate add token?',
-      description: 'Your existing bookmarklet and extension will stop working until you replace the token.',
+      description: 'Your existing bookmarklet, extension, and OBS overlay URL will stop working until you replace the token.',
       confirmText: 'Regenerate',
       destructive: true,
     }))) return;
@@ -385,6 +387,17 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
       await navigator.clipboard.writeText(bookmarklet);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard unavailable */
+    }
+  };
+
+  const copyOverlay = async () => {
+    if (!overlayUrl) return;
+    try {
+      await navigator.clipboard.writeText(overlayUrl);
+      setOverlayCopied(true);
+      setTimeout(() => setOverlayCopied(false), 1500);
     } catch {
       /* clipboard unavailable */
     }
@@ -462,6 +475,29 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
                 {busy ? '…' : 'Regenerate'}
               </Button>
             </div>
+          </div>
+
+          <div>
+            <p className="font-mono text-xs uppercase tracking-widest text-ink/60 mb-2">
+              OBS overlay (browser source)
+            </p>
+            <div className="flex gap-1 items-center">
+              <Input
+                readOnly
+                value={overlayUrl}
+                onFocus={(e) => e.currentTarget.select()}
+                className="flex-1 min-w-0 text-xs bg-ink/10 border-ink/20"
+                aria-label="Overlay URL"
+              />
+              <Button type="button" size="sm" className="shrink-0" onClick={copyOverlay}>
+                {overlayCopied ? 'Copied!' : 'Copy'}
+              </Button>
+            </div>
+            <p className="text-xs text-ink/50 mt-2">
+              Add this as a <strong>Browser Source</strong> in OBS (about 800×100). It shows the
+              story you&apos;re reacting to as an on-air lower third — headline, outlet, and type —
+              and disappears between items.
+            </p>
           </div>
         </div>
       )}
