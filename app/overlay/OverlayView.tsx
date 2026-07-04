@@ -56,14 +56,14 @@ export function OverlayView({
   }, [refresh]);
 
   // Realtime pings when the deck changes (including now-playing switches) are
-  // the primary path; this interval is just a safety net in case OBS's
-  // embedded browser ever drops the WebSocket subscription silently (a real
-  // risk in an embedded/sandboxed context — see the CHANNEL_ERROR/TIMED_OUT
-  // logging in useQueueRealtime). Kept fairly quick since the request is
-  // small and explicitly uncached either way.
+  // the primary path — near-instant, and useQueueRealtime already self-heals
+  // a dropped connection with a backoff-retry. This interval is a slow
+  // backstop only, for the rare case a subscription can't be re-established
+  // at all (an unusual, sandboxed context like OBS's browser source is the
+  // one place that's genuinely more likely than a normal browser tab).
   useQueueRealtime(streamId, refresh);
   useEffect(() => {
-    const id = setInterval(refresh, 8000);
+    const id = setInterval(refresh, 30000);
     return () => clearInterval(id);
   }, [refresh]);
 
