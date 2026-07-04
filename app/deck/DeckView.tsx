@@ -375,6 +375,16 @@ export function DeckView({
   const suppressRefreshUntil = useRef(0);
   // The segment whose name is being edited, so a refresh doesn't clobber it.
   const editingSegmentRef = useRef<string | null>(null);
+  // Whether we've adopted the server's now-playing item into activeId yet.
+  // Without this, every fresh tab/reload starts with activeId=null, the
+  // "auto-select first item" fallback below picks orderedQueue[0], and the
+  // now-playing effect immediately reports THAT as on-air — silently
+  // clobbering whatever was actually live (the bug behind the overlay/mod
+  // view flashing back to the wrong story whenever a tab is opened/refreshed).
+  const seededActiveRef = useRef(false);
+  // Tracks the last activeId we told the server about, so re-adopting the
+  // server's own value on load doesn't re-POST (and re-broadcast) it right back.
+  const lastSentNowPlaying = useRef<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (Date.now() < suppressRefreshUntil.current) return;
@@ -395,6 +405,18 @@ export function DeckView({
       const data = await qr.json();
       setQueue(data.submissions || []);
       setPendingOrder(null); // server state is now authoritative
+      // Adopt whatever the server already has on air, once, instead of
+      // letting the "auto-select first item" effect default to
+      // orderedQueue[0] and immediately report that as now-playing.
+      if (!seededActiveRef.current) {
+        seededActiveRef.current = true;
+        const npId: string | null = data.nowPlaying?.id ?? null;
+        if (npId) {
+          setActiveId(npId);
+          setStartedAt(Date.now());
+          lastSentNowPlaying.current = npId; // already on the server; skip the redundant re-POST
+        }
+      }
     }
     if (sr.ok) {
       const data = await sr.json();
@@ -505,7 +527,6 @@ export function DeckView({
 
   // Report the now-playing item to the server so the mod view can show it.
   // Curators don't drive the live show, so they never set "on air".
-  const lastSentNowPlaying = useRef<string | null>(null);
   useEffect(() => {
     if (curateOnly) return;
     if (lastSentNowPlaying.current === activeId) return;
