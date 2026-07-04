@@ -15,7 +15,15 @@ type NowPlaying = {
 // The on-air lower third: a broadsheet card (paper, ink border, hard shadow)
 // styled after the mod view's "On air" bar, kept under 100px tall so it works
 // as a slim OBS browser source. Disappears entirely between items.
-export function OverlayView({ token }: { token: string }) {
+// `theme` forces one of the app palettes via a .theme-* scope class (see
+// globals.css); null follows the embedding browser's system preference.
+export function OverlayView({
+  token,
+  theme,
+}: {
+  token: string;
+  theme: 'light' | 'dark' | 'sepia' | 'contrast' | null;
+}) {
   const [streamId, setStreamId] = useState<string | null>(null);
   const [nowPlaying, setNowPlaying] = useState<NowPlaying | null>(null);
   const [invalid, setInvalid] = useState(false);
@@ -54,10 +62,14 @@ export function OverlayView({ token }: { token: string }) {
 
   // Setup aid only: a misconfigured source shows a small chip instead of
   // silent nothing. (Streamers see this while configuring, not on air.)
+  const themeClass = theme ? `theme-${theme}` : '';
+
   if (invalid) {
     return (
-      <div className="inline-flex items-center gap-2 m-2 border border-rust bg-paper px-3 py-1.5 font-mono text-xs text-rust">
-        The Broadside overlay: invalid or missing token — regenerate it in Settings → Quick add.
+      <div className={themeClass}>
+        <div className="inline-flex items-center gap-2 m-2 border border-rust bg-paper px-3 py-1.5 font-mono text-xs text-rust">
+          The Broadside overlay: invalid or missing token — regenerate it in Settings → Quick add.
+        </div>
       </div>
     );
   }
@@ -74,7 +86,9 @@ export function OverlayView({ token }: { token: string }) {
     .join(' · ');
 
   return (
-    <div className="m-2 h-[84px] flex items-center gap-4 bg-paper border-2 border-ink shadow-[4px_4px_0_rgb(var(--ink))] px-4 overflow-hidden">
+    <div
+      className={`${themeClass} m-2 h-[84px] flex items-center gap-4 bg-paper border-2 border-ink shadow-[4px_4px_0_rgb(var(--ink))] px-4 overflow-hidden text-ink`}
+    >
       <div className="shrink-0 flex flex-col items-center gap-1">
         <span className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-widest text-rust font-bold">
           <span className="inline-block w-2 h-2 rounded-full bg-rust live-dot" />

@@ -4,7 +4,11 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+/* Each palette is also exposed as a `.theme-*` scope class so an isolated
+   surface (the OBS overlay) can force a theme on itself via a wrapper div,
+   independent of the html-level class next-themes manages. Values are
+   deliberately defined once, in these combined selectors. */
+:root, .theme-light {
   --ink: 13 13 14;
   --paper: 245 241 232;
   --rust: 196 69 28;
@@ -13,7 +17,7 @@
   --slate: 44 62 80;
 }
 
-html.dark {
+html.dark, .theme-dark {
   --ink: 232 228 219;
   --paper: 20 20 22;
   --rust: 232 102 62;
@@ -23,7 +27,7 @@ html.dark {
 }
 
 /* Warm vintage newsprint — aged paper, espresso ink. */
-html.sepia {
+html.sepia, .theme-sepia {
   --ink: 46 34 24;
   --paper: 240 227 202;
   --rust: 166 74 44;
@@ -33,7 +37,7 @@ html.sepia {
 }
 
 /* Maximum-legibility black-on-white with punchy accents. */
-html.contrast {
+html.contrast, .theme-contrast {
   --ink: 0 0 0;
   --paper: 255 255 255;
   --rust: 198 32 12;

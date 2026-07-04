@@ -6,6 +6,7 @@ import { AppHeader } from '@/components/AppHeader';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useEventSubStatus } from '@/lib/use-eventsub-status';
 
 export function SetupForm({
@@ -348,13 +349,17 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
   const [copied, setCopied] = useState(false);
   const [tokenCopied, setTokenCopied] = useState(false);
   const [overlayCopied, setOverlayCopied] = useState(false);
+  // 'system' = no theme param; the overlay follows the embedding browser.
+  const [overlayTheme, setOverlayTheme] = useState('system');
   const linkRef = useRef<HTMLAnchorElement>(null);
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const bookmarklet = token
     ? `javascript:(function(){window.open('${origin}/quick-add?token=${token}&url='+encodeURIComponent(location.href),'nr_add','width=440,height=280');})();`
     : '';
-  const overlayUrl = token ? `${origin}/overlay?token=${token}` : '';
+  const overlayUrl = token
+    ? `${origin}/overlay?token=${token}${overlayTheme === 'system' ? '' : `&theme=${overlayTheme}`}`
+    : '';
 
   // React blocks javascript: hrefs, so set it on the DOM node directly.
   useEffect(() => {
@@ -481,6 +486,25 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
             <p className="font-mono text-xs uppercase tracking-widest text-ink/60 mb-2">
               OBS overlay (browser source)
             </p>
+            <ToggleGroup
+              type="single"
+              value={overlayTheme}
+              onValueChange={(v) => { if (v) setOverlayTheme(v); }}
+              className="mb-2 text-[10px]"
+              aria-label="Overlay theme"
+            >
+              {([
+                ['system', 'System'],
+                ['light', 'Newsprint'],
+                ['dark', 'Dark'],
+                ['sepia', 'Sepia'],
+                ['contrast', 'High contrast'],
+              ] as const).map(([value, label]) => (
+                <ToggleGroupItem key={value} value={value}>
+                  {label}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
             <div className="flex gap-1 items-center">
               <Input
                 readOnly
@@ -496,7 +520,8 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
             <p className="text-xs text-ink/50 mt-2">
               Add this as a <strong>Browser Source</strong> in OBS (about 800×100). It shows the
               story you&apos;re reacting to as an on-air lower third — headline, outlet, and type —
-              and disappears between items.
+              and disappears between items. The theme is baked into the URL (an OBS source has no
+              UI to change it later); System follows the embedding browser, which in OBS means light.
             </p>
           </div>
         </div>
