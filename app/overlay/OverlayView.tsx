@@ -36,6 +36,12 @@ export function OverlayView({
       const r = await fetch(`/api/deck/overlay?token=${encodeURIComponent(token)}`, {
         cache: 'no-store',
       });
+      // Temporary diagnostic: proves whether each poll/realtime-triggered
+      // refresh is actually reaching the server and what it got back, so a
+      // stuck overlay is verifiable instead of guessed at. Safe to remove
+      // once this is confirmed working — cheap, and this page has no
+      // meaningful traffic to worry about console noise from.
+      console.log('[overlay] refresh', new Date().toISOString(), 'status', r.status);
       if (r.status === 401 || r.status === 400) {
         setInvalid(true);
         setNowPlaying(null);
@@ -43,10 +49,12 @@ export function OverlayView({
       }
       if (!r.ok) return; // transient server error — keep showing what we have
       const data = await r.json();
+      console.log('[overlay] data', data);
       setInvalid(false);
       setStreamId(data.streamId || null);
       setNowPlaying(data.nowPlaying || null);
-    } catch {
+    } catch (err) {
+      console.warn('[overlay] refresh failed', err);
       // network blip — keep the current card rather than flickering it away
     }
   }, [token]);
