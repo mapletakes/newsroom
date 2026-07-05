@@ -21,18 +21,17 @@ function getBrowserClient(): SupabaseClient | null {
 /**
  * Subscribe to queue-change broadcasts for a stream. Calls `onChange`
  * whenever the server signals the queue mutated (new link, approval,
- * reorder, etc.). This is the primary, near-instant update path; callers
- * pair it with a slow poll as a backstop, not a co-primary — this hook
- * self-heals a dropped connection on its own.
+ * reorder, etc.). Callers pair this with a slow poll as a backstop.
  *
- * A WebSocket subscription can silently error or time out in embedded/
- * sandboxed browser contexts (e.g. OBS's browser source) without the app
- * ever finding out. On CHANNEL_ERROR/TIMED_OUT/CLOSED this re-subscribes
- * after a short, capped exponential backoff instead of just logging and
- * going quiet until whatever poll interval the caller happens to have next
- * fires. On a successful *re*-connect (not the initial one — callers
- * already fetch on mount) it also triggers one onChange, to catch up on
- * anything missed while disconnected.
+ * Deliberately does NOT attempt to auto-reconnect on error/timeout/close: an
+ * earlier version did, and a single dropped connection could fire more than
+ * one error-type status (Phoenix channels commonly emit CHANNEL_ERROR then
+ * CLOSED for one failure), each independently scheduling its own retry
+ * timer. Since only the most recently scheduled timer was tracked, earlier
+ * ones leaked and fired anyway — and every successful reconnect calls
+ * onChange, which hits the REST API. That compounded into a runaway flood of
+ * requests. Simple logging + relying on the caller's poll to recover is the
+ * safe, boring choice here.
  */
 export function useQueueRealtime(streamId: string | null, onChange: () => void) {
   const cb = useRef(onChange);
@@ -45,39 +44,20 @@ export function useQueueRealtime(streamId: string | null, onChange: () => void) 
     const sb = getBrowserClient();
     if (!sb) return;
 
-    let channel: ReturnType<typeof sb.channel> | null = null;
-    let retryTimer: ReturnType<typeof setTimeout> | null = null;
-    let stopped = false;
-    let attempt = 0;
-
-    const connect = () => {
-      if (stopped) return;
-      channel = sb
-        .channel(`queue:${streamId}`)
-        .on('broadcast', { event: 'changed' }, () => cb.current())
-        .subscribe((status) => {
-          if (status === 'SUBSCRIBED') {
-            if (attempt > 0) cb.current(); // catch up after a reconnect
-            attempt = 0;
-            return;
-          }
-          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-            console.warn(`Realtime channel queue:${streamId} — ${status}, reconnecting…`);
-            if (channel) sb.removeChannel(channel);
-            if (stopped) return;
-            attempt += 1;
-            const delay = Math.min(1000 * 2 ** attempt, 30000);
-            retryTimer = setTimeout(connect, delay);
-          }
-        });
-    };
-
-    connect();
+    const channel = sb
+      .channel(`queue:${streamId}`)
+      .on('broadcast', { event: 'changed' }, () => cb.current())
+      .subscribe((status) => {
+        // Visibility only — no auto-retry (see doc comment above). The
+        // caller's own poll interval is what recovers from a dropped
+        // subscription.
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          console.warn(`Realtime channel queue:${streamId} — ${status}`);
+        }
+      });
 
     return () => {
-      stopped = true;
-      if (retryTimer) clearTimeout(retryTimer);
-      if (channel) sb.removeChannel(channel);
+      sb.removeChannel(channel);
     };
   }, [streamId]);
 }
