@@ -1,3 +1,5 @@
+import { withSentryConfig } from '@sentry/nextjs';
+
 // Surgical security headers. Deliberately NOT a full Content-Security-Policy:
 // only `frame-ancestors` is set (anti-clickjacking) so we don't break YouTube
 // embeds, remote thumbnails, the Supabase realtime socket, or the inline theme
@@ -27,4 +29,14 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  // Silences the "no auth token, skipping source map upload" notice when
+  // SENTRY_AUTH_TOKEN isn't set — errors still report fine without it, you
+  // just get minified stack traces instead of the original source.
+  silent: true,
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  disableLogger: true,
+  telemetry: false,
+});
