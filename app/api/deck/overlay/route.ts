@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { checkRateLimit, hashKey } from '@/lib/ratelimit';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,14 +18,25 @@ export const dynamic = 'force-dynamic';
 // indefinitely, regardless of how often (or how fast) it polls.
 const NO_STORE = { 'Cache-Control': 'no-store, must-revalidate' };
 
-function json(body: unknown, init?: { status?: number }) {
-  return NextResponse.json(body, { ...init, headers: NO_STORE });
+function json(body: unknown, init?: { status?: number; headers?: Record<string, string> }) {
+  return NextResponse.json(body, { status: init?.status, headers: { ...NO_STORE, ...init?.headers } });
 }
 
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get('token') || '';
   if (!token) {
     return json({ ok: false, error: 'missing token' }, { status: 400 });
+  }
+
+  // Also caps the blast radius of any future client-side bug that polls this
+  // endpoint too aggressively (see lib/ratelimit.ts — sized against this
+  // route's own real-world traffic pattern).
+  const limited = await checkRateLimit('poll', hashKey(token));
+  if (!limited.ok) {
+    return json(
+      { ok: false, error: 'rate limited, try again shortly' },
+      { status: 429, headers: { 'Retry-After': String(limited.retryAfterSeconds) } },
+    );
   }
 
   const sb = supabaseAdmin();

@@ -3,6 +3,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { checkRateLimit, hashKey } from '@/lib/ratelimit';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,6 +21,14 @@ export async function GET(req: NextRequest) {
   const token = req.headers.get('x-add-token') || req.nextUrl.searchParams.get('token') || '';
   if (!token) {
     return NextResponse.json({ ok: false, error: 'missing token' }, { status: 400, headers: CORS });
+  }
+
+  const limited = await checkRateLimit('read', hashKey(token));
+  if (!limited.ok) {
+    return NextResponse.json(
+      { ok: false, error: 'rate limited, try again shortly' },
+      { status: 429, headers: { ...CORS, 'Retry-After': String(limited.retryAfterSeconds) } },
+    );
   }
 
   const sb = supabaseAdmin();

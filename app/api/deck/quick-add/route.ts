@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { addToDeck } from '@/lib/deck-add';
+import { checkRateLimit, hashKey } from '@/lib/ratelimit';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -27,6 +28,14 @@ export async function POST(req: NextRequest) {
   const segmentId = body.segmentId ? String(body.segmentId) : null;
   if (!token || !url) {
     return NextResponse.json({ ok: false, error: 'missing token or url' }, { status: 400, headers: CORS });
+  }
+
+  const limited = await checkRateLimit('write', hashKey(token));
+  if (!limited.ok) {
+    return NextResponse.json(
+      { ok: false, error: 'rate limited, try again shortly' },
+      { status: 429, headers: { ...CORS, 'Retry-After': String(limited.retryAfterSeconds) } },
+    );
   }
 
   const sb = supabaseAdmin();

@@ -5,6 +5,7 @@
 import { NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { addToDeck } from '@/lib/deck-add';
+import { checkRateLimit, hashKey } from '@/lib/ratelimit';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -36,6 +37,11 @@ export async function GET(req: NextRequest) {
 
   if (!token || !url) {
     return page('<h2 style="margin:0">Missing token or URL</h2>');
+  }
+
+  const limited = await checkRateLimit('write', hashKey(token));
+  if (!limited.ok) {
+    return page('<h2 style="margin:0 0 8px">Slow down a moment</h2><p style="opacity:.6;font-size:14px">Too many adds in a short time — try again in a few seconds.</p>');
   }
 
   const sb = supabaseAdmin();
