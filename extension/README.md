@@ -3,16 +3,27 @@
 Add the current page, a link, or a video to your Broadside streamer deck without
 copy/paste or tab-switching.
 
-## Install on Chrome/Edge (load unpacked)
+## Install on Chrome/Edge (Web Store — recommended)
+
+The extension is published and approved on the Chrome Web Store — search for
+**"The Broadside Quick Add"** there and install like any extension (works on
+Edge too via "Allow extensions from other stores"). Store installs auto-update.
 
 1. In The Broadside, go to **Settings → Quick add** and **Generate add link**. Copy the
    **token** (`nr_…`).
-2. Open `chrome://extensions` (or `edge://extensions`).
-3. Toggle **Developer mode** on (top right).
-4. Click **Load unpacked** and select this `extension/` folder.
-5. Click the extension's **Details → Extension options** (or right-click the toolbar
-   icon → Options) and paste your **token**. The Broadside URL is pre-filled; change it
-   only if you use a custom domain.
+2. Install from the Chrome Web Store.
+3. Right-click the toolbar icon → **Options** (or Details → Extension options) and paste
+   your **token**. The Broadside URL is pre-filled; change it only if you use a custom domain.
+
+## Install on Chrome/Edge (load unpacked — development only)
+
+For hacking on the extension itself; regular users should use the store build above
+(load-unpacked copies never auto-update).
+
+1. Open `chrome://extensions` (or `edge://extensions`).
+2. Toggle **Developer mode** on (top right).
+3. Click **Load unpacked** and select this `extension/` folder.
+4. Set the token in Options as above.
 
 ## Install on Firefox (temporary, for testing)
 
@@ -60,5 +71,7 @@ ready on your deck.
 - The manifest's `background` key lists both `service_worker` (Chrome/Edge) and
   `scripts` (Firefox) so the same background.js runs on both — each browser uses the
   one it understands and ignores the other.
-- Chrome Web Store submission is prepped in `STORE_LISTING.md`; there's no equivalent
-  prep for Firefox's Add-on Developer Hub yet.
+- The extension is live on the Chrome Web Store (see `STORE_LISTING.md` for the listing
+  content and the update workflow: bump the manifest version, rebuild the zip, re-upload
+  in the developer dashboard — store users then auto-update). There's no equivalent
+  listing for Firefox's Add-on Developer Hub yet.

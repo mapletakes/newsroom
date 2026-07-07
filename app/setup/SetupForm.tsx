@@ -481,6 +481,18 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
                 {busy ? '…' : 'Regenerate'}
               </Button>
             </div>
+            <p className="text-xs text-ink/50 mt-2">
+              Get the extension from the{' '}
+              <a
+                href="https://chromewebstore.google.com/search/The%20Broadside%20Quick%20Add"
+                target="_blank"
+                rel="noreferrer"
+                className="underline hover:text-rust"
+              >
+                Chrome Web Store
+              </a>{' '}
+              (&ldquo;The Broadside Quick Add&rdquo;), then paste this token into its Options page.
+            </p>
           </div>
 
           <div>

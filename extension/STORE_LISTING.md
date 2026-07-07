@@ -1,11 +1,17 @@
-# Chrome Web Store submission — The Broadside Quick Add
+# Chrome Web Store listing — The Broadside Quick Add
 
-Everything below is ready to paste into the [Chrome Web Store Developer
-Dashboard](https://chrome.google.com/webstore/devconsole). The parts I can't do
-for you (they need your own Google account and a one-time $5 developer
-registration fee) are in **Manual steps**, at the end.
+> **Status: PUBLISHED & APPROVED** (July 2026). The submission steps below were
+> completed; this doc is kept as the source of truth for the listing content
+> and the update workflow.
+>
+> **Shipping an extension update now means:** bump `version` in manifest.json →
+> rebuild the zip (command below) → upload it in the
+> [Developer Dashboard](https://chrome.google.com/webstore/devconsole) →
+> store installs auto-update after Google processes it (usually quick; may
+> re-review if permissions change). A git push alone does NOT update anyone's
+> installed extension.
 
-This doc is Chrome-specific. The extension is also Firefox-compatible now (see
+This doc is Chrome-specific. The extension is also Firefox-compatible (see
 `README.md`'s "Install on Firefox" section) — Firefox's equivalent to this whole
 doc would be a submission to Mozilla's Add-on Developer Hub, not yet prepared.
 
