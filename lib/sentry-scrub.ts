@@ -22,7 +22,9 @@ function redactQueryParams(qs: NonNullable<ErrorEvent['request']>['query_string'
     return qs.replace(/((?:^|&)(?:token|add_token)=)[^&]*/gi, '$1REDACTED');
   }
   if (Array.isArray(qs)) {
-    return qs.map((p) => (SECRET_KEYS.has(p.key.toLowerCase()) ? { ...p, value: 'REDACTED' } : p));
+    return qs.map(([key, value]): [string, string] =>
+      SECRET_KEYS.has(key.toLowerCase()) ? [key, 'REDACTED'] : [key, value],
+    );
   }
   if (qs) {
     const redacted = { ...qs };
