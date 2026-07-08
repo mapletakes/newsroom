@@ -70,6 +70,33 @@ export function isTimestampFresh(timestamp: string): boolean {
   return diff < 10 * 60 * 1000;
 }
 
+// ── Idempotency ─────────────────────────────────────────────────
+
+/**
+ * Which id to dedup a chat-message notification on: Twitch's stable
+ * per-message id when present (identical across every retry/duplicate
+ * delivery of the same chat message), falling back to the webhook
+ * delivery id otherwise.
+ */
+export function resolveEventId(event: { message_id?: string }, deliveryMsgId: string): string {
+  return event.message_id || deliveryMsgId;
+}
+
+export type DedupOutcome = 'process' | 'duplicate' | 'process-with-warning';
+
+/**
+ * Decide what to do after attempting to record an event id as seen (via a
+ * unique-constrained insert). A unique-violation means another delivery
+ * already claimed this id — drop it. Any other error (e.g. the dedup table
+ * isn't migrated yet) must NOT be treated as "already seen": that would
+ * silently drop real chat messages, so process it anyway and just warn.
+ */
+export function classifyDedupOutcome(insertError: { code?: string } | null): DedupOutcome {
+  if (!insertError) return 'process';
+  if (insertError.code === '23505') return 'duplicate';
+  return 'process-with-warning';
+}
+
 // ── Subscription management ────────────────────────────────────
 
 /**

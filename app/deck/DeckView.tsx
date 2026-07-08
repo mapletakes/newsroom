@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { Submission } from '@/components/SubmissionCard';
 import { extractYouTubeId, formatDuration, formatDate, kindTint, kindCategory, type KindCategory } from '@/lib/url';
+import { positionsFromOrder, insertAtIndex, isSameOrder } from '@/lib/reorder';
 import { ArchiveButton } from '@/components/ArchiveButton';
 import { QuickLinksDrawer } from './QuickLinksDrawer';
 import { ChatStatusBanner } from './ChatStatusBanner';
@@ -841,7 +842,7 @@ export function DeckView({
   // Persist a new block order (ungrouped + segments) after a drag.
   const persistBlockOrder = (orderedIds: string[]) => {
     // Optimistic: assign positions 1..N across all blocks.
-    const pos = new Map(orderedIds.map((id, i) => [id, i + 1]));
+    const pos = positionsFromOrder(orderedIds);
     setSegments((prev) => prev.map((s) => ({ ...s, position: pos.get(s.id) ?? s.position })));
     if (pos.has('ungrouped')) setUngroupedPosition(pos.get('ungrouped')!);
 
@@ -893,7 +894,7 @@ export function DeckView({
   // Move one or more items into a block and set that block's full order. Used
   // for single drags, multi-select drags, and the "Move to…" picker.
   const moveItems = (movingIds: string[], segmentId: string | null, orderedTargetIds: string[]) => {
-    const posMap = new Map<string, number>(orderedTargetIds.map((id, i) => [id, i + 1] as [string, number]));
+    const posMap = positionsFromOrder(orderedTargetIds);
     const movingSet = new Set(movingIds);
     setQueue((prev) =>
       prev.map((s) => {
@@ -926,7 +927,7 @@ export function DeckView({
   // Persist a new within-group order (positions 1..N).
   const persistGroupOrder = (reordered: Submission[]) => {
     setQueue((prev) => {
-      const pos = new Map(reordered.map((s, i) => [s.id, i + 1]));
+      const pos = positionsFromOrder(reordered.map((s) => s.id));
       return prev.map((s) => (pos.has(s.id) ? { ...s, position: pos.get(s.id)! } : s));
     });
     return reconcileAfterWrites(fetch('/api/queue/reorder', {
@@ -1038,15 +1039,13 @@ export function DeckView({
     // Cross-container or multi-select: insert at over.id's position in remaining.
     const remaining = targetItems.filter((s) => !movingSet.has(s.id));
     const overIdx = isBlockId(overId) ? -1 : remaining.findIndex((s) => s.id === overId);
-    const insertAt = Math.max(0, Math.min(overIdx >= 0 ? overIdx : remaining.length, remaining.length));
-    const result = [...remaining.slice(0, insertAt), ...movingItems, ...remaining.slice(insertAt)];
+    const result = insertAtIndex(remaining, movingItems, overIdx);
 
     // No-op: same-container drag that didn't change order.
-    if (
-      sourceContainer === targetContainer &&
-      result.length === targetItems.length &&
-      result.every((s, i) => targetItems[i].id === s.id)
-    ) { endDrag(); return; }
+    if (sourceContainer === targetContainer && isSameOrder(result, targetItems)) {
+      endDrag();
+      return;
+    }
 
     // Set display order immediately for both affected containers. Merge into
     // any existing overrides — see the same-container branch above for why a

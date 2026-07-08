@@ -29,7 +29,7 @@ export async function fetchYouTubeMeta(url: string): Promise<YouTubeMeta> {
   if (!id) return empty;
 
   const apiKey = process.env.YOUTUBE_API_KEY;
-  let meta = { ...empty };
+  const meta = { ...empty };
 
   if (apiKey) {
     try {

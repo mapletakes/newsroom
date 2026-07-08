@@ -3,7 +3,12 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { waitUntil } from '@vercel/functions';
-import { verifySignature, isTimestampFresh } from '@/lib/twitch-eventsub';
+import {
+  verifySignature,
+  isTimestampFresh,
+  resolveEventId,
+  classifyDedupOutcome,
+} from '@/lib/twitch-eventsub';
 import { supabaseAdmin } from '@/lib/supabase';
 import { extractUrlsFromMessage } from '@/lib/url';
 import { submitUrlToQueue } from '@/lib/submit-url';
@@ -70,14 +75,13 @@ export async function POST(req: NextRequest) {
   // event.message_id is stable across every delivery of the same chat message,
   // so it dedups both cases while leaving allow_duplicates (separate messages
   // posting the same URL) intact.
-  const eventId: string = event.message_id || msgId;
+  const eventId: string = resolveEventId(event, msgId);
   if (eventId) {
     const { error: seenErr } = await sb.from('processed_events').insert({ id: eventId });
-    if (seenErr) {
-      // 23505 = unique violation = already handled this message → drop it.
-      if (seenErr.code === '23505') return new NextResponse(null, { status: 204 });
-      // Any other error (e.g. table not migrated yet) must not block ingestion.
-      console.warn('processed_events insert failed (run migration?):', seenErr.message);
+    const outcome = classifyDedupOutcome(seenErr);
+    if (outcome === 'duplicate') return new NextResponse(null, { status: 204 });
+    if (outcome === 'process-with-warning') {
+      console.warn('processed_events insert failed (run migration?):', seenErr!.message);
     }
   }
 

@@ -38,15 +38,20 @@ export function buildSessionCookie(s: Session) {
   };
 }
 
-export async function getSession(): Promise<Session | null> {
-  const c = cookies().get(COOKIE);
-  if (!c) return null;
-  const [payload, sig] = c.value.split('.');
+/** Verify + decode a raw session cookie value. Pulled out of getSession() so the
+ *  signing/tamper-detection logic is testable without a request context. */
+export function parseSessionCookie(value: string | undefined): Session | null {
+  if (!value) return null;
+  const [payload, sig] = value.split('.');
   if (!payload || !sig) return null;
   if (sign(payload) !== sig) return null;
   try {
     return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
   } catch { return null; }
+}
+
+export async function getSession(): Promise<Session | null> {
+  return parseSessionCookie(cookies().get(COOKIE)?.value);
 }
 
 /**
