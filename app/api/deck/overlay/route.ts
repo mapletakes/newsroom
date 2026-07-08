@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { checkRateLimit, hashKey } from '@/lib/ratelimit';
+import { computePlayOrder } from '@/lib/play-order';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,7 +43,7 @@ export async function GET(req: NextRequest) {
   const sb = supabaseAdmin();
   const { data: stream } = await sb
     .from('streams')
-    .select('id, now_playing_id')
+    .select('id, now_playing_id, ungrouped_position')
     .eq('add_token', token)
     .maybeSingle();
   if (!stream) {
@@ -52,28 +53,39 @@ export async function GET(req: NextRequest) {
   // streamId is returned so the overlay can subscribe to this stream's
   // realtime "changed" pings (they carry no data, just a refetch signal).
   if (!stream.now_playing_id) {
-    return json({ ok: true, streamId: stream.id, nowPlaying: null });
+    return json({ ok: true, streamId: stream.id, nowPlaying: null, next: null });
   }
 
-  const { data: np } = await sb
-    .from('submissions')
-    .select('title, url, kind, publisher, duration_seconds')
-    .eq('id', stream.now_playing_id)
-    .eq('stream_id', stream.id)
-    .maybeSingle();
+  // Full approved list + segments, ordered the same way the deck itself
+  // shows them — needed to find what comes after now-playing for the
+  // "coming up next" overlay variant.
+  const [{ data: approved }, { data: segments }] = await Promise.all([
+    sb
+      .from('submissions')
+      .select('id, title, url, kind, publisher, duration_seconds, segment_id, position, created_at')
+      .eq('stream_id', stream.id)
+      .eq('status', 'approved'),
+    sb.from('segments').select('id, position').eq('stream_id', stream.id),
+  ]);
+
+  const ordered = computePlayOrder(approved || [], segments || [], stream.ungrouped_position ?? 0);
+  const nowIdx = ordered.findIndex((s) => s.id === stream.now_playing_id);
+  const np = nowIdx >= 0 ? ordered[nowIdx] : null;
+  const nextItem = nowIdx >= 0 ? ordered[nowIdx + 1] || null : null;
 
   // No credibility/leaning tag in the payload: that's a streamer/mod triage
   // aid, not something the viewer-facing overlay should display.
+  const toPayload = (s: NonNullable<typeof np>) => ({
+    title: s.title || s.url,
+    kind: s.kind,
+    publisher: s.publisher,
+    durationSeconds: s.duration_seconds,
+  });
+
   return json({
     ok: true,
     streamId: stream.id,
-    nowPlaying: np
-      ? {
-          title: np.title || np.url,
-          kind: np.kind,
-          publisher: np.publisher,
-          durationSeconds: np.duration_seconds,
-        }
-      : null,
+    nowPlaying: np ? toPayload(np) : null,
+    next: nextItem ? toPayload(nextItem) : null,
   });
 }

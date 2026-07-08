@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Icon } from '@/components/ui/icon';
 
 // Shows a link to the archive.today snapshot if archived, otherwise a button
 // that triggers archiving. Clicking "Archive" opens archive.today's capture
@@ -34,7 +35,7 @@ export function ArchiveButton({
         className={`font-mono text-xs uppercase tracking-widest text-moss hover:underline inline-flex items-center gap-1 ${className}`}
         title="View the archived snapshot (archive.today)"
       >
-        <span className="material-icons text-sm">photo_camera</span>
+        <Icon name="camera" className="text-sm" />
         Archived ↗
       </a>
     );
@@ -68,7 +69,7 @@ export function ArchiveButton({
       className={`font-mono text-xs uppercase tracking-widest text-ink/50 hover:text-ink inline-flex items-center gap-1 disabled:opacity-60 ${className}`}
       title="Save a snapshot to archive.today"
     >
-      <span className="material-icons text-sm">photo_camera</span>
+      <Icon name="camera" className="text-sm" />
       {busy ? 'Archiving…' : 'Archive'}
     </button>
   );

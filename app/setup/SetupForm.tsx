@@ -352,6 +352,7 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
   // 'system' = no theme param; the overlay follows the embedding browser.
   const [overlayTheme, setOverlayTheme] = useState('system');
   const [overlayBrand, setOverlayBrand] = useState(true);
+  const [overlayVariant, setOverlayVariant] = useState('default');
   const linkRef = useRef<HTMLAnchorElement>(null);
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -359,7 +360,7 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
     ? `javascript:(function(){window.open('${origin}/quick-add?token=${token}&url='+encodeURIComponent(location.href),'nr_add','width=440,height=280');})();`
     : '';
   const overlayUrl = token
-    ? `${origin}/overlay?token=${token}${overlayTheme === 'system' ? '' : `&theme=${overlayTheme}`}${overlayBrand ? '' : '&brand=0'}`
+    ? `${origin}/overlay?token=${token}${overlayTheme === 'system' ? '' : `&theme=${overlayTheme}`}${overlayBrand ? '' : '&brand=0'}${overlayVariant === 'default' ? '' : `&variant=${overlayVariant}`}`
     : '';
 
   // React blocks javascript: hrefs, so set it on the DOM node directly.
@@ -501,6 +502,23 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
             </p>
             <ToggleGroup
               type="single"
+              value={overlayVariant}
+              onValueChange={(v) => { if (v) setOverlayVariant(v); }}
+              className="mb-2 text-[10px]"
+              aria-label="Overlay layout"
+            >
+              {([
+                ['default', 'Full'],
+                ['minimal', 'Minimal'],
+                ['ticker', 'Up next'],
+              ] as const).map(([value, label]) => (
+                <ToggleGroupItem key={value} value={value}>
+                  {label}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+            <ToggleGroup
+              type="single"
               value={overlayTheme}
               onValueChange={(v) => { if (v) setOverlayTheme(v); }}
               className="mb-2 text-[10px]"
@@ -539,11 +557,13 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
               </Button>
             </div>
             <p className="text-xs text-ink/50 mt-2">
-              Add this as a <strong>Browser Source</strong> in OBS (about 800×100). It shows the
-              story you&apos;re reacting to as an on-air lower third — headline, outlet, and type —
-              and disappears between items. The theme and mark visibility are both baked into the
-              URL (an OBS source has no UI to change them later); System follows the embedding
-              browser, which in OBS means light.
+              Add this as a <strong>Browser Source</strong> in OBS (about 800×100, or 800×120 for
+              Up next). <strong>Full</strong> shows a lower third — headline, outlet, and type.
+              <strong> Minimal</strong> is a single-line title-only chip. <strong>Up next</strong> is
+              the full card plus a strip showing what&apos;s queued after it. All disappear between
+              items. Layout, theme, and mark visibility are baked into the URL (an OBS source has no
+              UI to change them later); System follows the embedding browser, which in OBS means
+              light.
             </p>
           </div>
         </div>

@@ -94,7 +94,7 @@ export function SubmissionCard({
         <img
           src={s.thumbnail_url}
           alt=""
-          className={`${compact ? 'w-24 h-16' : 'w-40 h-24'} object-cover border border-ink/20 shrink-0`}
+          className={`${compact ? 'w-24 h-16' : 'w-24 h-16 sm:w-40 sm:h-24'} object-cover border border-ink/20 shrink-0`}
           loading="lazy"
         />
       )}

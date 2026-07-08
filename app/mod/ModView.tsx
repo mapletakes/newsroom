@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { SubmissionCard, type Submission } from '@/components/SubmissionCard';
+import { SwipeRow } from '@/components/SwipeRow';
 import { AppHeader } from '@/components/AppHeader';
 import { useQueueRealtime } from '@/lib/use-queue-realtime';
 import { useVisiblePoll } from '@/lib/use-visible-poll';
@@ -11,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Icon } from '@/components/ui/icon';
 import { formatDuration, sanitizeShareUrl } from '@/lib/url';
 
 const STATUS_KEYS = ['pending', 'approved', 'played', 'rejected'] as const;
@@ -211,7 +213,7 @@ export function ModView({
               readOnly
               value={sanitizeShareUrl(nowPlaying.url)}
               onFocus={(e) => e.currentTarget.select()}
-              className="shrink-0 w-48 font-mono text-[11px] bg-paper border border-ink/20 px-2 py-1 focus:outline-none focus:border-ink"
+              className="shrink-0 w-28 sm:w-48 font-mono text-[11px] bg-paper border border-ink/20 px-2 py-1 focus:outline-none focus:border-ink"
               aria-label="Now playing URL"
             />
             <CopyButton value={sanitizeShareUrl(nowPlaying.url)} />
@@ -295,8 +297,14 @@ export function ModView({
             </p>
           </div>
         )}
+        {filter === 'pending' && submissions.length > 0 && (
+          <p className="sm:hidden font-mono text-[10px] uppercase tracking-widest text-ink/40 mb-3 text-center">
+            swipe right to approve · swipe left to reject
+          </p>
+        )}
         <div className="space-y-3">
-          {submissions.map((s) => (
+          {submissions.map((s) => {
+            const card = (
             <SubmissionCard
               key={s.id}
               s={s}
@@ -347,7 +355,21 @@ export function ModView({
                 </>
               }
             />
-          ))}
+            );
+            // Swipe (touch only) is a mobile shortcut for approve/reject —
+            // only meaningful while the card is still pending.
+            if (s.status !== 'pending') return card;
+            return (
+              <SwipeRow
+                key={s.id}
+                disabled={pendingIds.has(s.id)}
+                onApprove={() => mutate(s.id, { status: 'approved' })}
+                onReject={() => mutate(s.id, { status: 'rejected' })}
+              >
+                {card}
+              </SwipeRow>
+            );
+          })}
         </div>
           </>
         )}
@@ -381,7 +403,7 @@ function AnnounceButton({ submissionId }: { submissionId: string }) {
   return (
     <span className="shrink-0 flex items-center gap-2">
       <Button variant="outline" size="xs" onClick={post} className="text-xs" title="Post 'Watching: …' to chat">
-        <span className="material-icons text-sm">campaign</span>
+        <Icon name="announce" className="text-sm" />
         Post to chat
       </Button>
       {status && <span className="font-mono text-xs text-ink/60">{status}</span>}
@@ -429,12 +451,19 @@ function ModActions({
         <Button
           variant="moss"
           size="sm"
+          className="px-4 py-2.5 text-sm sm:px-3 sm:py-1.5 sm:text-xs"
           onClick={() => mutate(id, { status: 'approved', mod_notes: note || null })}
           disabled={pending}
         >
           {pending ? 'Working…' : 'Approve'}
         </Button>
-        <Button variant="outline" size="sm" onClick={() => mutate(id, { status: 'rejected' })} disabled={pending}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="px-4 py-2.5 text-sm sm:px-3 sm:py-1.5 sm:text-xs"
+          onClick={() => mutate(id, { status: 'rejected' })}
+          disabled={pending}
+        >
           Reject
         </Button>
         <button

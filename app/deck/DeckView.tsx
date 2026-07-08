@@ -3,13 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { Submission } from '@/components/SubmissionCard';
-import { extractYouTubeId, formatDuration, formatDate, kindTint, kindCategory, type KindCategory } from '@/lib/url';
+import { extractYouTubeId, formatDuration, formatDate, formatClock, kindTint, kindCategory, type KindCategory } from '@/lib/url';
 import { positionsFromOrder, insertAtIndex, isSameOrder } from '@/lib/reorder';
 import { ArchiveButton } from '@/components/ArchiveButton';
 import { QuickLinksDrawer } from './QuickLinksDrawer';
 import { ChatStatusBanner } from './ChatStatusBanner';
 import { GettingStarted } from './GettingStarted';
+import { ShortcutsModal } from './ShortcutsModal';
 import { AppHeader } from '@/components/AppHeader';
+import { Icon } from '@/components/ui/icon';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input, Textarea } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -159,7 +161,7 @@ function SortableQueueItem({
           aria-label="Remove"
           tabIndex={-1}
         >
-          <span className="material-icons text-base">delete</span>
+          <Icon name="remove" className="text-base" />
         </button>
       </div>
     </div>
@@ -288,13 +290,13 @@ function SegmentBlock({
                 className="shrink-0 w-5 flex items-center justify-center text-ink/30 hover:text-rust"
                 aria-label="Reject all items in this block"
               >
-                <span className="material-icons text-sm">playlist_remove</span>
+                <Icon name="clearAll" className="text-sm" />
               </button>
             </SimpleTooltip>
           )}
           {onDelete && (
             <button onClick={onDelete} className="shrink-0 w-5 flex items-center justify-center text-ink/30 hover:text-rust" aria-label="Delete segment">
-              <span className="material-icons text-sm">delete</span>
+              <Icon name="remove" className="text-sm" />
             </button>
           )}
         </div>
@@ -360,6 +362,7 @@ export function DeckView({
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [overContainer, setOverContainer] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   // Explicit display order set at drag end so SortableContext.items reflects the new
   // arrangement in the same render that clears transforms — prevents the snap-back flash.
   const [pendingOrder, setPendingOrder] = useState<Record<string, string[]> | null>(null);
@@ -550,6 +553,23 @@ export function DeckView({
     }
     return found;
   }, [queue, activeId]);
+
+  // Live clock tick for the "time on this item" readout — only runs while
+  // something is actually on air, so an idle deck doesn't tick in the background.
+  const [clockTick, setClockTick] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active || !startedAt) return;
+    const id = setInterval(() => setClockTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [active, startedAt]);
+  const elapsedSeconds = active && startedAt ? Math.max(0, Math.floor((clockTick - startedAt) / 1000)) : 0;
+
+  // Combined runtime of everything still in the deck — a rundown estimate,
+  // not counting toward items with no known duration (articles, etc).
+  const totalRemainingSeconds = useMemo(
+    () => orderedQueue.reduce((sum, s) => sum + (s.duration_seconds || 0), 0),
+    [orderedQueue],
+  );
 
   // The item to advance to after playing/skipping/removing the active one:
   // the next item in play order, or the previous one if it was last.
@@ -749,6 +769,13 @@ export function DeckView({
     const el = e.target as HTMLElement | null;
     const tag = el?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return;
+
+    // ? opens the shortcuts help.
+    if (e.key === '?') {
+      e.preventDefault();
+      setShortcutsOpen(true);
+      return;
+    }
 
     // Escape clears a multi-selection.
     if (e.key === 'Escape' && selectedIds.size > 0) {
@@ -1138,6 +1165,7 @@ export function DeckView({
     <div className="min-h-screen flex flex-col">
       {!curateOnly && <QuickLinksDrawer />}
       {confirmDialog}
+      <ShortcutsModal open={shortcutsOpen} onOpenChange={setShortcutsOpen} curateOnly={curateOnly} />
       <AppHeader
         className="sticky top-0 z-20 bg-paper border-b-2 border-ink pl-10 pr-6 py-3 gap-6"
         section={curateOnly ? 'curating deck' : 'streamer deck'}
@@ -1220,7 +1248,11 @@ export function DeckView({
                 )}
                 {active.publisher && <span className="text-ink/60">· {active.publisher}</span>}
                 {active.published_at && <span className="text-ink/60">· {formatDate(active.published_at)}</span>}
-                <span className="ml-auto normal-case tracking-normal">
+                <span className="ml-auto flex items-center gap-3 normal-case tracking-normal">
+                  <span className="flex items-center gap-1.5 font-mono text-rust font-bold tracking-widest uppercase" title="Time on air for this item">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-rust live-dot" />
+                    {formatClock(elapsedSeconds)}
+                  </span>
                   <ArchiveButton id={active.id} url={active.url} archiveUrl={active.archive_url} />
                 </span>
               </div>
@@ -1326,7 +1358,7 @@ export function DeckView({
                   </Button>
                 )}
                 <Button variant="outlineDestructive" onClick={rejectActive} title="Remove from deck">
-                  <span className="material-icons text-base">delete</span>
+                  <Icon name="remove" className="text-base" />
                   Remove
                 </Button>
                 {!curateOnly && (
@@ -1335,7 +1367,7 @@ export function DeckView({
                     onClick={announce}
                     title="Post 'Watching: …' to your chat so a mod can pin it"
                   >
-                    <span className="material-icons text-base">campaign</span>
+                    <Icon name="announce" className="text-base" />
                     Post to chat
                   </Button>
                 )}
@@ -1381,11 +1413,21 @@ export function DeckView({
 
           <div className="flex items-center gap-3 mb-3 flex-wrap">
             <span className="shrink-0 font-mono text-xs uppercase tracking-widest text-ink/60">
-              Queue ({orderedQueue.length})
+              Queue ({orderedQueue.length}
+              {totalRemainingSeconds > 0 ? ` · ${formatDuration(totalRemainingSeconds)} left` : ''})
             </span>
             <span className="min-w-0 truncate font-mono text-[10px] text-ink/40">
               click select · ⇧/⌃-click multi · drag to reorder{!curateOnly && ' · P played'} · Del remove
             </span>
+            <SimpleTooltip content="Keyboard shortcuts">
+              <button
+                onClick={() => setShortcutsOpen(true)}
+                className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full border border-ink/30 text-ink/50 hover:border-ink hover:text-ink font-mono text-[10px]"
+                aria-label="Show keyboard shortcuts"
+              >
+                <Icon name="help" />
+              </button>
+            </SimpleTooltip>
             <Button variant="outline" size="xs" onClick={addSegment} className="shrink-0 ml-auto border-ink/30">
               + Segment
             </Button>
@@ -1422,7 +1464,7 @@ export function DeckView({
                   aria-label="Move selected to block"
                 >
                   Move to…
-                  <span className="material-icons text-sm leading-none">arrow_drop_down</span>
+                  <Icon name="expand" className="text-sm leading-none" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
                   <DropdownMenuLabel>Move to</DropdownMenuLabel>

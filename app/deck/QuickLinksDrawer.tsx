@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Sheet, SheetClose, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
+import { Icon } from '@/components/ui/icon';
 import {
   DndContext,
   closestCenter,
@@ -76,14 +77,14 @@ function SortableLinkRow({
         className="shrink-0 text-ink/30 hover:text-ink"
         aria-label="Open in new tab"
       >
-        <span className="material-icons text-base">open_in_new</span>
+        <Icon name="external" className="text-base" />
       </a>
       <button
         onClick={() => onRemove(link.id)}
         className="shrink-0 text-ink/20 hover:text-rust transition-colors"
         aria-label="Remove"
       >
-        <span className="material-icons text-base">delete</span>
+        <Icon name="remove" className="text-base" />
       </button>
     </div>
   );
@@ -174,7 +175,7 @@ export function QuickLinksDrawer() {
           aria-label="Open on-hand links"
           title="On-hand links"
         >
-          <span className="material-icons text-lg">bookmarks</span>
+          <Icon name="bookmark" className="text-lg" />
           <span className="[writing-mode:vertical-rl] font-mono text-[10px] uppercase tracking-widest">
             Links
           </span>
@@ -183,11 +184,11 @@ export function QuickLinksDrawer() {
 
       <SheetContent side="left">
         <div className="flex items-center gap-2 border-b-2 border-ink px-4 py-3">
-          <span className="material-icons text-ink">bookmarks</span>
+          <Icon name="bookmark" className="text-ink" />
           <SheetTitle>On-hand links</SheetTitle>
           <SheetClose asChild>
             <button className="ml-auto text-ink/50 hover:text-rust" aria-label="Close">
-              <span className="material-icons">close</span>
+              <Icon name="close" />
             </button>
           </SheetClose>
         </div>

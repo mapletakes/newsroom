@@ -86,11 +86,19 @@ export function extractUrlsFromMessage(message: string): string[] {
 
 export function formatDuration(seconds: number | null | undefined): string {
   if (!seconds || seconds < 0) return '';
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  return `${m}:${String(s).padStart(2, '0')}`;
+  return formatClock(seconds);
+}
+
+// Like formatDuration, but renders 0 as "0:00" instead of blank — for a
+// running clock (elapsed-on-air) rather than a known fixed duration, where
+// zero is a real, displayable value rather than "no duration known".
+export function formatClock(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+  return `${m}:${String(sec).padStart(2, '0')}`;
 }
 
 // Broad category for the deck's quick type filter.

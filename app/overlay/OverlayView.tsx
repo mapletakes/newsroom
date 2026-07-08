@@ -11,24 +11,37 @@ type NowPlaying = {
   durationSeconds: number | null;
 };
 
+export type OverlayVariant = 'default' | 'minimal' | 'ticker';
+
+const metaLine = (item: NowPlaying) =>
+  [item.publisher, item.kind.replace('_', ' '), item.durationSeconds ? formatDuration(item.durationSeconds) : null]
+    .filter(Boolean)
+    .join(' · ');
+
 // The on-air lower third: a broadsheet card (paper, ink border, hard shadow)
-// styled after the mod view's "On air" bar, kept under 100px tall so it works
-// as a slim OBS browser source. Disappears entirely between items.
+// styled after the mod view's "On air" bar, sized to work as an OBS browser
+// source. Disappears entirely between items.
 // `theme` forces one of the app palettes via a .theme-* scope class (see
 // globals.css); null follows the embedding browser's system preference.
 // `showBrand` toggles the small "The Broadside" mark — some streamers don't
-// want it on their own on-air graphic.
+// want it on their own on-air graphic. `variant` picks the layout:
+//   default — the full lower-third (title + publisher/kind/duration)
+//   minimal — a slim single-line title-only chip
+//   ticker  — the full lower-third plus a "next up" line underneath
 export function OverlayView({
   token,
   theme,
   showBrand,
+  variant,
 }: {
   token: string;
   theme: 'light' | 'dark' | 'sepia' | 'contrast' | null;
   showBrand: boolean;
+  variant: OverlayVariant;
 }) {
   const [streamId, setStreamId] = useState<string | null>(null);
   const [nowPlaying, setNowPlaying] = useState<NowPlaying | null>(null);
+  const [next, setNext] = useState<NowPlaying | null>(null);
   const [invalid, setInvalid] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -43,6 +56,7 @@ export function OverlayView({
       if (r.status === 401 || r.status === 400) {
         setInvalid(true);
         setNowPlaying(null);
+        setNext(null);
         return;
       }
       if (!r.ok) return; // transient server error — keep showing what we have
@@ -50,6 +64,7 @@ export function OverlayView({
       setInvalid(false);
       setStreamId(data.streamId || null);
       setNowPlaying(data.nowPlaying || null);
+      setNext(data.next || null);
     } catch {
       // network blip — keep the current card rather than flickering it away
     }
@@ -87,42 +102,65 @@ export function OverlayView({
 
   if (!nowPlaying) return null;
 
-  // Deliberately no credibility/leaning tag here: it's a triage aid for the
-  // streamer and mods, not something to put on stream in front of viewers.
-  const meta = [
-    nowPlaying.publisher,
-    nowPlaying.kind.replace('_', ' '),
-    nowPlaying.durationSeconds ? formatDuration(nowPlaying.durationSeconds) : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
-
-  return (
-    <div
-      className={`${themeClass} m-2 h-[84px] flex items-center gap-4 bg-paper border-2 border-ink shadow-[4px_4px_0_rgb(var(--ink))] px-4 overflow-hidden text-ink`}
-    >
-      <div className="shrink-0 flex flex-col items-center gap-1">
-        <span className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-widest text-rust font-bold">
-          <span className="inline-block w-2 h-2 rounded-full bg-rust live-dot" />
-          On air
-        </span>
+  if (variant === 'minimal') {
+    return (
+      <div
+        className={`${themeClass} m-2 h-10 inline-flex items-center gap-2 bg-paper border-2 border-ink shadow-[3px_3px_0_rgb(var(--ink))] px-3 max-w-[600px] text-ink`}
+      >
+        <span className="inline-block w-2 h-2 shrink-0 rounded-full bg-rust live-dot" />
+        <span className="font-display text-base font-bold leading-tight truncate">{nowPlaying.title}</span>
         {showBrand && (
-          <span className="font-mono text-[8px] uppercase tracking-widest text-ink/40">
+          <span className="shrink-0 font-mono text-[8px] uppercase tracking-widest text-ink/40 ml-1">
             The Broadside
           </span>
         )}
       </div>
-      <div className="shrink-0 w-px self-stretch my-3 bg-ink/20" />
-      <div className="min-w-0 flex-1">
-        <div className="font-display text-xl font-bold leading-tight truncate">
-          {nowPlaying.title}
+    );
+  }
+
+  // Deliberately no credibility/leaning tag here (in either variant): it's a
+  // triage aid for the streamer and mods, not something to put on stream in
+  // front of viewers.
+  const meta = metaLine(nowPlaying);
+
+  return (
+    <div
+      className={`${themeClass} m-2 flex flex-col bg-paper border-2 border-ink shadow-[4px_4px_0_rgb(var(--ink))] overflow-hidden text-ink`}
+    >
+      <div className="h-[84px] flex items-center gap-4 px-4">
+        <div className="shrink-0 flex flex-col items-center gap-1">
+          <span className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-widest text-rust font-bold">
+            <span className="inline-block w-2 h-2 rounded-full bg-rust live-dot" />
+            On air
+          </span>
+          {showBrand && (
+            <span className="font-mono text-[8px] uppercase tracking-widest text-ink/40">
+              The Broadside
+            </span>
+          )}
         </div>
-        {meta && (
-          <div className="font-mono text-[11px] uppercase tracking-widest text-ink/60 truncate mt-0.5">
-            {meta}
+        <div className="shrink-0 w-px self-stretch my-3 bg-ink/20" />
+        <div className="min-w-0 flex-1">
+          <div className="font-display text-xl font-bold leading-tight truncate">
+            {nowPlaying.title}
           </div>
-        )}
+          {meta && (
+            <div className="font-mono text-[11px] uppercase tracking-widest text-ink/60 truncate mt-0.5">
+              {meta}
+            </div>
+          )}
+        </div>
       </div>
+      {variant === 'ticker' && next && (
+        <div className="h-7 flex items-center gap-2 px-4 border-t border-ink/15 bg-ink/5">
+          <span className="shrink-0 font-mono text-[10px] uppercase tracking-widest text-ink/50">
+            Up next
+          </span>
+          <span className="min-w-0 flex-1 font-mono text-[11px] truncate text-ink/70">
+            {next.title}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

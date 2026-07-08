@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useEventSubStatus } from '@/lib/use-eventsub-status';
+import { Icon } from '@/components/ui/icon';
 
 const DISMISSED_KEY = 'broadside_onboarding_dismissed';
 
@@ -31,15 +32,13 @@ export function GettingStarted() {
         className="absolute top-2 right-2 text-ink/30 hover:text-rust"
         aria-label="Dismiss"
       >
-        <span className="material-icons text-base">close</span>
+        <Icon name="close" className="text-base" />
       </button>
       <h3 className="font-display text-lg font-bold mb-3">Getting started</h3>
       <ul className="space-y-2 text-sm">
         <li className="flex items-center gap-2">
           <span className={status === 'connected' ? 'text-moss' : 'text-ink/30'}>
-            <span className="material-icons text-base align-middle">
-              {status === 'connected' ? 'check_circle' : 'radio_button_unchecked'}
-            </span>
+            <Icon name={status === 'connected' ? 'radioChecked' : 'radioUnchecked'} className="text-base align-middle" />
           </span>
           Chat connected — links your chat posts get captured automatically.
           {status !== 'connected' && status !== 'loading' && (
@@ -48,7 +47,7 @@ export function GettingStarted() {
         </li>
         <li className="flex items-start gap-2">
           <span className="text-ink/30">
-            <span className="material-icons text-base align-middle">radio_button_unchecked</span>
+            <Icon name="radioUnchecked" className="text-base align-middle" />
           </span>
           <span>
             Tell your mods to sign in at this site once — they&apos;ll show up under{' '}
@@ -58,7 +57,7 @@ export function GettingStarted() {
         </li>
         <li className="flex items-start gap-2">
           <span className="text-ink/30">
-            <span className="material-icons text-base align-middle">radio_button_unchecked</span>
+            <Icon name="radioUnchecked" className="text-base align-middle" />
           </span>
           <span>
             Grab the <Link href="/setup" className="underline hover:text-rust">quick-add bookmarklet or Chrome extension</Link>{' '}
@@ -67,7 +66,7 @@ export function GettingStarted() {
         </li>
         <li className="flex items-start gap-2">
           <span className="text-ink/30">
-            <span className="material-icons text-base align-middle">radio_button_unchecked</span>
+            <Icon name="radioUnchecked" className="text-base align-middle" />
           </span>
           <span>Use <strong>+ Segment</strong> below to organize the deck into named blocks for your show.</span>
         </li>

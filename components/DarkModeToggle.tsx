@@ -12,13 +12,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Icon, type IconName } from '@/components/ui/icon';
 
-const OPTIONS: { value: string; label: string; icon: string }[] = [
-  { value: 'system', label: 'System', icon: 'brightness_auto' },
-  { value: 'light', label: 'Newsprint', icon: 'light_mode' },
-  { value: 'dark', label: 'Dark', icon: 'dark_mode' },
-  { value: 'sepia', label: 'Sepia', icon: 'local_cafe' },
-  { value: 'contrast', label: 'High contrast', icon: 'contrast' },
+const OPTIONS: { value: string; label: string; icon: IconName }[] = [
+  { value: 'system', label: 'System', icon: 'themeSystem' },
+  { value: 'light', label: 'Newsprint', icon: 'themeLight' },
+  { value: 'dark', label: 'Dark', icon: 'themeDark' },
+  { value: 'sepia', label: 'Sepia', icon: 'themeSepia' },
+  { value: 'contrast', label: 'High contrast', icon: 'themeContrast' },
 ];
 
 export function DarkModeToggle() {
@@ -29,9 +30,9 @@ export function DarkModeToggle() {
   // Until mounted, `theme` is unknown on the client — render a neutral icon to
   // avoid a hydration mismatch.
   const active = OPTIONS.find((o) => o.value === theme);
-  const triggerIcon = !mounted
-    ? 'dark_mode'
-    : active?.icon ?? (resolvedTheme === 'dark' ? 'dark_mode' : 'light_mode');
+  const triggerIcon: IconName = !mounted
+    ? 'themeDark'
+    : active?.icon ?? (resolvedTheme === 'dark' ? 'themeDark' : 'themeLight');
 
   return (
     <DropdownMenu>
@@ -40,7 +41,7 @@ export function DarkModeToggle() {
         aria-label="Choose theme"
         title="Choose theme"
       >
-        <span className="material-icons text-base">{triggerIcon}</span>
+        <Icon name={triggerIcon} className="text-base" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuLabel>Theme</DropdownMenuLabel>
@@ -51,7 +52,7 @@ export function DarkModeToggle() {
             onSelect={() => setTheme(o.value)}
             className={mounted && theme === o.value ? 'bg-ink text-paper' : ''}
           >
-            <span className="material-icons text-sm mr-2">{o.icon}</span>
+            <Icon name={o.icon} className="text-sm mr-2" />
             {o.label}
           </DropdownMenuItem>
         ))}
