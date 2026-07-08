@@ -66,18 +66,30 @@ export function SubmissionCard({
   s,
   compact = false,
   actions,
+  pending = false,
 }: {
   s: Submission;
   compact?: boolean;
   actions?: React.ReactNode;
+  /** A mutation on this card is in flight — dim it and block interaction
+   *  rather than letting the card disappear before the outcome is known. */
+  pending?: boolean;
 }) {
   const host = (() => {
     try { return new URL(s.url).hostname.replace(/^www\./, ''); } catch { return ''; }
   })();
 
   return (
-    <Card asChild className={cn(kindTint(s.kind), compact ? 'p-3' : 'p-4', 'flex gap-4')}>
-      <article>
+    <Card
+      asChild
+      className={cn(
+        kindTint(s.kind),
+        compact ? 'p-3' : 'p-4',
+        'flex gap-4',
+        pending && 'opacity-50 pointer-events-none transition-opacity',
+      )}
+    >
+      <article aria-busy={pending}>
       {s.thumbnail_url && (
         <img
           src={s.thumbnail_url}

@@ -40,11 +40,12 @@ export function ModView({
 }) {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [nowPlaying, setNowPlaying] = useState<Submission | null>(null);
-  // Keyed by submission id rather than local to a row's action component:
-  // a failed mutate() rolls back the optimistic move (removes then
-  // re-inserts the row), which unmounts/remounts that row's components —
-  // component-local error state would be wiped before it ever renders.
+  // Keyed by submission id, not local to a row's action component: a card
+  // stays mounted through its own mutate() call (see below), but keeping
+  // this at the ModView level means one place owns "what's true about this
+  // row right now" instead of splitting it across the row and its actions.
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<'pending' | 'approved' | 'played' | 'rejected'>('pending');
   const [counts, setCounts] = useState<{ pending: number; approved: number; played: number; rejected: number; total: number }>({
     pending: 0,
@@ -81,48 +82,50 @@ export function ModView({
     id: string,
     patch: Record<string, unknown>,
   ): Promise<{ ok: boolean; error?: string }> => {
-    // Optimistic: when the new status no longer matches the active tab, the
-    // item should leave this view instantly rather than wait for the round
-    // trip (that wait was the one place mod triage still felt sluggish).
-    // Reverted if the write fails; refresh() below is still the eventual
-    // source of truth for counts and any server-side outcome (e.g. a
-    // duplicate-on-deck conflict) we can't predict client-side.
     setRowErrors((prev) => {
       if (!(id in prev)) return prev;
       const next = { ...prev };
       delete next[id];
       return next;
     });
-    const prevItem = submissions.find((s) => s.id === id);
-    const prevCounts = counts;
-    const newStatus = typeof patch.status === 'string' ? patch.status : null;
-    const changesView = newStatus !== null && newStatus !== filter;
-    if (changesView) {
-      setSubmissions((prev) => prev.filter((s) => s.id !== id));
-      if (prevItem && newStatus && isStatusKey(prevItem.status) && isStatusKey(newStatus)) {
-        setCounts((c) => ({
-          ...c,
-          [prevItem.status]: Math.max(0, c[prevItem.status as StatusKey] - 1),
-          [newStatus]: c[newStatus as StatusKey] + 1,
-        }));
-      }
-    }
+    // The card stays put and shows a working state until the write
+    // resolves — it used to move out instantly and get put back on
+    // failure, but that remove-then-reinsert cycle unmounted/remounted the
+    // row for every failed action (e.g. approving a duplicate), which is
+    // both a jarring flash and wipes any row-local UI state.
+    setPendingIds((prev) => new Set(prev).add(id));
 
     const r = await fetch('/api/queue', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, ...patch }),
     });
+
+    setPendingIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+
     if (!r.ok) {
-      if (changesView && prevItem) {
-        setSubmissions((prev) => [prevItem, ...prev]);
-        setCounts(prevCounts);
-      }
       const e = await r.json().catch(() => ({}));
       // e.g. trying to approve something already on the deck.
       const message = e.detail || e.error || 'Action failed';
       setRowErrors((prev) => ({ ...prev, [id]: message }));
       return { ok: false, error: message };
+    }
+
+    // Now that the write succeeded, move the item out of this tab if its
+    // new status no longer belongs here, instead of waiting on refresh().
+    const prevItem = submissions.find((s) => s.id === id);
+    const newStatus = typeof patch.status === 'string' ? patch.status : null;
+    if (prevItem && newStatus && newStatus !== filter && isStatusKey(prevItem.status) && isStatusKey(newStatus)) {
+      setSubmissions((prev) => prev.filter((s) => s.id !== id));
+      setCounts((c) => ({
+        ...c,
+        [prevItem.status]: Math.max(0, c[prevItem.status as StatusKey] - 1),
+        [newStatus]: c[newStatus as StatusKey] + 1,
+      }));
     }
     // Auto-archive on approval (fire-and-forget; the snapshot link appears
     // on the card once the capture finishes and broadcasts).
@@ -297,13 +300,14 @@ export function ModView({
             <SubmissionCard
               key={s.id}
               s={s}
+              pending={pendingIds.has(s.id)}
               actions={
                 <>
                   {rowErrors[s.id] && (
                     <div className="font-mono text-xs text-rust w-full">⚠ {rowErrors[s.id]}</div>
                   )}
                   {s.status === 'pending' && (
-                    <ModActions id={s.id} mutate={mutate} />
+                    <ModActions id={s.id} mutate={mutate} pending={pendingIds.has(s.id)} />
                   )}
                   {s.status === 'approved' && (
                     <div className="flex flex-col gap-1 w-full">
@@ -318,7 +322,12 @@ export function ModView({
                     </div>
                   )}
                   {s.status === 'rejected' && (
-                    <Button variant="outline" size="sm" onClick={() => mutate(s.id, { status: 'pending' })}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => mutate(s.id, { status: 'pending' })}
+                      disabled={pendingIds.has(s.id)}
+                    >
                       Unreject
                     </Button>
                   )}
@@ -405,27 +414,27 @@ function CopyButton({ value }: { value: string }) {
 function ModActions({
   id,
   mutate,
+  pending,
 }: {
   id: string;
   mutate: (id: string, patch: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>;
+  pending: boolean;
 }) {
   const [note, setNote] = useState('');
   const [showNote, setShowNote] = useState(false);
-  const [approving, setApproving] = useState(false);
-
-  const approve = async () => {
-    setApproving(true);
-    await mutate(id, { status: 'approved', mod_notes: note || null });
-    setApproving(false);
-  };
 
   return (
     <div className="flex flex-col gap-2 w-full">
       <div className="flex gap-2 flex-wrap items-center">
-        <Button variant="moss" size="sm" onClick={approve} disabled={approving}>
-          {approving ? 'Approving…' : 'Approve'}
+        <Button
+          variant="moss"
+          size="sm"
+          onClick={() => mutate(id, { status: 'approved', mod_notes: note || null })}
+          disabled={pending}
+        >
+          {pending ? 'Working…' : 'Approve'}
         </Button>
-        <Button variant="outline" size="sm" onClick={() => mutate(id, { status: 'rejected' })}>
+        <Button variant="outline" size="sm" onClick={() => mutate(id, { status: 'rejected' })} disabled={pending}>
           Reject
         </Button>
         <button
