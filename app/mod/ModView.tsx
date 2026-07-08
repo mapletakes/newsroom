@@ -188,7 +188,7 @@ export function ModView({
       />
 
       {/* On air — what the streamer is currently showing on the deck */}
-      <div className="px-6 py-2 bg-rust/10 border-b border-rust/30 flex items-center gap-3 flex-wrap min-h-[2.75rem]">
+      <div className="px-3 sm:px-6 py-2 bg-rust/10 border-b border-rust/30 flex items-center gap-3 flex-wrap min-h-[2.75rem]">
         <span className="shrink-0 font-mono text-xs uppercase tracking-widest text-rust font-bold flex items-center gap-1">
           <span className="inline-block w-2 h-2 rounded-full bg-rust animate-pulse" />
           On air
@@ -199,24 +199,32 @@ export function ModView({
               <img
                 src={nowPlaying.thumbnail_url}
                 alt=""
-                className="shrink-0 w-12 h-8 object-cover border border-ink/20"
+                className="hidden sm:block shrink-0 w-12 h-8 object-cover border border-ink/20"
               />
             )}
-            <span className="flex-1 min-w-0 font-display text-sm font-bold truncate">
+            {/* A floor on min-width (rather than min-w-0) means the title
+                always shows a readable chunk of text instead of collapsing
+                to nothing to make room for the trailing buttons — those wrap
+                to their own line on narrow screens instead. */}
+            <span className="flex-1 min-w-[120px] font-display text-sm font-bold truncate">
               {nowPlaying.title || nowPlaying.url}
             </span>
-            <span className="shrink-0 font-mono text-[10px] uppercase tracking-widest text-ink/50">
+            <span className="hidden sm:inline shrink-0 font-mono text-[10px] uppercase tracking-widest text-ink/50">
               {nowPlaying.kind.replace('_', ' ')}
               {nowPlaying.duration_seconds ? ` · ${formatDuration(nowPlaying.duration_seconds)}` : ''}
             </span>
+            {/* The raw URL + copy are a desktop convenience (pasting into another
+                tool while sat at a desk); a mod on a phone just needs Announce/Open. */}
             <input
               readOnly
               value={sanitizeShareUrl(nowPlaying.url)}
               onFocus={(e) => e.currentTarget.select()}
-              className="shrink-0 w-28 sm:w-48 font-mono text-[11px] bg-paper border border-ink/20 px-2 py-1 focus:outline-none focus:border-ink"
+              className="hidden sm:block shrink-0 w-48 font-mono text-[11px] bg-paper border border-ink/20 px-2 py-1 focus:outline-none focus:border-ink"
               aria-label="Now playing URL"
             />
-            <CopyButton value={sanitizeShareUrl(nowPlaying.url)} />
+            <span className="hidden sm:inline-flex">
+              <CopyButton value={sanitizeShareUrl(nowPlaying.url)} />
+            </span>
             <AnnounceButton submissionId={nowPlaying.id} />
             <a
               href={nowPlaying.url}
@@ -233,7 +241,7 @@ export function ModView({
       </div>
 
       {/* Filter tabs */}
-      <div className="px-6 py-3 border-b border-ink/20 flex items-center gap-1 flex-wrap font-mono text-xs uppercase">
+      <div className="px-3 sm:px-6 py-3 border-b border-ink/20 flex items-center gap-1 flex-wrap font-mono text-xs uppercase">
         <ToggleGroup
           type="single"
           value={filter}
@@ -245,26 +253,28 @@ export function ModView({
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
-        <Button variant="outlineDestructive" size="sm" onClick={() => clear('pending')}>
+        {/* Bulk-delete maintenance actions — not the primary phone workflow,
+            so they're tucked away below the fold on narrow screens. */}
+        <Button variant="outlineDestructive" size="sm" onClick={() => clear('pending')} className="hidden sm:inline-flex">
           Clear pending
         </Button>
         {counts.rejected > 0 && (
-          <Button variant="outlineDestructive" size="sm" onClick={() => clear('rejected')}>
+          <Button variant="outlineDestructive" size="sm" onClick={() => clear('rejected')} className="hidden sm:inline-flex">
             Clear rejected ({counts.rejected})
           </Button>
         )}
         {counts.played > 0 && (
-          <Button variant="outlineDestructive" size="sm" onClick={() => clear('played')}>
+          <Button variant="outlineDestructive" size="sm" onClick={() => clear('played')} className="hidden sm:inline-flex">
             Clear played ({counts.played})
           </Button>
         )}
-        <span className="ml-auto text-ink/60">
+        <span className="hidden sm:inline ml-auto text-ink/60">
           {displayName} · {submitCommand ? `command: ${submitCommand}` : 'any URL'}
         </span>
       </div>
 
       {/* List */}
-      <main className="px-6 py-6 max-w-5xl mx-auto w-full">
+      <main className="px-3 sm:px-6 py-6 max-w-5xl mx-auto w-full">
         {!loaded ? (
           <div className="space-y-3">
             {[0, 1, 2].map((i) => (
@@ -402,9 +412,16 @@ function AnnounceButton({ submissionId }: { submissionId: string }) {
   };
   return (
     <span className="shrink-0 flex items-center gap-2">
-      <Button variant="outline" size="xs" onClick={post} className="text-xs" title="Post 'Watching: …' to chat">
+      <Button
+        variant="outline"
+        size="xs"
+        onClick={post}
+        className="text-xs"
+        title="Post 'Watching: …' to chat"
+        aria-label="Post 'Watching: …' to chat"
+      >
         <Icon name="announce" className="text-sm" />
-        Post to chat
+        <span className="hidden sm:inline">Post to chat</span>
       </Button>
       {status && <span className="font-mono text-xs text-ink/60">{status}</span>}
     </span>
@@ -447,11 +464,11 @@ function ModActions({
 
   return (
     <div className="flex flex-col gap-2 w-full">
-      <div className="flex gap-2 flex-wrap items-center">
+      <div className="flex gap-2 items-center">
         <Button
           variant="moss"
           size="sm"
-          className="px-4 py-2.5 text-sm sm:px-3 sm:py-1.5 sm:text-xs"
+          className="flex-1 sm:flex-none px-4 py-2.5 text-sm sm:px-3 sm:py-1.5 sm:text-xs"
           onClick={() => mutate(id, { status: 'approved', mod_notes: note || null })}
           disabled={pending}
         >
@@ -460,19 +477,19 @@ function ModActions({
         <Button
           variant="outline"
           size="sm"
-          className="px-4 py-2.5 text-sm sm:px-3 sm:py-1.5 sm:text-xs"
+          className="flex-1 sm:flex-none px-4 py-2.5 text-sm sm:px-3 sm:py-1.5 sm:text-xs"
           onClick={() => mutate(id, { status: 'rejected' })}
           disabled={pending}
         >
           Reject
         </Button>
-        <button
-          onClick={() => setShowNote(!showNote)}
-          className="font-mono text-xs uppercase tracking-widest text-ink/50 hover:text-ink"
-        >
-          {showNote ? '− hide note' : '+ add note'}
-        </button>
       </div>
+      <button
+        onClick={() => setShowNote(!showNote)}
+        className="self-start font-mono text-xs uppercase tracking-widest text-ink/50 hover:text-ink"
+      >
+        {showNote ? '− hide note' : '+ add note'}
+      </button>
       {showNote && (
         <Input
           value={note}
