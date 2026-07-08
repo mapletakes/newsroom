@@ -647,9 +647,14 @@ export function DeckView({
     selectItem(id);
   };
 
-  const markPlayed = async () => {
+  // Removes instantly, but the actual played write is delayed 5s behind an
+  // Undo toast — same pattern as removeFromQueue, so marking played by
+  // accident (e.g. a stray 'p' keypress) is as easy to walk back as reject.
+  const markPlayed = () => {
     if (!active) return;
     const playedId = active.id;
+    const played = queue.find((s) => s.id === playedId);
+    if (!played) return;
     const duration = startedAt ? Math.round((Date.now() - startedAt) / 1000) : null;
     const tk = takeaway || null;
     const next = nextAfterActive();
@@ -657,16 +662,33 @@ export function DeckView({
     setStartedAt(next ? Date.now() : null);
     setTakeaway('');
     setQueue((prev) => prev.filter((s) => s.id !== playedId)); // optimistic
-    await reconcileAfterWrites(fetch('/api/queue', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: playedId,
-        status: 'played',
-        takeaway: tk,
-        duration_on_screen_s: duration,
-      }),
-    }));
+
+    let undone = false;
+    const timer = setTimeout(() => {
+      if (undone) return;
+      reconcileAfterWrites(fetch('/api/queue', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: playedId,
+          status: 'played',
+          takeaway: tk,
+          duration_on_screen_s: duration,
+        }),
+      }));
+    }, 5000);
+
+    toast('Marked played', {
+      duration: 5000,
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          undone = true;
+          clearTimeout(timer);
+          setQueue((prev) => [played, ...prev]);
+        },
+      },
+    });
   };
 
   const skip = async () => {
