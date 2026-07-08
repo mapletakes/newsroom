@@ -40,6 +40,11 @@ export function ModView({
 }) {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [nowPlaying, setNowPlaying] = useState<Submission | null>(null);
+  // Keyed by submission id rather than local to a row's action component:
+  // a failed mutate() rolls back the optimistic move (removes then
+  // re-inserts the row), which unmounts/remounts that row's components —
+  // component-local error state would be wiped before it ever renders.
+  const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [filter, setFilter] = useState<'pending' | 'approved' | 'played' | 'rejected'>('pending');
   const [counts, setCounts] = useState<{ pending: number; approved: number; played: number; rejected: number; total: number }>({
     pending: 0,
@@ -82,6 +87,12 @@ export function ModView({
     // Reverted if the write fails; refresh() below is still the eventual
     // source of truth for counts and any server-side outcome (e.g. a
     // duplicate-on-deck conflict) we can't predict client-side.
+    setRowErrors((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
     const prevItem = submissions.find((s) => s.id === id);
     const prevCounts = counts;
     const newStatus = typeof patch.status === 'string' ? patch.status : null;
@@ -109,7 +120,9 @@ export function ModView({
       }
       const e = await r.json().catch(() => ({}));
       // e.g. trying to approve something already on the deck.
-      return { ok: false, error: e.detail || e.error || 'Action failed' };
+      const message = e.detail || e.error || 'Action failed';
+      setRowErrors((prev) => ({ ...prev, [id]: message }));
+      return { ok: false, error: message };
     }
     // Auto-archive on approval (fire-and-forget; the snapshot link appears
     // on the card once the capture finishes and broadcasts).
@@ -286,6 +299,9 @@ export function ModView({
               s={s}
               actions={
                 <>
+                  {rowErrors[s.id] && (
+                    <div className="font-mono text-xs text-rust w-full">⚠ {rowErrors[s.id]}</div>
+                  )}
                   {s.status === 'pending' && (
                     <ModActions id={s.id} mutate={mutate} />
                   )}
@@ -395,15 +411,12 @@ function ModActions({
 }) {
   const [note, setNote] = useState('');
   const [showNote, setShowNote] = useState(false);
-  const [error, setError] = useState('');
   const [approving, setApproving] = useState(false);
 
   const approve = async () => {
-    setError('');
     setApproving(true);
-    const res = await mutate(id, { status: 'approved', mod_notes: note || null });
+    await mutate(id, { status: 'approved', mod_notes: note || null });
     setApproving(false);
-    if (!res.ok) setError(res.error || 'Could not approve');
   };
 
   return (
@@ -422,9 +435,6 @@ function ModActions({
           {showNote ? '− hide note' : '+ add note'}
         </button>
       </div>
-      {error && (
-        <div className="font-mono text-xs text-rust">⚠ {error}</div>
-      )}
       {showNote && (
         <Input
           value={note}
