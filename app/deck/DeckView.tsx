@@ -683,6 +683,12 @@ export function DeckView({
     setStartedAt(next ? Date.now() : null);
     setTakeaway('');
     setQueue((prev) => prev.filter((s) => s.id !== playedId)); // optimistic
+    // Cover the undo-delay window itself, not just the write once it starts —
+    // a realtime broadcast landing in the 5s before the write fires (e.g. a
+    // mod approving something else) would otherwise refetch pre-write server
+    // state and flash the item back in before the delayed write removes it
+    // again. reconcileAfterWrites takes over extending this once the write begins.
+    suppressRefreshUntil.current = Date.now() + 5000;
 
     let undone = false;
     const timer = setTimeout(() => {
@@ -727,6 +733,9 @@ export function DeckView({
     const removed = queue.find((s) => s.id === id);
     if (!removed) return;
     setQueue((prev) => prev.filter((s) => s.id !== id));
+    // See markPlayed — covers the undo-delay window itself, not just the
+    // write once it starts.
+    suppressRefreshUntil.current = Date.now() + 5000;
 
     let undone = false;
     const timer = setTimeout(() => {
