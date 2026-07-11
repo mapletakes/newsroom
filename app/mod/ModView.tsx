@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { SubmissionCard, type Submission } from '@/components/SubmissionCard';
 import { SwipeRow } from '@/components/SwipeRow';
+import { SaveToListMenu } from '@/components/SaveToListMenu';
 import { AppHeader } from '@/components/AppHeader';
 import { useQueueRealtime } from '@/lib/use-queue-realtime';
 import { useVisiblePoll } from '@/lib/use-visible-poll';
@@ -181,6 +182,7 @@ export function ModView({
             <Link href="/choose" className="underline hover:text-rust">Switch Channel</Link>
             {!isMod && <Link href="/deck" className="underline hover:text-rust">Streamer Deck →</Link>}
             {isMod && canCurate && <Link href="/deck" className="underline hover:text-rust">Curate Deck →</Link>}
+            <Link href="/lists" className="underline hover:text-rust">Clip Files</Link>
             {!isMod && <Link href="/setup" className="underline hover:text-rust">Settings</Link>}
             {isAdmin && <Link href="/admin" className="underline hover:text-rust">Admin</Link>}
           </>
@@ -353,6 +355,25 @@ export function ModView({
                     <span className="font-mono text-xs uppercase tracking-widest text-ink/50">
                       ▶ played on air
                     </span>
+                  )}
+                  {canCurate && (
+                    <SaveToListMenu
+                      trigger={
+                        <Button variant="outline" size="xs" className="text-xs">
+                          Save to…
+                        </Button>
+                      }
+                      onSave={async (listId) => {
+                        const r = await fetch(`/api/lists/${listId}/items`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ submissionId: s.id }),
+                        });
+                        if (!r.ok) return { ok: false };
+                        const data = await r.json();
+                        return { ok: true, added: data.added, skipped: data.skipped };
+                      }}
+                    />
                   )}
                   <a
                     href={s.url}

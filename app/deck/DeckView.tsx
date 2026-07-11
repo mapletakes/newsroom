@@ -12,6 +12,7 @@ import { GettingStarted } from './GettingStarted';
 import { ShortcutsModal } from './ShortcutsModal';
 import { AppHeader } from '@/components/AppHeader';
 import { Icon } from '@/components/ui/icon';
+import { SaveToListMenu } from '@/components/SaveToListMenu';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input, Textarea } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -1175,6 +1176,9 @@ export function DeckView({
             <Link href="/mod" className="underline hover:text-rust">
               Mod View &rarr;
             </Link>
+            <Link href="/lists" className="underline hover:text-rust">
+              Clip Files
+            </Link>
             {!curateOnly && (
               <a href="/api/notes?format=markdown&commit=1" className="underline hover:text-rust">
                 Export Notes
@@ -1371,6 +1375,24 @@ export function DeckView({
                     Post to chat
                   </Button>
                 )}
+                <SaveToListMenu
+                  trigger={
+                    <Button variant="outline">
+                      <Icon name="bookmark" className="text-base" />
+                      Save to…
+                    </Button>
+                  }
+                  onSave={async (listId) => {
+                    const r = await fetch(`/api/lists/${listId}/items`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ submissionId: active.id }),
+                    });
+                    if (!r.ok) return { ok: false };
+                    const data = await r.json();
+                    return { ok: true, added: data.added, skipped: data.skipped };
+                  }}
+                />
               </div>
 
               {!curateOnly && (
@@ -1479,6 +1501,24 @@ export function DeckView({
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
+              <SaveToListMenu
+                trigger={
+                  <button className="inline-flex items-center gap-1 bg-paper text-ink px-2 py-0.5 hover:bg-rust hover:text-paper transition-colors focus:outline-none">
+                    Save to…
+                  </button>
+                }
+                onSave={async (listId) => {
+                  const submissionIds = orderedQueue.filter((s) => selectedIds.has(s.id)).map((s) => s.id);
+                  const r = await fetch(`/api/lists/${listId}/items`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ submissionIds }),
+                  });
+                  if (!r.ok) return { ok: false };
+                  const data = await r.json();
+                  return { ok: true, added: data.added, skipped: data.skipped };
+                }}
+              />
               <button onClick={clearSelection} className="ml-auto underline hover:opacity-70">
                 Clear
               </button>

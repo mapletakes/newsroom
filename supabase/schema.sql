@@ -166,6 +166,58 @@ create table if not exists public.usage_events (
 create index if not exists usage_events_stream_idx on public.usage_events(stream_id, created_at);
 create index if not exists usage_events_kind_idx on public.usage_events(kind, created_at);
 
+-- Lists ("clip files"): durable, named collections of content, independent
+-- of the daily run of show. Unlike segments (which organize the LIVE deck
+-- and get cleared/reused constantly), a list is meant to persist across
+-- sessions and be reusable as pre-built show material — and, later, shared
+-- streamer-to-streamer via share_token.
+create table if not exists public.lists (
+  id uuid primary key default gen_random_uuid(),
+  stream_id uuid references public.streams(id) on delete cascade,
+  name text not null default 'New clip file',
+  position int default 0,
+  -- Set when the streamer makes this list shareable via a read-only link.
+  share_token text unique,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+create index if not exists lists_stream_idx on public.lists(stream_id, position);
+create index if not exists lists_share_token_idx on public.lists(share_token);
+
+-- Items in a list. Metadata is SNAPSHOTTED here (not a foreign key into
+-- submissions): submissions get bulk-deleted by routine queue cleanup
+-- ("Clear played/rejected"), but a durable list can't have its items vanish
+-- because someone did end-of-day housekeeping. This also means an imported
+-- (shared-from-another-streamer) item works identically to a locally-added
+-- one — there's no cross-stream reference to keep valid.
+create table if not exists public.list_items (
+  id uuid primary key default gen_random_uuid(),
+  list_id uuid references public.lists(id) on delete cascade,
+  url text not null,
+  normalized_url text not null,
+  kind media_kind default 'unknown',
+  title text,
+  description text,
+  thumbnail_url text,
+  publisher text,
+  author text,
+  duration_seconds int,
+  published_at timestamptz,
+  summary text,
+  credibility_tag text,
+  topics text[],
+  dmca_risk text,
+  content_warning text,
+  -- Curator's own note (distinct from the AI summary) — e.g. why this is on
+  -- the list, or a starting point copied from a submission's mod_notes.
+  note text,
+  added_by text, -- twitch login of whoever added it, or "via @streamer" on import
+  position int default 0,
+  created_at timestamptz default now()
+);
+create index if not exists list_items_list_idx on public.list_items(list_id, position);
+create index if not exists list_items_list_url_idx on public.list_items(list_id, normalized_url);
+
 -- ============================================================
 -- Row Level Security
 -- ============================================================
@@ -181,6 +233,8 @@ alter table public.usage_events enable row level security;
 alter table public.processed_events enable row level security;
 alter table public.submissions enable row level security;
 alter table public.show_notes enable row level security;
+alter table public.lists enable row level security;
+alter table public.list_items enable row level security;
 
 -- Public read of streams (for the deck/mod views via service-role queries)
 -- We do NOT grant anon any access; the API routes use the service role.

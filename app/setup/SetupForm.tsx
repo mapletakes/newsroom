@@ -70,6 +70,7 @@ export function SetupForm({
           <>
             <Link href="/deck" className="underline hover:text-rust">Streamer Deck</Link>
             <Link href="/mod" className="underline hover:text-rust">Mod View</Link>
+            <Link href="/lists" className="underline hover:text-rust">Clip Files</Link>
             {isAdmin && <Link href="/admin" className="underline hover:text-rust">Admin</Link>}
           </>
         }
