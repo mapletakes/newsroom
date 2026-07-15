@@ -166,7 +166,7 @@ create table if not exists public.usage_events (
 create index if not exists usage_events_stream_idx on public.usage_events(stream_id, created_at);
 create index if not exists usage_events_kind_idx on public.usage_events(kind, created_at);
 
--- Lists ("clip files"): durable, named collections of content, independent
+-- Lists ("the shelf"): durable, named collections of content, independent
 -- of the daily run of show. Unlike segments (which organize the LIVE deck
 -- and get cleared/reused constantly), a list is meant to persist across
 -- sessions and be reusable as pre-built show material — and, later, shared
@@ -174,7 +174,7 @@ create index if not exists usage_events_kind_idx on public.usage_events(kind, cr
 create table if not exists public.lists (
   id uuid primary key default gen_random_uuid(),
   stream_id uuid references public.streams(id) on delete cascade,
-  name text not null default 'New clip file',
+  name text not null default 'New shelf',
   position int default 0,
   -- Set when the streamer makes this list shareable via a read-only link.
   share_token text unique,

@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 export async function generateMetadata({ params }: { params: { token: string } }) {
   const sb = supabaseAdmin();
   const { data: list } = await sb.from('lists').select('name').eq('share_token', params.token).maybeSingle();
-  return { title: list ? `${list.name} — The Broadside` : 'Clip file — The Broadside' };
+  return { title: list ? `${list.name} — The Broadside` : 'Shelf — The Broadside' };
 }
 
 export default async function SharedListPage({ params }: { params: { token: string } }) {
@@ -41,7 +41,7 @@ export default async function SharedListPage({ params }: { params: { token: stri
     <main className="min-h-screen px-6 py-10 max-w-3xl mx-auto">
       <header className="mb-8 flex items-center gap-3 flex-wrap">
         <Wordmark />
-        <span className="font-mono text-xs uppercase tracking-widest text-ink/60">/ shared clip file</span>
+        <span className="font-mono text-xs uppercase tracking-widest text-ink/60">/ shared shelf</span>
         <Link href="/" className="ml-auto underline hover:text-rust font-mono text-xs uppercase tracking-widest">
           The Broadside →
         </Link>
@@ -53,7 +53,7 @@ export default async function SharedListPage({ params }: { params: { token: stri
       <h1 className="font-display text-4xl font-bold mb-2">{list.name}</h1>
       <p className="font-mono text-xs text-ink/50 mb-6">
         {(items || []).length} item{(items || []).length === 1 ? '' : 's'} · read-only — this is a snapshot,
-        not a live view of {streamerName}&apos;s clip file
+        not a live view of {streamerName}&apos;s shelf
       </p>
 
       <div className="mb-8">
@@ -63,7 +63,7 @@ export default async function SharedListPage({ params }: { params: { token: stri
       <div className="rule-double mb-6" />
 
       {(items || []).length === 0 ? (
-        <p className="text-ink/60 font-mono text-sm py-8 text-center">This clip file is empty.</p>
+        <p className="text-ink/60 font-mono text-sm py-8 text-center">This shelf is empty.</p>
       ) : (
         <div className="space-y-3">
           {(items || []).map((item) => (

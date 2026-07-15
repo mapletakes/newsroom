@@ -29,7 +29,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-type ListSummary = {
+type ShelfSummary = {
   id: string;
   name: string;
   position: number;
@@ -39,16 +39,16 @@ type ListSummary = {
   item_count: number;
 };
 
-function SortableListRow({
-  list,
+function SortableShelfRow({
+  shelf,
   canCurate,
   onDelete,
 }: {
-  list: ListSummary;
+  shelf: ShelfSummary;
   canCurate: boolean;
   onDelete: () => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: list.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: shelf.id });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -69,15 +69,15 @@ function SortableListRow({
             <Icon name="drag" />
           </button>
         )}
-        <Link href={`/lists/${list.id}`} className="min-w-0 flex-1">
-          <div className="font-display text-lg font-bold leading-tight truncate">{list.name}</div>
+        <Link href={`/shelf/${shelf.id}`} className="min-w-0 flex-1">
+          <div className="font-display text-lg font-bold leading-tight truncate">{shelf.name}</div>
           <div className="font-mono text-xs text-ink/50 mt-0.5">
-            {list.item_count} item{list.item_count === 1 ? '' : 's'} · updated {relativeTime(list.updated_at)}
-            {list.share_token && <span className="text-moss"> · shared</span>}
+            {shelf.item_count} item{shelf.item_count === 1 ? '' : 's'} · updated {relativeTime(shelf.updated_at)}
+            {shelf.share_token && <span className="text-moss"> · shared</span>}
           </div>
         </Link>
         <Link
-          href={`/lists/${list.id}`}
+          href={`/shelf/${shelf.id}`}
           className="shrink-0 font-mono text-xs uppercase tracking-widest underline hover:text-rust"
         >
           Open →
@@ -86,7 +86,7 @@ function SortableListRow({
           <button
             onClick={onDelete}
             className="shrink-0 text-ink/20 hover:text-rust transition-colors"
-            aria-label="Delete clip file"
+            aria-label="Delete shelf"
           >
             <Icon name="remove" className="text-base" />
           </button>
@@ -96,7 +96,7 @@ function SortableListRow({
   );
 }
 
-export function ListsView({
+export function ShelfView({
   displayName,
   isAdmin = false,
   isMod = false,
@@ -107,7 +107,7 @@ export function ListsView({
   isMod?: boolean;
   canCurate?: boolean;
 }) {
-  const [lists, setLists] = useState<ListSummary[]>([]);
+  const [shelves, setShelves] = useState<ShelfSummary[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
@@ -117,17 +117,17 @@ export function ListsView({
     const r = await fetch('/api/lists');
     if (r.ok) {
       const data = await r.json();
-      setLists(data.lists || []);
+      setShelves(data.lists || []);
     }
     setLoaded(true);
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  const createList = async (e: React.FormEvent) => {
+  const createShelf = async (e: React.FormEvent) => {
     e.preventDefault();
     if (creating) return;
-    const name = newName.trim() || 'New clip file';
+    const name = newName.trim() || 'New shelf';
     setCreating(true);
     try {
       const r = await fetch('/api/lists', {
@@ -137,25 +137,25 @@ export function ListsView({
       });
       if (r.ok) {
         const data = await r.json();
-        setLists((prev) => [data.list, ...prev]);
+        setShelves((prev) => [data.list, ...prev]);
         setNewName('');
       } else {
-        toast.error('Failed to create clip file');
+        toast.error('Failed to create shelf');
       }
     } finally {
       setCreating(false);
     }
   };
 
-  const deleteList = async (list: ListSummary) => {
+  const deleteShelf = async (shelf: ShelfSummary) => {
     if (!(await confirm({
-      title: `Delete “${list.name}”?`,
-      description: `This can't be undone. ${list.item_count} item${list.item_count === 1 ? '' : 's'} will be removed with it.`,
+      title: `Delete “${shelf.name}”?`,
+      description: `This can't be undone. ${shelf.item_count} item${shelf.item_count === 1 ? '' : 's'} will be removed with it.`,
       confirmText: 'Delete',
       destructive: true,
     }))) return;
-    setLists((prev) => prev.filter((l) => l.id !== list.id));
-    await fetch(`/api/lists/${list.id}`, { method: 'DELETE' });
+    setShelves((prev) => prev.filter((s) => s.id !== shelf.id));
+    await fetch(`/api/lists/${shelf.id}`, { method: 'DELETE' });
   };
 
   const sensors = useSensors(
@@ -166,15 +166,15 @@ export function ListsView({
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    setLists((prev) => {
-      const oldIndex = prev.findIndex((l) => l.id === active.id);
-      const newIndex = prev.findIndex((l) => l.id === over.id);
+    setShelves((prev) => {
+      const oldIndex = prev.findIndex((s) => s.id === active.id);
+      const newIndex = prev.findIndex((s) => s.id === over.id);
       if (oldIndex < 0 || newIndex < 0) return prev;
       const reordered = arrayMove(prev, oldIndex, newIndex);
       fetch('/api/lists/reorder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: reordered.map((l) => l.id) }),
+        body: JSON.stringify({ ids: reordered.map((s) => s.id) }),
       }).catch(() => {});
       return reordered;
     });
@@ -185,7 +185,7 @@ export function ListsView({
       {confirmDialog}
       <AppHeader
         className="border-b-2 border-ink px-6 py-3 gap-6"
-        section="clip files"
+        section="the shelf"
         right={
           <>
             {!isMod && <Link href="/deck" className="underline hover:text-rust">Streamer Deck</Link>}
@@ -199,20 +199,20 @@ export function ListsView({
 
       <main className="px-6 py-8 max-w-3xl mx-auto w-full flex-1">
         <div className="mb-6">
-          <h1 className="font-display text-3xl font-bold mb-2">Clip files</h1>
+          <h1 className="font-display text-3xl font-bold mb-2">The Shelf</h1>
           <p className="text-sm text-ink/60 max-w-xl">
-            Durable, named lists of content — independent of today&apos;s run of show. Save
+            Durable, named lists of content — independent of today&apos;s run of show. Shelve
             something here when it&apos;s worth keeping but not for today, then send it to the
             deck whenever it&apos;s time.
           </p>
         </div>
 
         {canCurate && (
-          <form onSubmit={createList} className="flex gap-2 mb-6">
+          <form onSubmit={createShelf} className="flex gap-2 mb-6">
             <Input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="New clip file name…"
+              placeholder="New shelf name…"
               className="flex-1"
               disabled={creating}
             />
@@ -226,25 +226,25 @@ export function ListsView({
           <div className="space-y-3">
             {[0, 1, 2].map((i) => <Skeleton key={i} className="h-20 w-full" />)}
           </div>
-        ) : lists.length === 0 ? (
+        ) : shelves.length === 0 ? (
           <div className="text-center py-16">
-            <p className="font-display text-2xl mb-2">No clip files yet.</p>
+            <p className="font-display text-2xl mb-2">Nothing on the shelf yet.</p>
             <p className="text-ink/60 font-mono text-sm">
               {canCurate
-                ? 'Create one above, or save an item to a new clip file straight from the deck or mod view.'
-                : 'Ask your streamer to create one, or save an item to a new clip file from the deck or mod view.'}
+                ? 'Create one above, or save an item to a new shelf straight from the deck or mod view.'
+                : 'Ask your streamer to create one, or save an item to a new shelf from the deck or mod view.'}
             </p>
           </div>
         ) : (
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={lists.map((l) => l.id)} strategy={verticalListSortingStrategy}>
+            <SortableContext items={shelves.map((s) => s.id)} strategy={verticalListSortingStrategy}>
               <div className="space-y-2">
-                {lists.map((list) => (
-                  <SortableListRow
-                    key={list.id}
-                    list={list}
+                {shelves.map((shelf) => (
+                  <SortableShelfRow
+                    key={shelf.id}
+                    shelf={shelf}
                     canCurate={canCurate}
-                    onDelete={() => deleteList(list)}
+                    onDelete={() => deleteShelf(shelf)}
                   />
                 ))}
               </div>

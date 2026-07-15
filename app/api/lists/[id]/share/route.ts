@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getApprovedSession } from '@/lib/session';
 import { sessionCanCurate } from '@/lib/curate';
 
-// POST — generate a share link for this clip file (idempotent: returns the
+// POST — generate a share link for this shelf (idempotent: returns the
 // existing token if one's already set, so re-clicking "Share" in the UI
 // doesn't invalidate a link someone already sent out). Pass
 // { regenerate: true } to force a fresh token, revoking the old link.

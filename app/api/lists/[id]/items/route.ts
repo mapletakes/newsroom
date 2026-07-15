@@ -7,7 +7,7 @@ import { runListItemExtraction } from '@/lib/list-extract';
 
 export const dynamic = 'force-dynamic';
 
-// POST — add item(s) to a clip file. Body is one of:
+// POST — add item(s) to a shelf. Body is one of:
 //   { submissionId }        — copy one submission's metadata in
 //   { submissionIds: [] }   — copy several at once (the deck's multi-select "Save to…")
 //   { url }                 — direct add by URL, runs its own extraction

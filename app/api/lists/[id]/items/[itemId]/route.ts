@@ -35,7 +35,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   return NextResponse.json({ ok: true });
 }
 
-// DELETE — remove one item from a clip file.
+// DELETE — remove one item from a shelf.
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string; itemId: string } }) {
   const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });

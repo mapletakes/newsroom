@@ -182,7 +182,7 @@ export function ModView({
             <Link href="/choose" className="underline hover:text-rust">Switch Channel</Link>
             {!isMod && <Link href="/deck" className="underline hover:text-rust">Streamer Deck →</Link>}
             {isMod && canCurate && <Link href="/deck" className="underline hover:text-rust">Curate Deck →</Link>}
-            <Link href="/lists" className="underline hover:text-rust">Clip Files</Link>
+            <Link href="/shelf" className="underline hover:text-rust">Shelf</Link>
             {!isMod && <Link href="/setup" className="underline hover:text-rust">Settings</Link>}
             {isAdmin && <Link href="/admin" className="underline hover:text-rust">Admin</Link>}
           </>

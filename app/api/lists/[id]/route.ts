@@ -29,7 +29,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   return NextResponse.json({ list, items: items || [] });
 }
 
-// PATCH — rename a clip file.
+// PATCH — rename a shelf.
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
@@ -39,7 +39,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const body = await req.json().catch(() => ({}));
   const patch: Record<string, unknown> = {};
-  if (typeof body.name === 'string') patch.name = body.name.slice(0, 80) || 'Clip file';
+  if (typeof body.name === 'string') patch.name = body.name.slice(0, 80) || 'Shelf';
   if (Object.keys(patch).length === 0) return NextResponse.json({ error: 'nothing to update' }, { status: 400 });
   patch.updated_at = new Date().toISOString();
 
@@ -54,7 +54,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   return NextResponse.json({ ok: true });
 }
 
-// DELETE — remove a clip file (items cascade).
+// DELETE — remove a shelf (items cascade).
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });

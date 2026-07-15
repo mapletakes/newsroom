@@ -27,7 +27,7 @@ export function ImportButton({ token, loggedIn }: { token: string; loggedIn: boo
       if (r.ok) {
         const data = await r.json();
         toast.success('Imported — opening your copy…');
-        window.location.href = `/lists/${data.list.id}`;
+        window.location.href = `/shelf/${data.list.id}`;
       } else {
         const e = await r.json().catch(() => ({}));
         toast.error(e.error || 'Failed to import');
@@ -41,7 +41,7 @@ export function ImportButton({ token, loggedIn }: { token: string; loggedIn: boo
 
   return (
     <Button onClick={doImport} disabled={importing}>
-      {importing ? 'Importing…' : 'Import to my clip files'}
+      {importing ? 'Importing…' : 'Import to my shelf'}
     </Button>
   );
 }

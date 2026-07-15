@@ -1185,8 +1185,8 @@ export function DeckView({
             <Link href="/mod" className="underline hover:text-rust">
               Mod View &rarr;
             </Link>
-            <Link href="/lists" className="underline hover:text-rust">
-              Clip Files
+            <Link href="/shelf" className="underline hover:text-rust">
+              Shelf
             </Link>
             {!curateOnly && (
               <a href="/api/notes?format=markdown&commit=1" className="underline hover:text-rust">

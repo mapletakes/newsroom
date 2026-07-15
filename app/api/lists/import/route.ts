@@ -3,8 +3,8 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getApprovedSession } from '@/lib/session';
 import { sessionCanCurate } from '@/lib/curate';
 
-// POST { token } — import a shared clip file as a new, independent list on
-// the importer's own stream. A copy, not a live subscription: the two lists
+// POST { token } — import a shared shelf as a new, independent one on the
+// importer's own stream. A copy, not a live subscription: the two shelves
 // diverge immediately and editing one never touches the other. That trade
 // avoids every hard problem a live sync would introduce (what happens when
 // the source is edited, deleted, or unshared out from under an importer).
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     .select('twitch_login')
     .eq('id', source.stream_id)
     .maybeSingle();
-  const attribution = sourceStream?.twitch_login ? `via @${sourceStream.twitch_login}` : 'via a shared clip file';
+  const attribution = sourceStream?.twitch_login ? `via @${sourceStream.twitch_login}` : 'via a shared shelf';
 
   const { data: first } = await sb
     .from('lists')

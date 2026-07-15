@@ -5,7 +5,7 @@ import { sessionCanCurate } from '@/lib/curate';
 
 export const dynamic = 'force-dynamic';
 
-// GET — list this stream's clip files, newest-position-first, with item counts.
+// GET — list this stream's shelf, newest-position-first, with item counts.
 export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
@@ -35,7 +35,7 @@ export async function GET() {
   });
 }
 
-// POST — create a clip file, appended to the top (newest-first, matching segments).
+// POST — create a shelf, appended to the top (newest-first, matching segments).
 export async function POST(req: NextRequest) {
   const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const name = (typeof body.name === 'string' && body.name.trim()) || 'New clip file';
+  const name = (typeof body.name === 'string' && body.name.trim()) || 'New shelf';
 
   const sb = supabaseAdmin();
   const { data: first } = await sb

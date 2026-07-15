@@ -41,7 +41,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-type ListItem = {
+type ShelfItem = {
   id: string;
   url: string;
   kind: string;
@@ -65,7 +65,7 @@ type Segment = { id: string; name: string };
 
 // A "Send to deck" button that becomes a dropdown (ungrouped + each segment)
 // once the stream has any segments defined — otherwise it's a single click
-// straight to ungrouped. Shared by the per-item row and the list-level
+// straight to ungrouped. Shared by the per-item row and the shelf-level
 // "Send all" action.
 function SendToDeckMenu({
   segments,
@@ -114,7 +114,7 @@ function SortableItemRow({
   onSend,
   onNoteCommit,
 }: {
-  item: ListItem;
+  item: ShelfItem;
   canCurate: boolean;
   segments: Segment[];
   onRemove: () => void;
@@ -187,7 +187,7 @@ function SortableItemRow({
               onChange={(e) => setNote(e.target.value)}
               onBlur={() => onNoteCommit(note)}
               onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-              placeholder="Why this is on the list…"
+              placeholder="Why this is on the shelf…"
               className="w-full text-xs mb-2"
               disabled={!canCurate}
             />
@@ -209,7 +209,7 @@ function SortableItemRow({
               <button
                 onClick={onRemove}
                 className="ml-auto shrink-0 text-ink/20 hover:text-rust transition-colors"
-                aria-label="Remove from list"
+                aria-label="Remove from shelf"
               >
                 <Icon name="remove" className="text-base" />
               </button>
@@ -221,21 +221,21 @@ function SortableItemRow({
   );
 }
 
-export function ListDetailView({
-  listId,
+export function ShelfDetailView({
+  shelfId,
   displayName,
   isAdmin = false,
   isMod = false,
   canCurate = false,
 }: {
-  listId: string;
+  shelfId: string;
   displayName: string;
   isAdmin?: boolean;
   isMod?: boolean;
   canCurate?: boolean;
 }) {
-  const [list, setList] = useState<{ id: string; name: string; share_token: string | null } | null>(null);
-  const [items, setItems] = useState<ListItem[]>([]);
+  const [shelf, setShelf] = useState<{ id: string; name: string; share_token: string | null } | null>(null);
+  const [items, setItems] = useState<ShelfItem[]>([]);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [name, setName] = useState('');
@@ -245,21 +245,21 @@ export function ListDetailView({
   const { confirm, confirmDialog } = useConfirm();
 
   const refresh = useCallback(async () => {
-    const r = await fetch(`/api/lists/${listId}`);
+    const r = await fetch(`/api/lists/${shelfId}`);
     if (r.ok) {
       const data = await r.json();
-      setList(data.list);
+      setShelf(data.list);
       if (!editingNameRef.current) setName(data.list.name);
       setItems(data.items || []);
     }
     setLoaded(true);
-  }, [listId]);
+  }, [shelfId]);
 
   useEffect(() => { refresh(); }, [refresh]);
   useEffect(() => {
     fetch('/api/segments').then((r) => (r.ok ? r.json() : null)).then((d) => { if (d) setSegments(d.segments || []); });
   }, []);
-  // No realtime channel for lists (lower-urgency surface than the live
+  // No realtime channel for the shelf (lower-urgency surface than the live
   // queue) — a slow visible-tab poll is enough to pick up another curator's
   // edits.
   useVisiblePoll(refresh, 30000);
@@ -267,11 +267,11 @@ export function ListDetailView({
   const commitName = async () => {
     editingNameRef.current = false;
     const trimmed = name.trim();
-    if (!trimmed || trimmed === list?.name) {
-      if (list) setName(list.name);
+    if (!trimmed || trimmed === shelf?.name) {
+      if (shelf) setName(shelf.name);
       return;
     }
-    await fetch(`/api/lists/${listId}`, {
+    await fetch(`/api/lists/${shelfId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: trimmed }),
@@ -284,7 +284,7 @@ export function ListDetailView({
     if (!url || adding) return;
     setAdding(true);
     try {
-      const r = await fetch(`/api/lists/${listId}/items`, {
+      const r = await fetch(`/api/lists/${shelfId}/items`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
@@ -293,10 +293,10 @@ export function ListDetailView({
         const data = await r.json();
         setAddUrl('');
         if (data.added > 0) {
-          toast.success('Added to clip file');
+          toast.success('Added to the shelf');
           refresh();
         } else {
-          toast('Already on this list');
+          toast('Already on this shelf');
         }
       } else {
         toast.error('Failed to add');
@@ -308,11 +308,11 @@ export function ListDetailView({
 
   const removeItem = (id: string) => {
     setItems((prev) => prev.filter((i) => i.id !== id)); // optimistic
-    fetch(`/api/lists/${listId}/items/${id}`, { method: 'DELETE' }).catch(() => {});
+    fetch(`/api/lists/${shelfId}/items/${id}`, { method: 'DELETE' }).catch(() => {});
   };
 
   const commitNote = (id: string, note: string) => {
-    fetch(`/api/lists/${listId}/items/${id}`, {
+    fetch(`/api/lists/${shelfId}/items/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ note: note || null }),
@@ -320,7 +320,7 @@ export function ListDetailView({
   };
 
   const sendToDeck = async (itemIds: string[] | null, segmentId: string | null, segLabel: string) => {
-    const r = await fetch(`/api/lists/${listId}/send-to-deck`, {
+    const r = await fetch(`/api/lists/${shelfId}/send-to-deck`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ itemIds, segmentId }),
@@ -336,22 +336,22 @@ export function ListDetailView({
 
   const [sharing, setSharing] = useState(false);
   const [copied, setCopied] = useState(false);
-  const shareUrl = list?.share_token && typeof window !== 'undefined'
-    ? `${window.location.origin}/l/${list.share_token}`
+  const shareUrl = shelf?.share_token && typeof window !== 'undefined'
+    ? `${window.location.origin}/l/${shelf.share_token}`
     : '';
 
   const generateShareLink = async () => {
     if (sharing) return;
     setSharing(true);
     try {
-      const r = await fetch(`/api/lists/${listId}/share`, {
+      const r = await fetch(`/api/lists/${shelfId}/share`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       });
       if (r.ok) {
         const data = await r.json();
-        setList((prev) => (prev ? { ...prev, share_token: data.token } : prev));
+        setShelf((prev) => (prev ? { ...prev, share_token: data.token } : prev));
       } else {
         toast.error('Failed to create share link');
       }
@@ -367,8 +367,8 @@ export function ListDetailView({
       confirmText: 'Revoke',
       destructive: true,
     }))) return;
-    await fetch(`/api/lists/${listId}/share`, { method: 'DELETE' });
-    setList((prev) => (prev ? { ...prev, share_token: null } : prev));
+    await fetch(`/api/lists/${shelfId}/share`, { method: 'DELETE' });
+    setShelf((prev) => (prev ? { ...prev, share_token: null } : prev));
   };
 
   const copyShareLink = async () => {
@@ -379,16 +379,16 @@ export function ListDetailView({
     } catch { /* clipboard unavailable */ }
   };
 
-  const deleteList = async () => {
-    if (!list) return;
+  const deleteShelf = async () => {
+    if (!shelf) return;
     if (!(await confirm({
-      title: `Delete “${list.name}”?`,
+      title: `Delete “${shelf.name}”?`,
       description: `This can't be undone. ${items.length} item${items.length === 1 ? '' : 's'} will be removed with it.`,
       confirmText: 'Delete',
       destructive: true,
     }))) return;
-    await fetch(`/api/lists/${listId}`, { method: 'DELETE' });
-    window.location.href = '/lists';
+    await fetch(`/api/lists/${shelfId}`, { method: 'DELETE' });
+    window.location.href = '/shelf';
   };
 
   const sensors = useSensors(
@@ -404,7 +404,7 @@ export function ListDetailView({
       const newIndex = prev.findIndex((i) => i.id === over.id);
       if (oldIndex < 0 || newIndex < 0) return prev;
       const reordered = arrayMove(prev, oldIndex, newIndex);
-      fetch(`/api/lists/${listId}/items/reorder`, {
+      fetch(`/api/lists/${shelfId}/items/reorder`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: reordered.map((i) => i.id) }),
@@ -418,10 +418,10 @@ export function ListDetailView({
       {confirmDialog}
       <AppHeader
         className="border-b-2 border-ink px-6 py-3 gap-6"
-        section={<>clip file</>}
+        section={<>the shelf</>}
         right={
           <>
-            <Link href="/lists" className="underline hover:text-rust">← Clip Files</Link>
+            <Link href="/shelf" className="underline hover:text-rust">← The Shelf</Link>
             {!isMod && <Link href="/deck" className="underline hover:text-rust">Streamer Deck</Link>}
             <Link href="/mod" className="underline hover:text-rust">Mod View</Link>
             {isAdmin && <Link href="/admin" className="underline hover:text-rust">Admin</Link>}
@@ -447,8 +447,8 @@ export function ListDetailView({
               <h1 className="font-display text-3xl font-bold">{name}</h1>
             )}
             {canCurate && (
-              <button onClick={deleteList} className="shrink-0 font-mono text-xs uppercase tracking-widest text-ink/40 hover:text-rust">
-                Delete clip file
+              <button onClick={deleteShelf} className="shrink-0 font-mono text-xs uppercase tracking-widest text-ink/40 hover:text-rust">
+                Delete shelf
               </button>
             )}
           </div>
@@ -465,7 +465,7 @@ export function ListDetailView({
 
         {canCurate && (
           <div className="flex items-center gap-2 mb-6 flex-wrap">
-            {list?.share_token ? (
+            {shelf?.share_token ? (
               <>
                 <Input
                   readOnly
@@ -491,7 +491,7 @@ export function ListDetailView({
               type="url"
               value={addUrl}
               onChange={(e) => setAddUrl(e.target.value)}
-              placeholder="Paste a link to add it to this clip file…"
+              placeholder="Paste a link to add it to this shelf…"
               className="flex-1"
               disabled={adding}
             />
@@ -510,8 +510,8 @@ export function ListDetailView({
             <p className="font-display text-2xl mb-2">Nothing here yet.</p>
             <p className="text-ink/60 font-mono text-sm">
               {canCurate
-                ? 'Paste a link above, or save an item to this clip file from the deck or mod view.'
-                : 'Ask a curator to add something, or save an item to this clip file from the deck or mod view.'}
+                ? 'Paste a link above, or save an item to this shelf from the deck or mod view.'
+                : 'Ask a curator to add something, or save an item to this shelf from the deck or mod view.'}
             </p>
           </div>
         ) : (

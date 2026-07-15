@@ -3,11 +3,11 @@ import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase';
 import { isAdmin } from '@/lib/admin';
 import { canMemberCurate } from '@/lib/curate';
-import { ListsView } from './ListsView';
+import { ShelfDetailView } from './ShelfDetailView';
 
 export const dynamic = 'force-dynamic';
 
-export default async function ListsPage() {
+export default async function ShelfDetailPage({ params }: { params: { id: string } }) {
   const session = await getSession();
   if (!session) redirect('/login');
 
@@ -15,10 +15,19 @@ export default async function ListsPage() {
   const { data: stream } = await sb.from('streams').select('approved').eq('id', session.streamId).maybeSingle();
   if (stream?.approved === false) redirect('/blocked');
 
+  const { data: shelf } = await sb
+    .from('lists')
+    .select('id')
+    .eq('id', params.id)
+    .eq('stream_id', session.streamId)
+    .maybeSingle();
+  if (!shelf) redirect('/shelf');
+
   const canCurate = session.role === 'streamer' || (await canMemberCurate(session.streamId, session.twitchUserId));
 
   return (
-    <ListsView
+    <ShelfDetailView
+      shelfId={params.id}
       displayName={session.displayName}
       isAdmin={isAdmin(session.twitchUserId)}
       isMod={session.role === 'mod'}

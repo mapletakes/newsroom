@@ -1,4 +1,4 @@
-// Public, token-gated read of a shared clip file — no session required. Same
+// Public, token-gated read of a shared shelf — no session required. Same
 // trust model as the OBS overlay endpoint: a bare token in the URL, rate
 // limited, service-role query, no anon DB access.
 import { NextResponse } from 'next/server';
