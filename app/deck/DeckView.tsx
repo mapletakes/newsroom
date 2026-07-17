@@ -447,22 +447,44 @@ export function DeckView({
   // was the cause of items flashing back in/out on played/remove/reorder.
   const reconcileTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inflightWrites = useRef(0);
-  const reconcileAfterWrites = useCallback(<T,>(p: Promise<T>): Promise<T> => {
+
+  // Start tracking a write as "pending" — suppresses refetches until settled.
+  // Exposed separately from reconcileAfterWrites (below) so a delayed write
+  // behind an Undo toast (markPlayed, removeFromQueue) can start suppression
+  // at the moment of the OPTIMISTIC update, not just once the real fetch
+  // fires 5s later. Those were previously two independently-scheduled 5s
+  // timers (a fixed suppressRefreshUntil timestamp, and the undo setTimeout)
+  // that only approximately lined up — any jitter between them (easily
+  // introduced by a backgrounded tab's timer throttling) reopened the same
+  // stale-read gap the fixed-timestamp fix was meant to close, and a refresh
+  // landing in it could resurrect the item while a second copy was already
+  // sitting in local state — the "flashes back in" / "duplicate" symptom.
+  // Tracking continuously from click to settle removes the gap entirely.
+  const beginPendingWrite = useCallback(() => {
     inflightWrites.current += 1;
-    suppressRefreshUntil.current = Date.now() + 15000; // pause refetches while writing
-    const settle = () => {
-      inflightWrites.current -= 1;
-      if (inflightWrites.current > 0) return; // more writes pending; wait for them
-      if (reconcileTimer.current) clearTimeout(reconcileTimer.current);
-      reconcileTimer.current = setTimeout(() => {
-        if (inflightWrites.current > 0) return; // a new write started; it will reconcile
-        suppressRefreshUntil.current = 0;
-        refresh();
-      }, 250);
-    };
-    p.then(settle, settle);
-    return p;
+    suppressRefreshUntil.current = Date.now() + 15000;
+  }, []);
+
+  // Mark a pending write as resolved (the fetch completed, or it was
+  // cancelled via Undo) and, once every pending write has settled, do one
+  // authoritative refresh — the only way local state (including an Undo's
+  // optimistic re-insertion) ever gets confirmed against the server.
+  const settlePendingWrite = useCallback(() => {
+    inflightWrites.current -= 1;
+    if (inflightWrites.current > 0) return; // more writes pending; wait for them
+    if (reconcileTimer.current) clearTimeout(reconcileTimer.current);
+    reconcileTimer.current = setTimeout(() => {
+      if (inflightWrites.current > 0) return; // a new write started; it will reconcile
+      suppressRefreshUntil.current = 0;
+      refresh();
+    }, 250);
   }, [refresh]);
+
+  const reconcileAfterWrites = useCallback(<T,>(p: Promise<T>): Promise<T> => {
+    beginPendingWrite();
+    p.then(settlePendingWrite, settlePendingWrite);
+    return p;
+  }, [beginPendingWrite, settlePendingWrite]);
 
   useEffect(() => () => { if (reconcileTimer.current) clearTimeout(reconcileTimer.current); }, []);
 
@@ -683,17 +705,16 @@ export function DeckView({
     setStartedAt(next ? Date.now() : null);
     setTakeaway('');
     setQueue((prev) => prev.filter((s) => s.id !== playedId)); // optimistic
-    // Cover the undo-delay window itself, not just the write once it starts —
-    // a realtime broadcast landing in the 5s before the write fires (e.g. a
-    // mod approving something else) would otherwise refetch pre-write server
-    // state and flash the item back in before the delayed write removes it
-    // again. reconcileAfterWrites takes over extending this once the write begins.
-    suppressRefreshUntil.current = Date.now() + 5000;
+    // Track this as a pending write from the moment of the optimistic update,
+    // not just once the delayed fetch itself fires — see beginPendingWrite's
+    // doc comment for why the two-separate-timers version this replaced
+    // could still let a stale refresh through.
+    beginPendingWrite();
 
     let undone = false;
     const timer = setTimeout(() => {
       if (undone) return;
-      reconcileAfterWrites(fetch('/api/queue', {
+      fetch('/api/queue', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -702,7 +723,7 @@ export function DeckView({
           takeaway: tk,
           duration_on_screen_s: duration,
         }),
-      }));
+      }).then(settlePendingWrite, settlePendingWrite);
     }, 5000);
 
     toast('Marked played', {
@@ -713,6 +734,7 @@ export function DeckView({
           undone = true;
           clearTimeout(timer);
           setQueue((prev) => [played, ...prev]);
+          settlePendingWrite(); // the write never happened — stop tracking it, and resync
         },
       },
     });
@@ -733,18 +755,18 @@ export function DeckView({
     const removed = queue.find((s) => s.id === id);
     if (!removed) return;
     setQueue((prev) => prev.filter((s) => s.id !== id));
-    // See markPlayed — covers the undo-delay window itself, not just the
-    // write once it starts.
-    suppressRefreshUntil.current = Date.now() + 5000;
+    // See markPlayed — tracks the write as pending from the optimistic
+    // update itself, not just once the delayed fetch fires.
+    beginPendingWrite();
 
     let undone = false;
     const timer = setTimeout(() => {
       if (undone) return;
-      reconcileAfterWrites(fetch('/api/queue', {
+      fetch('/api/queue', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, status: 'rejected' }),
-      }));
+      }).then(settlePendingWrite, settlePendingWrite);
     }, 5000);
 
     toast('Removed from deck', {
@@ -755,6 +777,7 @@ export function DeckView({
           undone = true;
           clearTimeout(timer);
           setQueue((prev) => [removed, ...prev]);
+          settlePendingWrite(); // the write never happened — stop tracking it, and resync
         },
       },
     });
