@@ -28,6 +28,7 @@ export default async function ShelfDetailPage({ params }: { params: { id: string
   return (
     <ShelfDetailView
       shelfId={params.id}
+      streamId={session.streamId}
       displayName={session.displayName}
       isAdmin={isAdmin(session.twitchUserId)}
       isMod={session.role === 'mod'}

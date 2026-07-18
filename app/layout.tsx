@@ -2,6 +2,7 @@ import './globals.css';
 import type { Metadata } from 'next';
 import { Toaster } from '@/components/ui/sonner';
 import { ThemeProvider } from '@/components/theme-provider';
+import { QueryProvider } from '@/components/query-provider';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister';
 
@@ -23,11 +24,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning>
       <body>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem themes={THEMES}>
-          <TooltipProvider delayDuration={200}>
-            {children}
-            <Toaster />
-            <ServiceWorkerRegister />
-          </TooltipProvider>
+          <QueryProvider>
+            <TooltipProvider delayDuration={200}>
+              {children}
+              <Toaster />
+              <ServiceWorkerRegister />
+            </TooltipProvider>
+          </QueryProvider>
         </ThemeProvider>
       </body>
     </html>

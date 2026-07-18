@@ -1,9 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
 import { Sheet, SheetClose, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 import { Icon } from '@/components/ui/icon';
+import { queryKeys } from '@/lib/query-keys';
 import {
   DndContext,
   closestCenter,
@@ -23,6 +25,13 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 
 type QuickLink = { id: string; label: string; url: string; position: number };
+
+async function fetchQuickLinks(): Promise<QuickLink[]> {
+  const r = await fetch('/api/quick-links');
+  if (!r.ok) return [];
+  const d = await r.json();
+  return d.links || [];
+}
 
 const host = (u: string) => {
   try {
@@ -93,56 +102,71 @@ function SortableLinkRow({
 // A streamer's personal "on-hand" links (fossabot, fundraisers, etc.), in a
 // popout drawer that overlays the deck. Entirely separate from the queue.
 export function QuickLinksDrawer() {
-  const [links, setLinks] = useState<QuickLink[]>([]);
+  const queryClient = useQueryClient();
+  const linksKey = queryKeys.quickLinks();
+  const { data } = useQuery({ queryKey: linksKey, queryFn: fetchQuickLinks });
+  const links = data ?? [];
+
   const [label, setLabel] = useState('');
   const [url, setUrl] = useState('');
-  const [adding, setAdding] = useState(false);
   const [error, setError] = useState('');
 
-  const load = useCallback(async () => {
-    const r = await fetch('/api/quick-links');
-    if (r.ok) {
-      const d = await r.json();
-      setLinks(d.links || []);
-    }
-  }, []);
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const add = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!url.trim() || adding) return;
-    setAdding(true);
-    setError('');
-    try {
+  const addMutation = useMutation({
+    mutationFn: async (vars: { label: string; url: string }) => {
       const r = await fetch('/api/quick-links', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ label, url }),
+        body: JSON.stringify(vars),
       });
-      if (r.ok) {
-        const d = await r.json();
-        setLinks((prev) => [...prev, d.link]);
-        setLabel('');
-        setUrl('');
-      } else {
-        const d = await r.json().catch(() => ({}));
-        setError(d.error === 'invalid url' ? 'That doesn’t look like a URL.' : d.error || 'Failed to add');
-      }
-    } finally {
-      setAdding(false);
-    }
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error === 'invalid url' ? 'That doesn’t look like a URL.' : d.error || 'Failed to add');
+      return d.link as QuickLink;
+    },
+    onSuccess: (link) => {
+      queryClient.setQueryData<QuickLink[]>(linksKey, (prev = []) => [...prev, link]);
+      setLabel('');
+      setUrl('');
+      setError('');
+    },
+    onError: (err: Error) => setError(err.message),
+  });
+
+  const add = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!url.trim() || addMutation.isPending) return;
+    setError('');
+    addMutation.mutate({ label, url });
   };
 
-  const remove = async (id: string) => {
-    setLinks((prev) => prev.filter((l) => l.id !== id)); // optimistic
-    await fetch('/api/quick-links', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id }),
-    });
-  };
+  const removeMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await fetch('/api/quick-links', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+    },
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: linksKey });
+      const previous = queryClient.getQueryData<QuickLink[]>(linksKey);
+      queryClient.setQueryData<QuickLink[]>(linksKey, (prev = []) => prev.filter((l) => l.id !== id));
+      return { previous };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previous) queryClient.setQueryData(linksKey, context.previous);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: linksKey }),
+  });
+
+  const reorderMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      await fetch('/api/quick-links', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+    },
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -152,18 +176,12 @@ export function QuickLinksDrawer() {
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    setLinks((prev) => {
-      const oldIndex = prev.findIndex((l) => l.id === active.id);
-      const newIndex = prev.findIndex((l) => l.id === over.id);
-      if (oldIndex < 0 || newIndex < 0) return prev;
-      const reordered = arrayMove(prev, oldIndex, newIndex);
-      fetch('/api/quick-links', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: reordered.map((l) => l.id) }),
-      }).catch(() => {});
-      return reordered;
-    });
+    const oldIndex = links.findIndex((l) => l.id === active.id);
+    const newIndex = links.findIndex((l) => l.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const reordered = arrayMove(links, oldIndex, newIndex);
+    queryClient.setQueryData(linksKey, reordered);
+    reorderMutation.mutate(reordered.map((l) => l.id));
   };
 
   return (
@@ -207,14 +225,14 @@ export function QuickLinksDrawer() {
               onChange={(e) => setUrl(e.target.value)}
               placeholder="Paste a URL…"
               className="flex-1 min-w-0 text-xs"
-              disabled={adding}
+              disabled={addMutation.isPending}
             />
             <button
               type="submit"
-              disabled={adding || !url.trim()}
+              disabled={addMutation.isPending || !url.trim()}
               className="shrink-0 font-mono text-xs uppercase tracking-widest bg-ink text-paper px-3 py-1.5 hover:bg-rust transition-colors disabled:opacity-40"
             >
-              {adding ? '…' : 'Add'}
+              {addMutation.isPending ? '…' : 'Add'}
             </button>
           </div>
           {error && <div className="font-mono text-[10px] text-rust">{error}</div>}
@@ -234,7 +252,7 @@ export function QuickLinksDrawer() {
             >
               <SortableContext items={links.map((l) => l.id)} strategy={verticalListSortingStrategy}>
                 {links.map((l) => (
-                  <SortableLinkRow key={l.id} link={l} onRemove={remove} />
+                  <SortableLinkRow key={l.id} link={l} onRemove={(id) => removeMutation.mutate(id)} />
                 ))}
               </SortableContext>
             </DndContext>

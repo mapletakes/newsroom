@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppHeader } from '@/components/AppHeader';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,7 +21,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { formatDuration, formatDate, relativeTime, kindTint } from '@/lib/url';
-import { useVisiblePoll } from '@/lib/use-visible-poll';
+import { queryKeys } from '@/lib/query-keys';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
@@ -61,7 +62,23 @@ type ShelfItem = {
   created_at: string;
 };
 
+type ShelfMeta = { id: string; name: string; share_token: string | null };
+type ShelfData = { list: ShelfMeta; items: ShelfItem[] };
 type Segment = { id: string; name: string };
+
+async function fetchShelf(shelfId: string): Promise<ShelfData> {
+  const r = await fetch(`/api/lists/${shelfId}`);
+  if (!r.ok) throw new Error('Failed to load shelf');
+  const data = await r.json();
+  return { list: data.list, items: data.items || [] };
+}
+
+async function fetchSegments(): Promise<Segment[]> {
+  const r = await fetch('/api/segments');
+  if (!r.ok) return [];
+  const data = await r.json();
+  return data.segments || [];
+}
 
 // A "Send to deck" button that becomes a dropdown (ungrouped + each segment)
 // once the stream has any segments defined — otherwise it's a single click
@@ -223,142 +240,181 @@ function SortableItemRow({
 
 export function ShelfDetailView({
   shelfId,
+  streamId,
   displayName,
   isAdmin = false,
   isMod = false,
   canCurate = false,
 }: {
   shelfId: string;
+  streamId: string;
   displayName: string;
   isAdmin?: boolean;
   isMod?: boolean;
   canCurate?: boolean;
 }) {
-  const [shelf, setShelf] = useState<{ id: string; name: string; share_token: string | null } | null>(null);
-  const [items, setItems] = useState<ShelfItem[]>([]);
-  const [segments, setSegments] = useState<Segment[]>([]);
-  const [loaded, setLoaded] = useState(false);
-  const [name, setName] = useState('');
-  const editingNameRef = useRef(false);
-  const [addUrl, setAddUrl] = useState('');
-  const [adding, setAdding] = useState(false);
+  const queryClient = useQueryClient();
+  const shelfKey = queryKeys.shelf(shelfId);
   const { confirm, confirmDialog } = useConfirm();
 
-  const refresh = useCallback(async () => {
-    const r = await fetch(`/api/lists/${shelfId}`);
-    if (r.ok) {
-      const data = await r.json();
-      setShelf(data.list);
-      if (!editingNameRef.current) setName(data.list.name);
-      setItems(data.items || []);
-    }
-    setLoaded(true);
-  }, [shelfId]);
+  // A slow backstop poll is enough here — no realtime channel for the shelf
+  // (lower-urgency surface than the live queue). refetchIntervalInBackground
+  // defaults to false, so this already pauses while the tab is hidden, same
+  // as the hand-rolled useVisiblePoll it replaces.
+  const { data, isPending } = useQuery({
+    queryKey: shelfKey,
+    queryFn: () => fetchShelf(shelfId),
+    refetchInterval: 30000,
+  });
+  const shelf = data?.list ?? null;
+  const items = data?.items ?? [];
 
-  useEffect(() => { refresh(); }, [refresh]);
+  const { data: segments = [] } = useQuery({ queryKey: queryKeys.segments(streamId), queryFn: fetchSegments });
+
+  const [name, setName] = useState('');
+  const editingNameRef = useRef(false);
   useEffect(() => {
-    fetch('/api/segments').then((r) => (r.ok ? r.json() : null)).then((d) => { if (d) setSegments(d.segments || []); });
-  }, []);
-  // No realtime channel for the shelf (lower-urgency surface than the live
-  // queue) — a slow visible-tab poll is enough to pick up another curator's
-  // edits.
-  useVisiblePoll(refresh, 30000);
+    if (shelf && !editingNameRef.current) setName(shelf.name);
+  }, [shelf]);
 
-  const commitName = async () => {
+  const [addUrl, setAddUrl] = useState('');
+
+  const renameMutation = useMutation({
+    mutationFn: async (newName: string) => {
+      await fetch(`/api/lists/${shelfId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName }),
+      });
+    },
+    onSuccess: (_void, newName) => {
+      queryClient.setQueryData<ShelfData>(shelfKey, (prev) =>
+        prev ? { ...prev, list: { ...prev.list, name: newName } } : prev);
+    },
+  });
+
+  const commitName = () => {
     editingNameRef.current = false;
     const trimmed = name.trim();
     if (!trimmed || trimmed === shelf?.name) {
       if (shelf) setName(shelf.name);
       return;
     }
-    await fetch(`/api/lists/${shelfId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: trimmed }),
-    });
+    renameMutation.mutate(trimmed);
   };
 
-  const handleAddUrl = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const url = addUrl.trim();
-    if (!url || adding) return;
-    setAdding(true);
-    try {
+  const addUrlMutation = useMutation({
+    mutationFn: async (url: string) => {
       const r = await fetch(`/api/lists/${shelfId}/items`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
       });
-      if (r.ok) {
-        const data = await r.json();
-        setAddUrl('');
-        if (data.added > 0) {
-          toast.success('Added to the shelf');
-          refresh();
-        } else {
-          toast('Already on this shelf');
-        }
+      if (!r.ok) throw new Error('Failed to add');
+      return r.json();
+    },
+    onSuccess: (result) => {
+      setAddUrl('');
+      if (result.added > 0) {
+        toast.success('Added to the shelf');
+        queryClient.invalidateQueries({ queryKey: shelfKey });
       } else {
-        toast.error('Failed to add');
+        toast('Already on this shelf');
       }
-    } finally {
-      setAdding(false);
-    }
+    },
+    onError: () => toast.error('Failed to add'),
+  });
+
+  const handleAddUrl = (e: React.FormEvent) => {
+    e.preventDefault();
+    const url = addUrl.trim();
+    if (!url || addUrlMutation.isPending) return;
+    addUrlMutation.mutate(url);
   };
 
-  const removeItem = (id: string) => {
-    setItems((prev) => prev.filter((i) => i.id !== id)); // optimistic
-    fetch(`/api/lists/${shelfId}/items/${id}`, { method: 'DELETE' }).catch(() => {});
-  };
+  const removeItemMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await fetch(`/api/lists/${shelfId}/items/${id}`, { method: 'DELETE' });
+    },
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: shelfKey });
+      const previous = queryClient.getQueryData<ShelfData>(shelfKey);
+      queryClient.setQueryData<ShelfData>(shelfKey, (prev) =>
+        prev ? { ...prev, items: prev.items.filter((i) => i.id !== id) } : prev);
+      return { previous };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previous) queryClient.setQueryData(shelfKey, context.previous);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: shelfKey }),
+  });
 
-  const commitNote = (id: string, note: string) => {
-    fetch(`/api/lists/${shelfId}/items/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ note: note || null }),
-    }).catch(() => {});
-  };
+  const noteMutation = useMutation({
+    mutationFn: async ({ id, note }: { id: string; note: string }) => {
+      await fetch(`/api/lists/${shelfId}/items/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: note || null }),
+      });
+    },
+  });
 
-  const sendToDeck = async (itemIds: string[] | null, segmentId: string | null, segLabel: string) => {
-    const r = await fetch(`/api/lists/${shelfId}/send-to-deck`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ itemIds, segmentId }),
+  const sendToDeckMutation = useMutation({
+    mutationFn: async (vars: { itemIds: string[] | null; segmentId: string | null }) => {
+      const r = await fetch(`/api/lists/${shelfId}/send-to-deck`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(vars),
+      });
+      if (!r.ok) throw new Error('Failed to send to deck');
+      return r.json();
+    },
+    onError: () => toast.error('Failed to send to deck'),
+  });
+
+  const sendToDeck = (itemIds: string[] | null, segmentId: string | null, segLabel: string) => {
+    sendToDeckMutation.mutate({ itemIds, segmentId }, {
+      onSuccess: (result) => {
+        if (result.added > 0) {
+          toast.success(`Sent ${result.added} to deck${segLabel ? ` — ${segLabel}` : ''}${result.skipped ? ` (${result.skipped} already there)` : ''}`);
+        } else {
+          toast(result.skipped ? 'Already on the deck' : 'Nothing to send');
+        }
+      },
     });
-    if (!r.ok) { toast.error('Failed to send to deck'); return; }
-    const data = await r.json();
-    if (data.added > 0) {
-      toast.success(`Sent ${data.added} to deck${segLabel ? ` — ${segLabel}` : ''}${data.skipped ? ` (${data.skipped} already there)` : ''}`);
-    } else {
-      toast(data.skipped ? 'Already on the deck' : 'Nothing to send');
-    }
   };
 
-  const [sharing, setSharing] = useState(false);
   const [copied, setCopied] = useState(false);
   const shareUrl = shelf?.share_token && typeof window !== 'undefined'
     ? `${window.location.origin}/l/${shelf.share_token}`
     : '';
 
-  const generateShareLink = async () => {
-    if (sharing) return;
-    setSharing(true);
-    try {
+  const shareMutation = useMutation({
+    mutationFn: async () => {
       const r = await fetch(`/api/lists/${shelfId}/share`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       });
-      if (r.ok) {
-        const data = await r.json();
-        setShelf((prev) => (prev ? { ...prev, share_token: data.token } : prev));
-      } else {
-        toast.error('Failed to create share link');
-      }
-    } finally {
-      setSharing(false);
-    }
-  };
+      if (!r.ok) throw new Error('Failed to create share link');
+      return r.json();
+    },
+    onSuccess: (result) => {
+      queryClient.setQueryData<ShelfData>(shelfKey, (prev) =>
+        prev ? { ...prev, list: { ...prev.list, share_token: result.token } } : prev);
+    },
+    onError: () => toast.error('Failed to create share link'),
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: async () => {
+      await fetch(`/api/lists/${shelfId}/share`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      queryClient.setQueryData<ShelfData>(shelfKey, (prev) =>
+        prev ? { ...prev, list: { ...prev.list, share_token: null } } : prev);
+    },
+  });
 
   const revokeShareLink = async () => {
     if (!(await confirm({
@@ -367,8 +423,7 @@ export function ShelfDetailView({
       confirmText: 'Revoke',
       destructive: true,
     }))) return;
-    await fetch(`/api/lists/${shelfId}/share`, { method: 'DELETE' });
-    setShelf((prev) => (prev ? { ...prev, share_token: null } : prev));
+    revokeMutation.mutate();
   };
 
   const copyShareLink = async () => {
@@ -379,6 +434,16 @@ export function ShelfDetailView({
     } catch { /* clipboard unavailable */ }
   };
 
+  const deleteShelfMutation = useMutation({
+    mutationFn: async () => {
+      await fetch(`/api/lists/${shelfId}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.shelves() });
+      window.location.href = '/shelf';
+    },
+  });
+
   const deleteShelf = async () => {
     if (!shelf) return;
     if (!(await confirm({
@@ -387,9 +452,18 @@ export function ShelfDetailView({
       confirmText: 'Delete',
       destructive: true,
     }))) return;
-    await fetch(`/api/lists/${shelfId}`, { method: 'DELETE' });
-    window.location.href = '/shelf';
+    deleteShelfMutation.mutate();
   };
+
+  const reorderMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      await fetch(`/api/lists/${shelfId}/items/reorder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+    },
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -399,18 +473,12 @@ export function ShelfDetailView({
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    setItems((prev) => {
-      const oldIndex = prev.findIndex((i) => i.id === active.id);
-      const newIndex = prev.findIndex((i) => i.id === over.id);
-      if (oldIndex < 0 || newIndex < 0) return prev;
-      const reordered = arrayMove(prev, oldIndex, newIndex);
-      fetch(`/api/lists/${shelfId}/items/reorder`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: reordered.map((i) => i.id) }),
-      }).catch(() => {});
-      return reordered;
-    });
+    const oldIndex = items.findIndex((i) => i.id === active.id);
+    const newIndex = items.findIndex((i) => i.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const reordered = arrayMove(items, oldIndex, newIndex);
+    queryClient.setQueryData<ShelfData>(shelfKey, (prev) => (prev ? { ...prev, items: reordered } : prev));
+    reorderMutation.mutate(reordered.map((i) => i.id));
   };
 
   return (
@@ -431,7 +499,7 @@ export function ShelfDetailView({
       />
 
       <main className="px-6 py-8 max-w-3xl mx-auto w-full flex-1">
-        {!loaded ? (
+        {isPending ? (
           <Skeleton className="h-9 w-64 mb-6" />
         ) : (
           <div className="flex items-start justify-between gap-4 mb-2 flex-wrap">
@@ -478,8 +546,8 @@ export function ShelfDetailView({
                 <Button variant="outlineDestructive" size="sm" onClick={revokeShareLink}>Revoke</Button>
               </>
             ) : (
-              <Button variant="outline" size="sm" onClick={generateShareLink} disabled={sharing}>
-                {sharing ? '…' : 'Share with another streamer…'}
+              <Button variant="outline" size="sm" onClick={() => shareMutation.mutate()} disabled={shareMutation.isPending}>
+                {shareMutation.isPending ? '…' : 'Share with another streamer…'}
               </Button>
             )}
           </div>
@@ -493,15 +561,15 @@ export function ShelfDetailView({
               onChange={(e) => setAddUrl(e.target.value)}
               placeholder="Paste a link to add it to this shelf…"
               className="flex-1"
-              disabled={adding}
+              disabled={addUrlMutation.isPending}
             />
-            <Button type="submit" disabled={adding || !addUrl.trim()}>
-              {adding ? '…' : 'Add'}
+            <Button type="submit" disabled={addUrlMutation.isPending || !addUrl.trim()}>
+              {addUrlMutation.isPending ? '…' : 'Add'}
             </Button>
           </form>
         )}
 
-        {!loaded ? (
+        {isPending ? (
           <div className="space-y-3">
             {[0, 1, 2].map((i) => <Skeleton key={i} className="h-32 w-full" />)}
           </div>
@@ -524,9 +592,9 @@ export function ShelfDetailView({
                     item={item}
                     canCurate={canCurate}
                     segments={segments}
-                    onRemove={() => removeItem(item.id)}
+                    onRemove={() => removeItemMutation.mutate(item.id)}
                     onSend={(seg, label) => sendToDeck([item.id], seg, label)}
-                    onNoteCommit={(note) => commitNote(item.id, note)}
+                    onNoteCommit={(note) => noteMutation.mutate({ id: item.id, note })}
                   />
                 ))}
               </div>

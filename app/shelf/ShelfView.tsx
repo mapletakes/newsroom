@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppHeader } from '@/components/AppHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Icon } from '@/components/ui/icon';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { relativeTime } from '@/lib/url';
+import { queryKeys } from '@/lib/query-keys';
 import { toast } from 'sonner';
 import {
   DndContext,
@@ -38,6 +40,13 @@ type ShelfSummary = {
   updated_at: string;
   item_count: number;
 };
+
+async function fetchShelves(): Promise<ShelfSummary[]> {
+  const r = await fetch('/api/lists');
+  if (!r.ok) throw new Error('Failed to load the shelf');
+  const data = await r.json();
+  return data.lists || [];
+}
 
 function SortableShelfRow({
   shelf,
@@ -107,44 +116,63 @@ export function ShelfView({
   isMod?: boolean;
   canCurate?: boolean;
 }) {
-  const [shelves, setShelves] = useState<ShelfSummary[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const queryClient = useQueryClient();
+  const shelvesKey = queryKeys.shelves();
+  const { data, isPending } = useQuery({ queryKey: shelvesKey, queryFn: fetchShelves });
+  const shelves = data ?? [];
   const [newName, setNewName] = useState('');
-  const [creating, setCreating] = useState(false);
   const { confirm, confirmDialog } = useConfirm();
 
-  const refresh = useCallback(async () => {
-    const r = await fetch('/api/lists');
-    if (r.ok) {
-      const data = await r.json();
-      setShelves(data.lists || []);
-    }
-    setLoaded(true);
-  }, []);
-
-  useEffect(() => { refresh(); }, [refresh]);
-
-  const createShelf = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (creating) return;
-    const name = newName.trim() || 'New shelf';
-    setCreating(true);
-    try {
+  const createMutation = useMutation({
+    mutationFn: async (name: string): Promise<ShelfSummary> => {
       const r = await fetch('/api/lists', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
       });
-      if (r.ok) {
-        const data = await r.json();
-        setShelves((prev) => [data.list, ...prev]);
-        setNewName('');
-      } else {
-        toast.error('Failed to create shelf');
-      }
-    } finally {
-      setCreating(false);
-    }
+      if (!r.ok) throw new Error('Failed to create shelf');
+      const d = await r.json();
+      return d.list;
+    },
+    onSuccess: (created) => {
+      queryClient.setQueryData<ShelfSummary[]>(shelvesKey, (prev = []) => [created, ...prev]);
+      setNewName('');
+    },
+    onError: () => toast.error('Failed to create shelf'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const r = await fetch(`/api/lists/${id}`, { method: 'DELETE' });
+      if (!r.ok) throw new Error('Failed to delete shelf');
+    },
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: shelvesKey });
+      const previous = queryClient.getQueryData<ShelfSummary[]>(shelvesKey);
+      queryClient.setQueryData<ShelfSummary[]>(shelvesKey, (prev = []) => prev.filter((s) => s.id !== id));
+      return { previous };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previous) queryClient.setQueryData(shelvesKey, context.previous);
+      toast.error('Failed to delete shelf');
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: shelvesKey }),
+  });
+
+  const reorderMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      await fetch('/api/lists/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+    },
+  });
+
+  const createShelf = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (createMutation.isPending) return;
+    createMutation.mutate(newName.trim() || 'New shelf');
   };
 
   const deleteShelf = async (shelf: ShelfSummary) => {
@@ -154,8 +182,7 @@ export function ShelfView({
       confirmText: 'Delete',
       destructive: true,
     }))) return;
-    setShelves((prev) => prev.filter((s) => s.id !== shelf.id));
-    await fetch(`/api/lists/${shelf.id}`, { method: 'DELETE' });
+    deleteMutation.mutate(shelf.id);
   };
 
   const sensors = useSensors(
@@ -166,18 +193,12 @@ export function ShelfView({
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    setShelves((prev) => {
-      const oldIndex = prev.findIndex((s) => s.id === active.id);
-      const newIndex = prev.findIndex((s) => s.id === over.id);
-      if (oldIndex < 0 || newIndex < 0) return prev;
-      const reordered = arrayMove(prev, oldIndex, newIndex);
-      fetch('/api/lists/reorder', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: reordered.map((s) => s.id) }),
-      }).catch(() => {});
-      return reordered;
-    });
+    const oldIndex = shelves.findIndex((s) => s.id === active.id);
+    const newIndex = shelves.findIndex((s) => s.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const reordered = arrayMove(shelves, oldIndex, newIndex);
+    queryClient.setQueryData(shelvesKey, reordered);
+    reorderMutation.mutate(reordered.map((s) => s.id));
   };
 
   return (
@@ -214,15 +235,15 @@ export function ShelfView({
               onChange={(e) => setNewName(e.target.value)}
               placeholder="New shelf name…"
               className="flex-1"
-              disabled={creating}
+              disabled={createMutation.isPending}
             />
-            <Button type="submit" disabled={creating}>
-              {creating ? '…' : '+ Create'}
+            <Button type="submit" disabled={createMutation.isPending}>
+              {createMutation.isPending ? '…' : '+ Create'}
             </Button>
           </form>
         )}
 
-        {!loaded ? (
+        {isPending ? (
           <div className="space-y-3">
             {[0, 1, 2].map((i) => <Skeleton key={i} className="h-20 w-full" />)}
           </div>
