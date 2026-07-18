@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Submission } from '@/components/SubmissionCard';
 import { extractYouTubeId, formatDuration, formatDate, formatClock, kindTint, kindCategory, type KindCategory } from '@/lib/url';
 import { positionsFromOrder, insertAtIndex, isSameOrder } from '@/lib/reorder';
+import { queryKeys } from '@/lib/query-keys';
 import { ArchiveButton } from '@/components/ArchiveButton';
 import { QuickLinksDrawer } from './QuickLinksDrawer';
 import { ChatStatusBanner } from './ChatStatusBanner';
@@ -32,7 +34,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { useQueueRealtime } from '@/lib/use-queue-realtime';
-import { useVisiblePoll } from '@/lib/use-visible-poll';
 import {
   DndContext,
   DragOverlay,
@@ -56,6 +57,8 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 
 type Segment = { id: string; name: string; position: number; collapsed: boolean };
+type QueueData = { submissions: Submission[]; nowPlayingId: string | null };
+type SegmentsData = { segments: Segment[]; ungroupedPosition: number };
 
 // Order within a group: by position (nulls last), then newest first.
 const byPosition = (a: Submission, b: Submission) =>
@@ -350,12 +353,61 @@ export function DeckView({
   isAdmin?: boolean;
   curateOnly?: boolean;
 }) {
-  const [queue, setQueue] = useState<Submission[]>([]);
-  const [segments, setSegments] = useState<Segment[]>([]);
+  const queryClient = useQueryClient();
+  const queueKey = queryKeys.queue(streamId, 'approved');
+  const segmentsKey = queryKeys.segments(streamId);
+
+  // Shared across every mutation below (see beginPendingWrite/settlePendingWrite):
+  // while any write is pending, the two queryFns return whatever's already
+  // cached instead of hitting the network, so a realtime broadcast or the
+  // slow poll can never clobber an optimistic update with pre-write server
+  // state — replaces the old suppressRefreshUntil timestamp with the same
+  // guarantee, enforced at the fetch boundary instead of a time window.
+  const pendingWrites = useRef(0);
+
+  const fetchQueue = useCallback(async (): Promise<QueueData> => {
+    if (pendingWrites.current > 0) {
+      const current = queryClient.getQueryData<QueueData>(queueKey);
+      if (current) return current;
+    }
+    const r = await fetch('/api/queue?status=approved');
+    if (!r.ok) throw new Error('Failed to load queue');
+    const data = await r.json();
+    return { submissions: data.submissions || [], nowPlayingId: data.nowPlaying?.id ?? null };
+  }, [queryClient, queueKey]);
+
+  const fetchSegments = useCallback(async (): Promise<SegmentsData> => {
+    if (pendingWrites.current > 0) {
+      const current = queryClient.getQueryData<SegmentsData>(segmentsKey);
+      if (current) return current;
+    }
+    const r = await fetch('/api/segments');
+    if (!r.ok) return { segments: [], ungroupedPosition: 0 };
+    const data = await r.json();
+    return {
+      segments: data.segments || [],
+      ungroupedPosition: typeof data.ungroupedPosition === 'number' ? data.ungroupedPosition : 0,
+    };
+  }, [segmentsKey, queryClient]);
+
+  const { data: queueData, isPending: queueLoading } = useQuery({
+    queryKey: queueKey,
+    queryFn: fetchQueue,
+    refetchInterval: 120000,
+  });
+  const { data: segmentsData } = useQuery({
+    queryKey: segmentsKey,
+    queryFn: fetchSegments,
+    refetchInterval: 120000,
+  });
+
+  const queue = useMemo(() => queueData?.submissions ?? [], [queueData]);
+  const segments = useMemo(() => segmentsData?.segments ?? [], [segmentsData]);
+  const ungroupedPosition = segmentsData?.ungroupedPosition ?? 0;
   // True once the first fetch resolves — distinguishes "still loading" from
   // "genuinely empty" so the deck doesn't flash a false empty state on load.
-  const [loaded, setLoaded] = useState(false);
-  const [ungroupedPosition, setUngroupedPosition] = useState(0);
+  const loaded = !queueLoading;
+
   const [ungroupedCollapsed, setUngroupedCollapsed] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [takeaway, setTakeaway] = useState('');
@@ -364,9 +416,6 @@ export function DeckView({
   const [overContainer, setOverContainer] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  // Explicit display order set at drag end so SortableContext.items reflects the new
-  // arrangement in the same render that clears transforms — prevents the snap-back flash.
-  const [pendingOrder, setPendingOrder] = useState<Record<string, string[]> | null>(null);
   const lastSelectedRef = useRef<string | null>(null);
   // The items the current drag is carrying (the whole selection, or just one).
   const movingIdsRef = useRef<string[]>([]);
@@ -377,9 +426,11 @@ export function DeckView({
   const [adding, setAdding] = useState(false);
   const announcingRef = useRef(false);
 
-  const suppressRefreshUntil = useRef(0);
-  // The segment whose name is being edited, so a refresh doesn't clobber it.
-  const editingSegmentRef = useRef<string | null>(null);
+  // A segment name being typed lives here, not in the query cache — same
+  // reasoning as ShelfDetailView's name/editingNameRef: keeps a background
+  // refetch (realtime, poll) from ever clobbering an in-progress rename.
+  const [editingSegment, setEditingSegment] = useState<{ id: string; name: string } | null>(null);
+
   // Whether we've adopted the server's now-playing item into activeId yet.
   // Without this, every fresh tab/reload starts with activeId=null, the
   // "auto-select first item" fallback below picks orderedQueue[0], and the
@@ -391,94 +442,36 @@ export function DeckView({
   // server's own value on load doesn't re-POST (and re-broadcast) it right back.
   const lastSentNowPlaying = useRef<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    if (Date.now() < suppressRefreshUntil.current) return;
-    const [qr, sr] = await Promise.all([
-      fetch('/api/queue?status=approved'),
-      fetch('/api/segments'),
-    ]);
-    // Re-check: an edit (e.g. toggling a segment's collapsed state) may have
-    // started its own suppression window WHILE these fetches were in flight,
-    // which means this response now predates that edit. Applying it would
-    // clobber the fresh optimistic state with stale data — the item-order
-    // case is shielded from this by pendingOrder, but segment fields
-    // (collapsed, position) aren't, which is why toggling collapse could
-    // flash back to the old state before correcting itself. Discard; the
-    // edit's own reconcileAfterWrites will do the real refresh once it settles.
-    if (Date.now() < suppressRefreshUntil.current) return;
-    if (qr.ok) {
-      const data = await qr.json();
-      setQueue(data.submissions || []);
-      setPendingOrder(null); // server state is now authoritative
-      // Adopt whatever the server already has on air, once, instead of
-      // letting the "auto-select first item" effect default to
-      // orderedQueue[0] and immediately report that as now-playing.
-      if (!seededActiveRef.current) {
-        seededActiveRef.current = true;
-        const npId: string | null = data.nowPlaying?.id ?? null;
-        if (npId) {
-          setActiveId(npId);
-          setStartedAt(Date.now());
-          lastSentNowPlaying.current = npId; // already on the server; skip the redundant re-POST
-        }
-      }
+  useEffect(() => {
+    if (!queueData || seededActiveRef.current) return;
+    seededActiveRef.current = true;
+    if (queueData.nowPlayingId) {
+      setActiveId(queueData.nowPlayingId);
+      setStartedAt(Date.now());
+      lastSentNowPlaying.current = queueData.nowPlayingId; // already on the server; skip the redundant re-POST
     }
-    if (sr.ok) {
-      const data = await sr.json();
-      const incoming: Segment[] = data.segments || [];
-      // Don't overwrite the name of a segment that's currently being renamed.
-      setSegments((prev) => {
-        const editing = editingSegmentRef.current;
-        if (!editing) return incoming;
-        const localName = prev.find((s) => s.id === editing)?.name;
-        return localName == null
-          ? incoming
-          : incoming.map((s) => (s.id === editing ? { ...s, name: localName } : s));
-      });
-      if (typeof data.ungroupedPosition === 'number') setUngroupedPosition(data.ungroupedPosition);
-    }
-    setLoaded(true);
-  }, []);
+  }, [queueData]);
 
-  // While the user is actively editing, hold off the realtime + poll refetches
-  // so optimistic updates aren't clobbered, then reconcile with the server once
-  // all in-flight writes resolve. Reconciling AFTER the writes (rather than on a
-  // fixed timer) means the refetch never reads pre-write state — that stale read
-  // was the cause of items flashing back in/out on played/remove/reorder.
-  const reconcileTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const inflightWrites = useRef(0);
-
-  // Start tracking a write as "pending" — suppresses refetches until settled.
-  // Exposed separately from reconcileAfterWrites (below) so a delayed write
+  // Start tracking a write as "pending" — see the pendingWrites doc comment
+  // above. Exposed separately from reconcileAfterWrites so a delayed write
   // behind an Undo toast (markPlayed, removeFromQueue) can start suppression
   // at the moment of the OPTIMISTIC update, not just once the real fetch
-  // fires 5s later. Those were previously two independently-scheduled 5s
-  // timers (a fixed suppressRefreshUntil timestamp, and the undo setTimeout)
-  // that only approximately lined up — any jitter between them (easily
-  // introduced by a backgrounded tab's timer throttling) reopened the same
-  // stale-read gap the fixed-timestamp fix was meant to close, and a refresh
-  // landing in it could resurrect the item while a second copy was already
-  // sitting in local state — the "flashes back in" / "duplicate" symptom.
-  // Tracking continuously from click to settle removes the gap entirely.
+  // fires 5s later.
   const beginPendingWrite = useCallback(() => {
-    inflightWrites.current += 1;
-    suppressRefreshUntil.current = Date.now() + 15000;
+    pendingWrites.current += 1;
   }, []);
 
   // Mark a pending write as resolved (the fetch completed, or it was
   // cancelled via Undo) and, once every pending write has settled, do one
-  // authoritative refresh — the only way local state (including an Undo's
-  // optimistic re-insertion) ever gets confirmed against the server.
+  // authoritative refetch of both queries — the only way local state
+  // (including an Undo's optimistic re-insertion) ever gets confirmed
+  // against the server.
   const settlePendingWrite = useCallback(() => {
-    inflightWrites.current -= 1;
-    if (inflightWrites.current > 0) return; // more writes pending; wait for them
-    if (reconcileTimer.current) clearTimeout(reconcileTimer.current);
-    reconcileTimer.current = setTimeout(() => {
-      if (inflightWrites.current > 0) return; // a new write started; it will reconcile
-      suppressRefreshUntil.current = 0;
-      refresh();
-    }, 250);
-  }, [refresh]);
+    pendingWrites.current -= 1;
+    if (pendingWrites.current > 0) return; // more writes pending; wait for them
+    queryClient.invalidateQueries({ queryKey: queueKey });
+    queryClient.invalidateQueries({ queryKey: segmentsKey });
+  }, [queryClient, queueKey, segmentsKey]);
 
   const reconcileAfterWrites = useCallback(<T,>(p: Promise<T>): Promise<T> => {
     beginPendingWrite();
@@ -486,16 +479,14 @@ export function DeckView({
     return p;
   }, [beginPendingWrite, settlePendingWrite]);
 
-  useEffect(() => () => { if (reconcileTimer.current) clearTimeout(reconcileTimer.current); }, []);
-
-  useEffect(() => { refresh(); }, [refresh]);
-
-  // Refetch instantly when the server broadcasts a queue change.
-  useQueueRealtime(streamId, refresh);
-
-  // Slow fallback poll in case a broadcast is missed or the socket drops.
-  // Only ticks while the tab is visible; realtime is the primary path.
-  useVisiblePoll(refresh, 120000);
+  // Refetch instantly when the server broadcasts a queue change — one
+  // subscription invalidating both queries, since they were always
+  // refreshed together (see pendingWrites above for why a bare invalidate
+  // is safe even mid-edit).
+  useQueueRealtime(streamId, () => {
+    queryClient.invalidateQueries({ queryKey: queueKey });
+    queryClient.invalidateQueries({ queryKey: segmentsKey });
+  });
 
   // Ordered list of blocks (ungrouped + segments), sorted by position.
   // The ungrouped block participates via a sentinel id so segments can sit
@@ -704,11 +695,12 @@ export function DeckView({
     setActiveId(next?.id || null);
     setStartedAt(next ? Date.now() : null);
     setTakeaway('');
-    setQueue((prev) => prev.filter((s) => s.id !== playedId)); // optimistic
+    queryClient.setQueryData<QueueData>(queueKey, (prev) =>
+      prev ? { ...prev, submissions: prev.submissions.filter((s) => s.id !== playedId) } : prev); // optimistic
     // Track this as a pending write from the moment of the optimistic update,
-    // not just once the delayed fetch itself fires — see beginPendingWrite's
-    // doc comment for why the two-separate-timers version this replaced
-    // could still let a stale refresh through.
+    // not just once the delayed fetch itself fires — see the pendingWrites
+    // doc comment for why a fixed-timestamp version of this gap could still
+    // let a stale refresh through.
     beginPendingWrite();
 
     let undone = false;
@@ -733,7 +725,8 @@ export function DeckView({
         onClick: () => {
           undone = true;
           clearTimeout(timer);
-          setQueue((prev) => [played, ...prev]);
+          queryClient.setQueryData<QueueData>(queueKey, (prev) =>
+            prev ? { ...prev, submissions: [played, ...prev.submissions] } : prev);
           settlePendingWrite(); // the write never happened — stop tracking it, and resync
         },
       },
@@ -754,7 +747,8 @@ export function DeckView({
   const removeFromQueue = (id: string) => {
     const removed = queue.find((s) => s.id === id);
     if (!removed) return;
-    setQueue((prev) => prev.filter((s) => s.id !== id));
+    queryClient.setQueryData<QueueData>(queueKey, (prev) =>
+      prev ? { ...prev, submissions: prev.submissions.filter((s) => s.id !== id) } : prev);
     // See markPlayed — tracks the write as pending from the optimistic
     // update itself, not just once the delayed fetch fires.
     beginPendingWrite();
@@ -776,7 +770,8 @@ export function DeckView({
         onClick: () => {
           undone = true;
           clearTimeout(timer);
-          setQueue((prev) => [removed, ...prev]);
+          queryClient.setQueryData<QueueData>(queueKey, (prev) =>
+            prev ? { ...prev, submissions: [removed, ...prev.submissions] } : prev);
           settlePendingWrite(); // the write never happened — stop tracking it, and resync
         },
       },
@@ -886,35 +881,36 @@ export function DeckView({
   };
 
   // --- Segment handlers ---
-  const addSegment = async () => {
-    await fetch('/api/segments', {
+  const addSegment = () => {
+    reconcileAfterWrites(fetch('/api/segments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: 'New segment' }),
-    });
-    refresh();
-  };
-
-  const renameSegmentLocal = (id: string, name: string) => {
-    editingSegmentRef.current = id;
-    setSegments((prev) => prev.map((s) => (s.id === id ? { ...s, name } : s)));
-  };
-
-  const commitRename = async (id: string) => {
-    const seg = segments.find((s) => s.id === id);
-    editingSegmentRef.current = null;
-    if (!seg) return;
-    await reconcileAfterWrites(fetch('/api/segments', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, name: seg.name }),
     }));
   };
 
-  const toggleCollapse = async (seg: Segment) => {
+  const renameSegmentLocal = (id: string, name: string) => {
+    setEditingSegment({ id, name });
+  };
+
+  const commitRename = (id: string) => {
+    const name = editingSegment?.id === id ? editingSegment.name : segments.find((s) => s.id === id)?.name;
+    setEditingSegment(null);
+    if (name == null) return;
+    queryClient.setQueryData<SegmentsData>(segmentsKey, (prev) =>
+      prev ? { ...prev, segments: prev.segments.map((s) => (s.id === id ? { ...s, name } : s)) } : prev);
+    reconcileAfterWrites(fetch('/api/segments', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, name }),
+    }));
+  };
+
+  const toggleCollapse = (seg: Segment) => {
     const collapsed = !seg.collapsed;
-    setSegments((prev) => prev.map((s) => (s.id === seg.id ? { ...s, collapsed } : s)));
-    await reconcileAfterWrites(fetch('/api/segments', {
+    queryClient.setQueryData<SegmentsData>(segmentsKey, (prev) =>
+      prev ? { ...prev, segments: prev.segments.map((s) => (s.id === seg.id ? { ...s, collapsed } : s)) } : prev);
+    reconcileAfterWrites(fetch('/api/segments', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: seg.id, collapsed }),
@@ -925,8 +921,13 @@ export function DeckView({
   const persistBlockOrder = (orderedIds: string[]) => {
     // Optimistic: assign positions 1..N across all blocks.
     const pos = positionsFromOrder(orderedIds);
-    setSegments((prev) => prev.map((s) => ({ ...s, position: pos.get(s.id) ?? s.position })));
-    if (pos.has('ungrouped')) setUngroupedPosition(pos.get('ungrouped')!);
+    queryClient.setQueryData<SegmentsData>(segmentsKey, (prev) => {
+      if (!prev) return prev;
+      return {
+        segments: prev.segments.map((s) => ({ ...s, position: pos.get(s.id) ?? s.position })),
+        ungroupedPosition: pos.has('ungrouped') ? pos.get('ungrouped')! : prev.ungroupedPosition,
+      };
+    });
 
     return reconcileAfterWrites(fetch('/api/segments/reorder', {
       method: 'POST',
@@ -947,7 +948,10 @@ export function DeckView({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id }),
     });
-    refresh();
+    // Items on the deleted segment fall back to ungrouped server-side, so
+    // both queries need a fresh read, not just segments.
+    queryClient.invalidateQueries({ queryKey: segmentsKey });
+    queryClient.invalidateQueries({ queryKey: queueKey });
   };
 
   // Reject every item in one block (a segment, or ungrouped) — end-of-day cleanup.
@@ -965,8 +969,9 @@ export function DeckView({
       destructive: true,
     }))) return;
     // Optimistic: drop them from the deck immediately.
-    setQueue((prev) => prev.filter((s) => !inBlock(s)));
-    await reconcileAfterWrites(fetch('/api/deck/clear-block', {
+    queryClient.setQueryData<QueueData>(queueKey, (prev) =>
+      prev ? { ...prev, submissions: prev.submissions.filter((s) => !inBlock(s)) } : prev);
+    reconcileAfterWrites(fetch('/api/deck/clear-block', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ containerId }),
@@ -978,14 +983,18 @@ export function DeckView({
   const moveItems = (movingIds: string[], segmentId: string | null, orderedTargetIds: string[]) => {
     const posMap = positionsFromOrder(orderedTargetIds);
     const movingSet = new Set(movingIds);
-    setQueue((prev) =>
-      prev.map((s) => {
-        const inMoving = movingSet.has(s.id);
-        const pos = posMap.get(s.id);
-        if (!inMoving && pos === undefined) return s;
-        return { ...s, segment_id: inMoving ? segmentId : s.segment_id, position: pos ?? s.position };
-      }),
-    );
+    queryClient.setQueryData<QueueData>(queueKey, (prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        submissions: prev.submissions.map((s) => {
+          const inMoving = movingSet.has(s.id);
+          const pos = posMap.get(s.id);
+          if (!inMoving && pos === undefined) return s;
+          return { ...s, segment_id: inMoving ? segmentId : s.segment_id, position: pos ?? s.position };
+        }),
+      };
+    });
     return reconcileAfterWrites(fetch('/api/queue/move', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1008,9 +1017,10 @@ export function DeckView({
 
   // Persist a new within-group order (positions 1..N).
   const persistGroupOrder = (reordered: Submission[]) => {
-    setQueue((prev) => {
-      const pos = positionsFromOrder(reordered.map((s) => s.id));
-      return prev.map((s) => (pos.has(s.id) ? { ...s, position: pos.get(s.id)! } : s));
+    const pos = positionsFromOrder(reordered.map((s) => s.id));
+    queryClient.setQueryData<QueueData>(queueKey, (prev) => {
+      if (!prev) return prev;
+      return { ...prev, submissions: prev.submissions.map((s) => (pos.has(s.id) ? { ...s, position: pos.get(s.id)! } : s)) };
     });
     return reconcileAfterWrites(fetch('/api/queue/reorder', {
       method: 'POST',
@@ -1029,21 +1039,20 @@ export function DeckView({
     [queue, knownSegmentIds],
   );
 
+  // Reads straight from the (already up to date) query-derived lists — a
+  // drag-end writes its new order directly into the query cache via
+  // setQueryData before this is next called, in the same render that clears
+  // the drag transform, so there's no separate "pending order" overlay to
+  // maintain the way the old queue-as-local-state version needed.
   const containerItems = useCallback(
-    (containerId: string): Submission[] => {
-      const base = containerId === 'ungrouped' ? ungroupedItems : itemsForSegment(containerId);
-      const order = pendingOrder?.[containerId];
-      if (!order) return base;
-      const map = new Map(base.map((s) => [s.id, s]));
-      return order.map((id) => map.get(id)).filter((s): s is Submission => s !== undefined);
-    },
-    [ungroupedItems, itemsForSegment, pendingOrder],
+    (containerId: string): Submission[] =>
+      containerId === 'ungrouped' ? ungroupedItems : itemsForSegment(containerId),
+    [ungroupedItems, itemsForSegment],
   );
 
   const handleDragStart = (event: DragStartEvent) => {
     const id = String(event.active.id);
     setActiveDragId(id);
-    setPendingOrder(null); // clear stale override so containerItems reads live queue state
     movingIdsRef.current =
       !isBlockId(id) && selectedIds.has(id) && selectedCount > 1
         ? orderedQueue.filter((s) => selectedIds.has(s.id)).map((s) => s.id)
@@ -1106,12 +1115,8 @@ export function DeckView({
       const toIdx = targetItems.findIndex((s) => s.id === overId);
       if (fromIdx >= 0 && toIdx >= 0 && fromIdx !== toIdx) {
         const reordered = arrayMove(targetItems, fromIdx, toIdx);
-        // Set display order immediately — same render as endDrag() clears transforms.
-        // Merge rather than replace: a rapid second drag on a different
-        // container must not wipe out this container's still-unresolved
-        // override (that was the "flashes back on quick successive drags"
-        // bug — a later setPendingOrder(newOnly) discarded earlier overrides).
-        setPendingOrder((prev) => ({ ...prev, [targetContainer]: reordered.map((s) => s.id) }));
+        // persistGroupOrder writes the new order into the query cache
+        // synchronously — same render as endDrag() clears transforms.
         persistGroupOrder(reordered);
       }
       endDrag();
@@ -1128,18 +1133,6 @@ export function DeckView({
       endDrag();
       return;
     }
-
-    // Set display order immediately for both affected containers. Merge into
-    // any existing overrides — see the same-container branch above for why a
-    // blind replace is wrong when drags happen in quick succession.
-    const remainingAtSource = sourceContainer !== targetContainer
-      ? containerItems(sourceContainer).filter((s) => !movingSet.has(s.id)).map((s) => s.id)
-      : null;
-    setPendingOrder((prev) => {
-      const next = { ...prev, [targetContainer]: result.map((s) => s.id) };
-      if (remainingAtSource) next[sourceContainer] = remainingAtSource;
-      return next;
-    });
 
     const segId = targetContainer === 'ungrouped' ? null : targetContainer;
     moveItems(movingIds, segId, result.map((s) => s.id));
@@ -1163,7 +1156,7 @@ export function DeckView({
         const data = await r.json();
         setAddUrl('');
         toast.success(data.expanded ? `Added ${data.count} videos from playlist` : 'Added to deck');
-        refresh();
+        queryClient.invalidateQueries({ queryKey: queueKey });
       } else {
         const err = await r.json().catch(() => ({}));
         toast.error(err.error || 'Failed to add');
@@ -1606,7 +1599,7 @@ export function DeckView({
                     <SegmentBlock
                       key={seg.id}
                       containerId={seg.id}
-                      title={seg.name}
+                      title={editingSegment?.id === seg.id ? editingSegment.name : seg.name}
                       editable
                       collapsed={seg.collapsed}
                       items={items}
