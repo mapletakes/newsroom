@@ -1,13 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { SubmissionCard, type Submission } from '@/components/SubmissionCard';
 import { SwipeRow } from '@/components/SwipeRow';
 import { SaveToListMenu } from '@/components/SaveToListMenu';
 import { AppHeader } from '@/components/AppHeader';
-import { useQueueRealtime } from '@/lib/use-queue-realtime';
-import { useVisiblePoll } from '@/lib/use-visible-poll';
+import { useInvalidateOnChange } from '@/lib/use-invalidate-on-change';
+import { queryKeys } from '@/lib/query-keys';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +21,22 @@ const STATUS_KEYS = ['pending', 'approved', 'played', 'rejected'] as const;
 type StatusKey = (typeof STATUS_KEYS)[number];
 function isStatusKey(s: string): s is StatusKey {
   return (STATUS_KEYS as readonly string[]).includes(s);
+}
+
+type Counts = { pending: number; approved: number; played: number; rejected: number; total: number };
+type QueueData = { submissions: Submission[]; nowPlaying: Submission | null; counts: Counts };
+
+const EMPTY_COUNTS: Counts = { pending: 0, approved: 0, played: 0, rejected: 0, total: 0 };
+
+async function fetchQueue(filter: string): Promise<QueueData> {
+  const r = await fetch(`/api/queue?status=${filter}`);
+  if (!r.ok) throw new Error('Failed to load queue');
+  const data = await r.json();
+  return {
+    submissions: data.submissions || [],
+    nowPlaying: data.nowPlaying || null,
+    counts: data.counts || EMPTY_COUNTS,
+  };
 }
 
 export function ModView({
@@ -41,45 +58,53 @@ export function ModView({
   isAdmin?: boolean;
   canCurate?: boolean;
 }) {
-  const [submissions, setSubmissions] = useState<Submission[]>([]);
-  const [nowPlaying, setNowPlaying] = useState<Submission | null>(null);
+  const queryClient = useQueryClient();
+  const [filter, setFilter] = useState<'pending' | 'approved' | 'played' | 'rejected'>('pending');
+  const queueKey = queryKeys.queue(streamId, filter);
+  const queueKeyAllFilters = queryKeys.queue(streamId); // prefix — matches every filter's cached query
+
+  // keepPreviousData means switching tabs keeps showing the last filter's
+  // list while the new one loads, instead of flashing back to the skeleton —
+  // matches the original's behavior of never resetting `loaded` after the
+  // first fetch. refetchInterval replaces the old useVisiblePoll(120s)
+  // backstop (it already pauses in background tabs by default).
+  const { data, isPending: loading } = useQuery({
+    queryKey: queueKey,
+    queryFn: () => fetchQueue(filter),
+    placeholderData: keepPreviousData,
+    refetchInterval: 120000,
+  });
+  const submissions = data?.submissions ?? [];
+  const nowPlaying = data?.nowPlaying ?? null;
+  const counts = data?.counts ?? EMPTY_COUNTS;
+  const loaded = !loading;
+
+  // Refetch instantly when the server broadcasts a queue change — invalidate
+  // every filter's cached query (not just the one currently on screen) so
+  // switching tabs later shows fresh data instead of a stale cache.
+  useInvalidateOnChange(streamId, queueKeyAllFilters);
+
   // Keyed by submission id, not local to a row's action component: a card
   // stays mounted through its own mutate() call (see below), but keeping
   // this at the ModView level means one place owns "what's true about this
   // row right now" instead of splitting it across the row and its actions.
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
-  const [filter, setFilter] = useState<'pending' | 'approved' | 'played' | 'rejected'>('pending');
-  const [counts, setCounts] = useState<{ pending: number; approved: number; played: number; rejected: number; total: number }>({
-    pending: 0,
-    approved: 0,
-    played: 0,
-    rejected: 0,
-    total: 0,
+
+  const statusMutation = useMutation({
+    mutationFn: async ({ id, patch }: { id: string; patch: Record<string, unknown> }) => {
+      const r = await fetch('/api/queue', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...patch }),
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e.detail || e.error || 'Action failed');
+      }
+      return r.json();
+    },
   });
-  // True once the first fetch resolves — distinguishes "still loading" from
-  // "genuinely empty" so the queue doesn't flash a false empty state on load.
-  const [loaded, setLoaded] = useState(false);
-
-  const refresh = useCallback(async () => {
-    const r = await fetch(`/api/queue?status=${filter}`);
-    if (r.ok) {
-      const data = await r.json();
-      setSubmissions(data.submissions || []);
-      setNowPlaying(data.nowPlaying || null);
-      if (data.counts) setCounts(data.counts);
-    }
-    setLoaded(true);
-  }, [filter]);
-
-  useEffect(() => { refresh(); }, [refresh]);
-
-  // Refetch instantly when the server broadcasts a queue change.
-  useQueueRealtime(streamId, refresh);
-
-  // Slow fallback poll in case a broadcast is missed or the socket drops.
-  // Only ticks while the tab is visible; realtime is the primary path.
-  useVisiblePoll(refresh, 120000);
 
   const mutate = async (
     id: string,
@@ -98,11 +123,13 @@ export function ModView({
     // both a jarring flash and wipes any row-local UI state.
     setPendingIds((prev) => new Set(prev).add(id));
 
-    const r = await fetch('/api/queue', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, ...patch }),
-    });
+    let result: { ok: boolean; error?: string };
+    try {
+      await statusMutation.mutateAsync({ id, patch });
+      result = { ok: true };
+    } catch (err) {
+      result = { ok: false, error: err instanceof Error ? err.message : 'Action failed' };
+    }
 
     setPendingIds((prev) => {
       const next = new Set(prev);
@@ -110,25 +137,30 @@ export function ModView({
       return next;
     });
 
-    if (!r.ok) {
-      const e = await r.json().catch(() => ({}));
-      // e.g. trying to approve something already on the deck.
-      const message = e.detail || e.error || 'Action failed';
-      setRowErrors((prev) => ({ ...prev, [id]: message }));
-      return { ok: false, error: message };
+    if (!result.ok) {
+      setRowErrors((prev) => ({ ...prev, [id]: result.error! }));
+      return result;
     }
 
     // Now that the write succeeded, move the item out of this tab if its
-    // new status no longer belongs here, instead of waiting on refresh().
+    // new status no longer belongs here, instead of waiting on a refetch.
     const prevItem = submissions.find((s) => s.id === id);
     const newStatus = typeof patch.status === 'string' ? patch.status : null;
     if (prevItem && newStatus && newStatus !== filter && isStatusKey(prevItem.status) && isStatusKey(newStatus)) {
-      setSubmissions((prev) => prev.filter((s) => s.id !== id));
-      setCounts((c) => ({
-        ...c,
-        [prevItem.status]: Math.max(0, c[prevItem.status as StatusKey] - 1),
-        [newStatus]: c[newStatus as StatusKey] + 1,
-      }));
+      queryClient.setQueryData<QueueData>(queueKey, (prev) => {
+        if (!prev) return prev;
+        const fromStatus = prevItem.status as StatusKey;
+        const toStatus = newStatus as StatusKey;
+        return {
+          ...prev,
+          submissions: prev.submissions.filter((s) => s.id !== id),
+          counts: {
+            ...prev.counts,
+            [fromStatus]: Math.max(0, prev.counts[fromStatus] - 1),
+            [toStatus]: prev.counts[toStatus] + 1,
+          },
+        };
+      });
     }
     // Auto-archive on approval (fire-and-forget; the snapshot link appears
     // on the card once the capture finishes and broadcasts).
@@ -139,13 +171,24 @@ export function ModView({
         body: JSON.stringify({ id }),
       }).catch(() => {});
     }
-    refresh();
+    queryClient.invalidateQueries({ queryKey: queueKeyAllFilters });
     return { ok: true };
   };
 
   const tabCount = (k: 'pending' | 'approved' | 'played' | 'rejected') => counts[k];
 
   const { confirm, confirmDialog } = useConfirm();
+
+  const clearMutation = useMutation({
+    mutationFn: async (status: 'pending' | 'rejected' | 'played') => {
+      await fetch('/api/queue/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queueKeyAllFilters }),
+  });
 
   const clear = async (status: 'pending' | 'rejected' | 'played') => {
     const label =
@@ -161,12 +204,7 @@ export function ModView({
       confirmText: 'Delete all',
       destructive: true,
     }))) return;
-    await fetch('/api/queue/clear', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    });
-    refresh();
+    clearMutation.mutate(status);
   };
 
   return (
