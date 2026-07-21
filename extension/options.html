@@ -8,7 +8,7 @@
       h2 { margin: 0 0 4px; }
       p { font-size: 13px; color: #555; line-height: 1.5; }
       label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; margin: 18px 0 4px; font-weight: 700; color: #555; }
-      input { width: 100%; padding: 9px; font-family: ui-monospace, monospace; font-size: 13px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+      input, select { width: 100%; padding: 9px; font-family: ui-monospace, monospace; font-size: 13px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; background: #fff; }
       button { margin-top: 18px; padding: 9px 18px; font-weight: 600; cursor: pointer; border: 0; border-radius: 4px; background: #16151a; color: #fff; }
       .ok { color: #3a7d44; margin-left: 10px; font-size: 13px; }
     </style>
@@ -20,6 +20,9 @@
     <input id="token" placeholder="nr_…" autocomplete="off" spellcheck="false" />
     <label for="appUrl">The Broadside URL</label>
     <input id="appUrl" placeholder="https://thebroadside.net" autocomplete="off" spellcheck="false" />
+    <label for="target">Default destination (toolbar button)</label>
+    <select id="target"></select>
+    <p style="margin-top:6px;">Right-click a page, link, or video for the full menu — every deck segment and shelf. The toolbar button always uses this default, so you can point it at a shelf while researching and flip it back to the deck once you're live.</p>
     <div><button id="save">Save</button><span id="status" class="ok"></span></div>
     <script src="options.js"></script>
   </body>

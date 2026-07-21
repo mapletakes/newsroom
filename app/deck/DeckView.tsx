@@ -408,6 +408,15 @@ export function DeckView({
   // "genuinely empty" so the deck doesn't flash a false empty state on load.
   const loaded = !queueLoading;
 
+  // Seed for the takeaway box when an item becomes active: a note written
+  // during Shelf prep (copied into prep_note when it was sent to the deck)
+  // reappears here instead of being retyped, and still becomes the show
+  // notes takeaway once the item is marked played.
+  const prepNoteFor = useCallback(
+    (id: string | null) => (id ? queue.find((s) => s.id === id)?.prep_note || '' : ''),
+    [queue],
+  );
+
   const [ungroupedCollapsed, setUngroupedCollapsed] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [takeaway, setTakeaway] = useState('');
@@ -448,6 +457,7 @@ export function DeckView({
     if (queueData.nowPlayingId) {
       setActiveId(queueData.nowPlayingId);
       setStartedAt(Date.now());
+      setTakeaway(queueData.submissions.find((s) => s.id === queueData.nowPlayingId)?.prep_note || '');
       lastSentNowPlaying.current = queueData.nowPlayingId; // already on the server; skip the redundant re-POST
     }
   }, [queueData]);
@@ -527,7 +537,7 @@ export function DeckView({
     if (!activeExists && orderedQueue.length > 0) {
       setActiveId(orderedQueue[0].id);
       setStartedAt(Date.now());
-      setTakeaway('');
+      setTakeaway(orderedQueue[0].prep_note || '');
     }
   }, [orderedQueue, activeId]);
 
@@ -672,7 +682,7 @@ export function DeckView({
     if (id === activeId) return; // already playing — don't reset the timer/takeaway
     setActiveId(id);
     setStartedAt(Date.now());
-    setTakeaway('');
+    setTakeaway(prepNoteFor(id));
   };
 
   // Plain (unmodified) click on a card: activate it and drop any multi-selection.
@@ -694,7 +704,7 @@ export function DeckView({
     const next = nextAfterActive();
     setActiveId(next?.id || null);
     setStartedAt(next ? Date.now() : null);
-    setTakeaway('');
+    setTakeaway(prepNoteFor(next?.id ?? null));
     queryClient.setQueryData<QueueData>(queueKey, (prev) =>
       prev ? { ...prev, submissions: prev.submissions.filter((s) => s.id !== playedId) } : prev); // optimistic
     // Track this as a pending write from the moment of the optimistic update,
@@ -738,7 +748,7 @@ export function DeckView({
     const next = nextAfterActive();
     setActiveId(next?.id || null);
     setStartedAt(next ? Date.now() : null);
-    setTakeaway('');
+    setTakeaway(prepNoteFor(next?.id ?? null));
   };
 
   // Removes instantly, but the actual reject write is delayed 5s behind an
@@ -785,7 +795,7 @@ export function DeckView({
     const next = nextAfterActive();
     setActiveId(next?.id || null);
     setStartedAt(next ? Date.now() : null);
-    setTakeaway('');
+    setTakeaway(prepNoteFor(next?.id ?? null));
     removeFromQueue(removedId);
   };
 

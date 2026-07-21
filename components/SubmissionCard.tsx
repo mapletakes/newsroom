@@ -27,6 +27,7 @@ type Submission = {
   related_coverage: { title: string; url: string; publisher: string; snippet: string }[] | null;
   archive_url: string | null;
   mod_notes: string | null;
+  prep_note: string | null;
   segment_id: string | null;
   position: number | null;
   submitter_login: string | null;

@@ -218,6 +218,34 @@ create table if not exists public.list_items (
 create index if not exists list_items_list_idx on public.list_items(list_id, position);
 create index if not exists list_items_list_url_idx on public.list_items(list_id, normalized_url);
 
+-- List segments: named groupings within a shelf, mirroring the deck's
+-- `segments` table but kept entirely separate — a shelf is meant to persist
+-- and be reused (e.g. a recurring weekly-format shelf you rebuild from each
+-- week), while deck segments get cleared/reused constantly. "Sending a
+-- rundown to the deck" always creates FRESH deck segments from these, it
+-- never reparents them, so the shelf's own structure is never consumed.
+create table if not exists public.list_segments (
+  id uuid primary key default gen_random_uuid(),
+  list_id uuid references public.lists(id) on delete cascade,
+  name text not null default 'New segment',
+  position int default 0,
+  created_at timestamptz default now()
+);
+create index if not exists list_segments_list_idx on public.list_segments(list_id, position);
+
+alter table public.list_items add column if not exists segment_id uuid references public.list_segments(id) on delete set null;
+
+-- Position of the shelf's "ungrouped" bucket among its list_segments, same
+-- convention as streams.ungrouped_position for the deck.
+alter table public.lists add column if not exists ungrouped_position int default 0;
+
+-- A curator's own prep note, distinct from mod_notes (which is
+-- editorial/risk-flagging territory). Populated by copying a shelf item's
+-- `note` over when it's sent to the deck; the deck seeds its takeaway box
+-- from this so a note written during research reappears on air instead of
+-- being retyped.
+alter table public.submissions add column if not exists prep_note text;
+
 -- ============================================================
 -- Row Level Security
 -- ============================================================
@@ -235,6 +263,7 @@ alter table public.submissions enable row level security;
 alter table public.show_notes enable row level security;
 alter table public.lists enable row level security;
 alter table public.list_items enable row level security;
+alter table public.list_segments enable row level security;
 
 -- Public read of streams (for the deck/mod views via service-role queries)
 -- We do NOT grant anon any access; the API routes use the service role.

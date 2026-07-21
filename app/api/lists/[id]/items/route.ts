@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getApprovedSession } from '@/lib/session';
 import { sessionCanCurate } from '@/lib/curate';
-import { detectKind, normalizeUrl } from '@/lib/url';
-import { runListItemExtraction } from '@/lib/list-extract';
+import { addUrlToList } from '@/lib/list-add';
 
 export const dynamic = 'force-dynamic';
 
@@ -95,27 +94,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       if (inserted) { added++; firstAddedId = firstAddedId || inserted.id; }
     }
   } else {
-    const normalized = normalizeUrl(url);
-    if (already.has(normalized)) {
-      return NextResponse.json({ added: 0, skipped: 1 });
-    }
-    const kind = detectKind(url);
-    const { data: inserted, error } = await sb
-      .from('list_items')
-      .insert({
-        list_id: list.id,
-        url,
-        normalized_url: normalized,
-        kind,
-        added_by: session.twitchLogin,
-        position: nextPos,
-      })
-      .select('id')
-      .single();
-    if (error || !inserted) return NextResponse.json({ error: error?.message || 'insert failed' }, { status: 500 });
-    added = 1;
-    firstAddedId = inserted.id;
-    await runListItemExtraction(inserted.id, session.streamId);
+    const result = await addUrlToList(list.id, session.streamId, url, session.twitchLogin);
+    if (!result.ok) return NextResponse.json({ error: result.error || 'insert failed' }, { status: 500 });
+    added = result.added;
+    skipped = result.skipped;
+    firstAddedId = result.itemId ?? null;
   }
 
   await sb.from('lists').update({ updated_at: new Date().toISOString() }).eq('id', list.id);
