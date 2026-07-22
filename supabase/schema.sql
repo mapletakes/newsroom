@@ -31,6 +31,15 @@ create table if not exists public.streams (
   approved boolean default true
 );
 
+-- Chat command that replies with what's currently on the deck (the same
+-- "Watching: <title> <url>" payload as the deck's manual "Post to chat"
+-- button), for viewers who can't see pinned/announced messages. Blank
+-- disables it. The cooldown timestamp guards against a burst of the command
+-- spamming chat the moment something starts trending — Vercel functions
+-- don't persist state between invocations, so this has to live in the DB.
+alter table public.streams add column if not exists video_command text default '!video';
+alter table public.streams add column if not exists video_command_last_sent_at timestamptz;
+
 -- Moderators on a stream
 create table if not exists public.moderators (
   stream_id uuid references public.streams(id) on delete cascade,

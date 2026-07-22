@@ -13,6 +13,7 @@ export function SetupForm({
   streamId,
   displayName,
   submitCommand,
+  videoCommand,
   allowAnyone,
   allowDuplicates,
   ignoredUsers,
@@ -24,6 +25,7 @@ export function SetupForm({
   streamId: string;
   displayName: string;
   submitCommand: string;
+  videoCommand: string;
   allowAnyone: boolean;
   allowDuplicates: boolean;
   ignoredUsers: string[];
@@ -33,6 +35,7 @@ export function SetupForm({
   moderators: { twitchUserId: string; login: string; canCurate: boolean }[];
 }) {
   const [cmd, setCmd] = useState(submitCommand);
+  const [videoCmd, setVideoCmd] = useState(videoCommand);
   const [open, setOpen] = useState(allowAnyone);
   const [dupes, setDupes] = useState(allowDuplicates);
   const [ignored, setIgnored] = useState<string[]>(ignoredUsers);
@@ -47,7 +50,7 @@ export function SetupForm({
     const r = await fetch('/api/setup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ submit_command: cmd, allow_anyone: open, allow_duplicates: dupes, ignored_users: ignored, preferred_sources: sources }),
+      body: JSON.stringify({ submit_command: cmd, video_command: videoCmd, allow_anyone: open, allow_duplicates: dupes, ignored_users: ignored, preferred_sources: sources }),
     });
     setSaving(false);
     if (r.ok) {
@@ -95,6 +98,23 @@ export function SetupForm({
           />
           <span className="block mt-1 text-xs text-ink/60">
             With a command, viewers must type e.g. <code>!submit https://...</code>. Without one, every URL in chat is captured.
+          </span>
+        </label>
+
+        <label className="block mb-6">
+          <span className="font-mono text-xs uppercase tracking-widest text-ink/60">
+            &quot;What&apos;s playing&quot; command (leave blank to disable)
+          </span>
+          <Input
+            value={videoCmd}
+            onChange={(e) => setVideoCmd(e.target.value)}
+            placeholder="!video"
+            className="w-full mt-1 p-3"
+          />
+          <span className="block mt-1 text-xs text-ink/60">
+            Any viewer who types this gets the same &quot;Watching: …&quot; message the deck&apos;s
+            &quot;Post to chat&quot; button sends — handy for people who can&apos;t see pinned messages.
+            Limited to once every 15 seconds per channel.
           </span>
         </label>
 

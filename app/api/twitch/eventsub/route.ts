@@ -12,6 +12,7 @@ import {
 import { supabaseAdmin } from '@/lib/supabase';
 import { extractUrlsFromMessage } from '@/lib/url';
 import { submitUrlToQueue } from '@/lib/submit-url';
+import { announceSubmission } from '@/lib/announce';
 
 export const maxDuration = 30;
 
@@ -19,6 +20,43 @@ export const maxDuration = 30;
 const VERIFICATION = 'webhook_callback_verification';
 const NOTIFICATION = 'notification';
 const REVOCATION = 'revocation';
+
+const VIDEO_COMMAND_COOLDOWN_MS = 15_000;
+
+// Replies in chat with whatever's currently on the deck — same payload as
+// the deck's manual "Post to chat" button, but fired for any viewer who
+// can't see pinned/announced messages. Sent as the streamer's own stored
+// token (there's no logged-in user driving this). The cooldown timestamp is
+// claimed up front, before the send even happens, so a burst of the command
+// from several viewers at once doesn't all slip through the same window —
+// there's a small race if two requests read it in the same instant, but the
+// worst case is one extra chat message, not worth guarding further.
+async function respondToVideoCommand(stream: {
+  id: string;
+  twitch_user_id: string;
+  now_playing_id: string | null;
+  video_command_last_sent_at: string | null;
+}) {
+  if (!stream.now_playing_id) return; // nothing on air — stay quiet
+
+  const last = stream.video_command_last_sent_at ? new Date(stream.video_command_last_sent_at).getTime() : 0;
+  if (Date.now() - last < VIDEO_COMMAND_COOLDOWN_MS) return;
+
+  const sb = supabaseAdmin();
+  await sb.from('streams').update({ video_command_last_sent_at: new Date().toISOString() }).eq('id', stream.id);
+
+  const { data: sub } = await sb
+    .from('submissions')
+    .select('title, url')
+    .eq('id', stream.now_playing_id)
+    .eq('stream_id', stream.id)
+    .maybeSingle();
+  if (!sub) return;
+
+  await announceSubmission(stream.id, stream.twitch_user_id, stream.twitch_user_id, sub).catch((err) =>
+    console.error('!video auto-reply failed:', err),
+  );
+}
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
@@ -92,12 +130,28 @@ export async function POST(req: NextRequest) {
   // Look up stream
   const { data: stream } = await sb
     .from('streams')
-    .select('id, submit_command, allow_anyone, ignored_users, approved')
+    .select('id, twitch_user_id, submit_command, allow_anyone, ignored_users, approved, video_command, now_playing_id, video_command_last_sent_at')
     .eq('twitch_user_id', broadcasterUserId)
     .single();
   if (!stream) return new NextResponse(null, { status: 204 });
   // Don't ingest for blocked / unapproved channels.
   if (stream.approved === false) return new NextResponse(null, { status: 204 });
+
+  // Ignored users — applies to every command, submit or "what's playing" alike.
+  const ignored: string[] = (stream.ignored_users || []).map((u: string) => u.toLowerCase());
+  if (ignored.includes(chatterName.toLowerCase())) {
+    return new NextResponse(null, { status: 204 });
+  }
+
+  // "What's playing" — open to everyone, not gated by allow_anyone (that
+  // setting is about who's trusted to submit links; this is read-only and
+  // exists specifically for viewers who aren't subs/mods/vips and can't see
+  // pinned chat). Has its own cooldown since, unlike link submission, it's a
+  // query command that can get spammed the moment something's trending.
+  if (stream.video_command && messageText.trim().toLowerCase() === stream.video_command.toLowerCase()) {
+    waitUntil(respondToVideoCommand(stream));
+    return new NextResponse(null, { status: 204 });
+  }
 
   // Parse badges
   const badges: { set_id: string }[] = event.badges || [];
@@ -108,12 +162,6 @@ export async function POST(req: NextRequest) {
 
   // Permission gate
   if (!stream.allow_anyone && !(isSub || isMod || isVip)) {
-    return new NextResponse(null, { status: 204 });
-  }
-
-  // Ignored users
-  const ignored: string[] = (stream.ignored_users || []).map((u: string) => u.toLowerCase());
-  if (ignored.includes(chatterName.toLowerCase())) {
     return new NextResponse(null, { status: 204 });
   }
 
