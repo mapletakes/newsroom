@@ -47,7 +47,7 @@ async function respondToVideoCommand(stream: {
 
   const { data: sub } = await sb
     .from('submissions')
-    .select('title, url')
+    .select('title, url, trigger_warning')
     .eq('id', stream.now_playing_id)
     .eq('stream_id', stream.id)
     .maybeSingle();

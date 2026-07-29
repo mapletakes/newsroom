@@ -15,6 +15,7 @@ import { ShortcutsModal } from './ShortcutsModal';
 import { AppHeader } from '@/components/AppHeader';
 import { Icon } from '@/components/ui/icon';
 import { SaveToListMenu } from '@/components/SaveToListMenu';
+import { TriggerWarningBanner, TriggerWarningEditor } from '@/components/TriggerWarning';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input, Textarea } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -98,7 +99,10 @@ function SortableQueueItem({
 
   return (
     <div ref={setNodeRef} style={style}>
-      <div className={`flex items-stretch gap-0 ${selected ? 'bg-ink/5' : ''}`}>
+      {/* mr-1.5 keeps the remove button clear of the sidebar's scrollbar —
+          without it, the X sits flush against the scroll track and users
+          have reported mis-hitting one for the other. */}
+      <div className={`flex items-stretch gap-0 mr-1.5 ${selected ? 'bg-ink/5' : ''}`}>
         {/* The whole card is the drag source. Plain click activates (and clears
             the multi-selection); Ctrl/Cmd-click toggles this card in the
             selection; Shift-click extends a range. dnd-kit suppresses the click
@@ -141,6 +145,11 @@ function SortableQueueItem({
                     <span className="text-rust font-bold ml-1 cursor-default">⚠ CW</span>
                   </SimpleTooltip>
                 )}
+                {s.trigger_warning && (
+                  <SimpleTooltip content={s.trigger_warning}>
+                    <span className="bg-rust text-paper font-bold ml-1 px-1 cursor-default">⚠ TW</span>
+                  </SimpleTooltip>
+                )}
               </div>
               <div className="font-display text-lg font-bold leading-tight line-clamp-2">
                 {s.title || s.url}
@@ -161,7 +170,7 @@ function SortableQueueItem({
         </Card>
         <button
           onClick={(e) => { e.stopPropagation(); onRemove(); }}
-          className="shrink-0 w-6 flex items-center justify-center text-ink/20 hover:text-rust transition-colors"
+          className="shrink-0 w-7 flex items-center justify-center text-ink/40 hover:text-rust hover:bg-rust/10 rounded-full transition-colors"
           aria-label="Remove"
           tabIndex={-1}
         >
@@ -251,7 +260,7 @@ function SegmentBlock({
       }`}
     >
       {title !== null && (
-        <div className="flex items-center gap-1 mb-1 bg-ink/10 px-1 py-1">
+        <div className="flex items-center gap-1 mb-1 mr-1.5 bg-ink/10 px-1 py-1">
           {sortable && (
             <button
               {...attributes}
@@ -491,9 +500,17 @@ export function DeckView({
 
   // Refetch instantly when the server broadcasts a queue change — one
   // subscription invalidating both queries, since they were always
-  // refreshed together (see pendingWrites above for why a bare invalidate
-  // is safe even mid-edit).
+  // refreshed together. Skipped while a write of our own is pending: the
+  // queryFn-level pendingWrites check already stops a stale fetch from
+  // landing, but invalidateQueries still marks the query stale and kicks off
+  // a background refetch each time it's called — with the realtime
+  // broadcast for our OWN write arriving independently of that write's own
+  // fetch resolving, a fast broadcast can trigger this callback before
+  // settlePendingWrite does, and again after, doubling up refetches around
+  // the same optimistic update instead of the single authoritative one
+  // settlePendingWrite already performs once every pending write settles.
   useQueueRealtime(streamId, () => {
+    if (pendingWrites.current > 0) return;
     queryClient.invalidateQueries({ queryKey: queueKey });
     queryClient.invalidateQueries({ queryKey: segmentsKey });
   });
@@ -890,6 +907,47 @@ export function DeckView({
     }
   };
 
+  // Trigger warnings are authored here as well as in the mod view: during a
+  // show it's usually the streamer who realises an item needs one, and it has
+  // to reach the overlay before the item goes up rather than after a round
+  // trip through a mod. Not gated on curateOnly — annotating content is the
+  // same kind of act as removing it, which curators can already do.
+  const saveTriggerWarning = useCallback(
+    (id: string, value: string | null) => {
+      queryClient.setQueryData<QueueData>(queueKey, (prev) =>
+        prev
+          ? {
+              ...prev,
+              submissions: prev.submissions.map((s) =>
+                s.id === id ? { ...s, trigger_warning: value } : s,
+              ),
+            }
+          : prev,
+      );
+      return reconcileAfterWrites(
+        fetch('/api/queue', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, trigger_warning: value }),
+        }),
+      ).then(
+        (r) => {
+          if (!r.ok) {
+            toast.error('Could not save the trigger warning');
+            return { ok: false };
+          }
+          toast.success(value ? 'Trigger warning saved' : 'Trigger warning removed');
+          return { ok: true };
+        },
+        () => {
+          toast.error('Could not save the trigger warning');
+          return { ok: false };
+        },
+      );
+    },
+    [queryClient, queueKey, reconcileAfterWrites],
+  );
+
   // --- Segment handlers ---
   const addSegment = () => {
     reconcileAfterWrites(fetch('/api/segments', {
@@ -916,15 +974,42 @@ export function DeckView({
     }));
   };
 
+  // Rapid clicking can send several overlapping collapse PATCHes for the
+  // same segment, and network completion order doesn't guarantee send
+  // order — a later click's request can resolve before an earlier one,
+  // letting the earlier (now-outdated) response win once everything settles
+  // and the segment visibly reverts. Serializing per segment — never more
+  // than one in-flight PATCH per id, with any clicks that land while one's
+  // in flight coalesced into a single follow-up once it resolves —
+  // guarantees whatever the user last clicked is always what gets sent last.
+  const collapseInFlight = useRef<Set<string>>(new Set());
+  const collapsePendingValue = useRef<Map<string, boolean>>(new Map());
+  const sendCollapsePatchRef = useRef<(segId: string, value: boolean) => void>(() => {});
+  sendCollapsePatchRef.current = (segId: string, value: boolean) => {
+    collapseInFlight.current.add(segId);
+    reconcileAfterWrites(fetch('/api/segments', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: segId, collapsed: value }),
+    })).finally(() => {
+      collapseInFlight.current.delete(segId);
+      const queued = collapsePendingValue.current.get(segId);
+      if (queued !== undefined) {
+        collapsePendingValue.current.delete(segId);
+        sendCollapsePatchRef.current(segId, queued);
+      }
+    });
+  };
+
   const toggleCollapse = (seg: Segment) => {
     const collapsed = !seg.collapsed;
     queryClient.setQueryData<SegmentsData>(segmentsKey, (prev) =>
       prev ? { ...prev, segments: prev.segments.map((s) => (s.id === seg.id ? { ...s, collapsed } : s)) } : prev);
-    reconcileAfterWrites(fetch('/api/segments', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: seg.id, collapsed }),
-    }));
+    if (collapseInFlight.current.has(seg.id)) {
+      collapsePendingValue.current.set(seg.id, collapsed);
+      return;
+    }
+    sendCollapsePatchRef.current(seg.id, collapsed);
   };
 
   // Persist a new block order (ungrouped + segments) after a drag.
@@ -1299,6 +1384,18 @@ export function DeckView({
               <h1 className="font-display text-3xl lg:text-4xl font-black leading-tight mb-4">
                 {active.title || active.url}
               </h1>
+
+              {/* Directly under the headline and above everything else on the
+                  item — this is what's on the overlay right now, and what's
+                  going out with the next chat post. */}
+              <div className="max-w-3xl mb-6 flex flex-col gap-2 items-start">
+                {active.trigger_warning && <TriggerWarningBanner text={active.trigger_warning} className="w-full" />}
+                <TriggerWarningEditor
+                  key={active.id}
+                  value={active.trigger_warning}
+                  onSave={(v) => saveTriggerWarning(active.id, v)}
+                />
+              </div>
 
               {(active.summary || active.description) && (
                 <p className="text-lg leading-relaxed mb-6 max-w-3xl whitespace-pre-line">

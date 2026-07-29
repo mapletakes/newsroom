@@ -6,6 +6,7 @@ import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { SimpleTooltip } from './ui/tooltip';
 import { ArchiveButton } from './ArchiveButton';
+import { TriggerWarningBanner } from './TriggerWarning';
 
 type Submission = {
   id: string;
@@ -28,6 +29,7 @@ type Submission = {
   archive_url: string | null;
   mod_notes: string | null;
   prep_note: string | null;
+  trigger_warning: string | null;
   segment_id: string | null;
   position: number | null;
   submitter_login: string | null;
@@ -119,6 +121,9 @@ export function SubmissionCard({
             </SimpleTooltip>
           )}
         </div>
+        {/* Above the headline, not tucked in with the badges: this is the one
+            flag on the card that's going out to viewers verbatim. */}
+        {s.trigger_warning && <TriggerWarningBanner text={s.trigger_warning} className="mb-2 py-2" />}
         <h3 className={`font-display ${compact ? 'text-lg' : 'text-xl'} font-bold leading-tight mb-1`}>
           {s.title || s.url}
         </h3>

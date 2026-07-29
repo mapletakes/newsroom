@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
   const [{ data: approved }, { data: segments }] = await Promise.all([
     sb
       .from('submissions')
-      .select('id, title, url, kind, publisher, duration_seconds, segment_id, position, created_at')
+      .select('id, title, url, kind, publisher, duration_seconds, trigger_warning, segment_id, position, created_at')
       .eq('stream_id', stream.id)
       .eq('status', 'approved'),
     sb.from('segments').select('id, position').eq('stream_id', stream.id),
@@ -74,12 +74,15 @@ export async function GET(req: NextRequest) {
   const nextItem = nowIdx >= 0 ? ordered[nowIdx + 1] || null : null;
 
   // No credibility/leaning tag in the payload: that's a streamer/mod triage
-  // aid, not something the viewer-facing overlay should display.
+  // aid, not something the viewer-facing overlay should display. The trigger
+  // warning is the opposite case — written specifically to be read by the
+  // audience, so it does belong on the viewer-facing graphic.
   const toPayload = (s: NonNullable<typeof np>) => ({
     title: s.title || s.url,
     kind: s.kind,
     publisher: s.publisher,
     durationSeconds: s.duration_seconds,
+    triggerWarning: s.trigger_warning || null,
   });
 
   return json({

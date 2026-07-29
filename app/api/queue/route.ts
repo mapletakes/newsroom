@@ -114,6 +114,13 @@ export async function PATCH(req: NextRequest) {
   }
   if (typeof body.position === 'number') patch.position = body.position;
   if (typeof body.mod_notes === 'string') patch.mod_notes = body.mod_notes;
+  // Unlike mod_notes, this one accepts an explicit null: a trigger warning is
+  // published to chat and the on-air overlay, so taking one back off an item
+  // has to be as possible as putting it on.
+  if ('trigger_warning' in body) {
+    const tw = typeof body.trigger_warning === 'string' ? body.trigger_warning.trim() : '';
+    patch.trigger_warning = tw || null;
+  }
   if (typeof body.duration_on_screen_s === 'number') patch.duration_on_screen_s = body.duration_on_screen_s;
 
   const sb = supabaseAdmin();

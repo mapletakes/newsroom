@@ -6,6 +6,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { SubmissionCard, type Submission } from '@/components/SubmissionCard';
 import { SwipeRow } from '@/components/SwipeRow';
 import { SaveToListMenu } from '@/components/SaveToListMenu';
+import { TriggerWarningEditor } from '@/components/TriggerWarning';
 import { AppHeader } from '@/components/AppHeader';
 import { useInvalidateOnChange } from '@/lib/use-invalidate-on-change';
 import { queryKeys } from '@/lib/query-keys';
@@ -249,6 +250,11 @@ export function ModView({
             <span className="flex-1 min-w-[120px] font-display text-sm font-bold truncate">
               {nowPlaying.title || nowPlaying.url}
             </span>
+            {nowPlaying.trigger_warning && (
+              <span className="shrink-0 max-w-full font-mono text-[10px] uppercase tracking-widest bg-rust text-paper px-2 py-1">
+                ⚠ TW: {nowPlaying.trigger_warning}
+              </span>
+            )}
             <span className="hidden sm:inline shrink-0 font-mono text-[10px] uppercase tracking-widest text-ink/50">
               {nowPlaying.kind.replace('_', ' ')}
               {nowPlaying.duration_seconds ? ` · ${formatDuration(nowPlaying.duration_seconds)}` : ''}
@@ -377,6 +383,19 @@ export function ModView({
                           Note: {s.mod_notes}
                         </span>
                       )}
+                    </div>
+                  )}
+                  {/* Available on approved items too, not just during triage —
+                      the need for a warning often only becomes obvious once
+                      someone actually watches the thing, which is usually
+                      after it's been waved through. */}
+                  {(s.status === 'pending' || s.status === 'approved') && (
+                    <div className="w-full">
+                      <TriggerWarningEditor
+                        key={s.id}
+                        value={s.trigger_warning}
+                        onSave={(v) => mutate(s.id, { trigger_warning: v })}
+                      />
                     </div>
                   )}
                   {s.status === 'rejected' && (

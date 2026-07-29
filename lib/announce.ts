@@ -10,18 +10,48 @@ import { sanitizeShareUrl } from './url';
 
 const MAX_CHARS = 500;
 
-// Builds "Watching: <title> <url>", truncating the title (never the url) to
-// fit Twitch's message limit. Strips playlist params so an unlisted
-// playlist id is never posted publicly.
-export function buildWatchingMessage(title: string | null, url: string): string {
+// A long warning gets its own cap rather than being allowed to eat the whole
+// budget — otherwise a rambling one would truncate the title down to nothing
+// and the message would no longer say what's actually on screen.
+const MAX_TW_CHARS = 180;
+const TW_PREFIX = '⚠ TW: ';
+
+function ellipsize(s: string, max: number): string {
+  return s.length > max ? s.slice(0, Math.max(0, max - 1)) + '…' : s;
+}
+
+// Builds "Watching: <title> <url>", plus " ⚠ TW: <warning>" when the item
+// carries one, truncating the title (never the url, never the warning's
+// prefix) to fit Twitch's message limit. Strips playlist params so an
+// unlisted playlist id is never posted publicly.
+export function buildWatchingMessage(
+  title: string | null,
+  url: string,
+  triggerWarning?: string | null,
+): string {
   const shareUrl = sanitizeShareUrl(url);
-  let t = title || shareUrl;
-  const fixed = `Watching:  ${shareUrl}`.length; // "Watching: " + space + url
-  if (fixed + t.length > MAX_CHARS) {
-    const room = Math.max(0, MAX_CHARS - fixed - 1);
-    t = t.slice(0, room) + '…';
+  const tw = (triggerWarning || '').trim();
+
+  // Budget the warning against what the url actually leaves, not just its own
+  // cap: the url is the one part never shortened (a broken link is worse than
+  // no link), so with a pathologically long one the warning has to give. A
+  // message over the limit is rejected by Twitch outright, which would lose
+  // the warning entirely rather than merely trim it.
+  let suffix = '';
+  if (tw) {
+    const budget = Math.min(MAX_TW_CHARS, MAX_CHARS - `Watching: ${shareUrl}`.length - 1 - TW_PREFIX.length);
+    if (budget > 0) suffix = ` ${TW_PREFIX}${ellipsize(tw, budget)}`;
   }
-  return `Watching: ${t} ${shareUrl}`;
+
+  let t = title || shareUrl;
+  const fixed = `Watching:  ${shareUrl}`.length + suffix.length; // "Watching: " + space + url + warning
+  if (fixed + t.length > MAX_CHARS) {
+    const room = MAX_CHARS - fixed - 1;
+    // With a long url and a warning there can be no room left at all; drop
+    // the title rather than emit a bare "…" that says nothing.
+    t = room > 0 ? t.slice(0, room) + '…' : '';
+  }
+  return t ? `Watching: ${t} ${shareUrl}${suffix}` : `Watching: ${shareUrl}${suffix}`;
 }
 
 export type AnnounceResult = { ok: boolean; error?: string; message?: string };
@@ -37,7 +67,7 @@ export async function announceSubmission(
   senderStreamId: string,
   broadcasterTwitchUserId: string,
   senderTwitchUserId: string,
-  sub: { title: string | null; url: string },
+  sub: { title: string | null; url: string; trigger_warning?: string | null },
 ): Promise<AnnounceResult> {
   const sb = supabaseAdmin();
   const { data: sender } = await sb
@@ -67,7 +97,7 @@ export async function announceSubmission(
       .eq('id', sender.id);
   }
 
-  const message = buildWatchingMessage(sub.title, sub.url);
+  const message = buildWatchingMessage(sub.title, sub.url, sub.trigger_warning);
   const result = await sendChatMessage(accessToken, broadcasterTwitchUserId, senderTwitchUserId, message);
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true, message };

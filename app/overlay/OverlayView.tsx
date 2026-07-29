@@ -9,6 +9,7 @@ type NowPlaying = {
   kind: string;
   publisher: string | null;
   durationSeconds: number | null;
+  triggerWarning: string | null;
 };
 
 export type OverlayVariant = 'default' | 'minimal' | 'ticker';
@@ -17,6 +18,22 @@ const metaLine = (item: NowPlaying) =>
   [item.publisher, item.kind.replace('_', ' '), item.durationSeconds ? formatDuration(item.durationSeconds) : null]
     .filter(Boolean)
     .join(' · ');
+
+// Solid rust rather than the card's paper — a warning that has to be readable
+// at a glance over arbitrary stream footage can't rely on a tint. Shown at the
+// TOP of the card in every variant (including minimal, which is otherwise
+// deliberately one line): the whole point is that it's seen before the item
+// it's warning about.
+function TriggerWarning({ text }: { text: string }) {
+  return (
+    <div className="flex items-baseline gap-2 bg-rust px-3 py-1.5 text-paper">
+      <span className="shrink-0 font-mono text-[11px] uppercase tracking-widest font-bold">
+        ⚠ Trigger warning
+      </span>
+      <span className="min-w-0 font-sans text-sm font-semibold leading-snug">{text}</span>
+    </div>
+  );
+}
 
 // The on-air lower third: a broadsheet card (paper, ink border, hard shadow)
 // styled after the mod view's "On air" bar, sized to work as an OBS browser
@@ -105,15 +122,18 @@ export function OverlayView({
   if (variant === 'minimal') {
     return (
       <div
-        className={`${themeClass} m-2 h-10 inline-flex items-center gap-2 bg-paper border-2 border-ink shadow-[3px_3px_0_rgb(var(--ink))] px-3 max-w-[600px] text-ink`}
+        className={`${themeClass} m-2 inline-flex flex-col bg-paper border-2 border-ink shadow-[3px_3px_0_rgb(var(--ink))] max-w-[600px] overflow-hidden text-ink`}
       >
-        <span className="inline-block w-2 h-2 shrink-0 rounded-full bg-rust live-dot" />
-        <span className="font-display text-base font-bold leading-tight truncate">{nowPlaying.title}</span>
-        {showBrand && (
-          <span className="shrink-0 font-mono text-[8px] uppercase tracking-widest text-ink/40 ml-1">
-            The Broadside
-          </span>
-        )}
+        {nowPlaying.triggerWarning && <TriggerWarning text={nowPlaying.triggerWarning} />}
+        <div className="h-10 flex items-center gap-2 px-3">
+          <span className="inline-block w-2 h-2 shrink-0 rounded-full bg-rust live-dot" />
+          <span className="font-display text-base font-bold leading-tight truncate">{nowPlaying.title}</span>
+          {showBrand && (
+            <span className="shrink-0 font-mono text-[8px] uppercase tracking-widest text-ink/40 ml-1">
+              The Broadside
+            </span>
+          )}
+        </div>
       </div>
     );
   }
@@ -127,6 +147,7 @@ export function OverlayView({
     <div
       className={`${themeClass} m-2 flex flex-col bg-paper border-2 border-ink shadow-[4px_4px_0_rgb(var(--ink))] overflow-hidden text-ink`}
     >
+      {nowPlaying.triggerWarning && <TriggerWarning text={nowPlaying.triggerWarning} />}
       <div className="h-[84px] flex items-center gap-4 px-4">
         <div className="shrink-0 flex flex-col items-center gap-1">
           <span className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-widest text-rust font-bold">

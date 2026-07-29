@@ -46,6 +46,8 @@ const SUB = {
   related_coverage: null,
   archive_url: null,
   mod_notes: null,
+  prep_note: null,
+  trigger_warning: null,
   segment_id: null,
   position: 1,
   submitter_login: 'some_viewer',

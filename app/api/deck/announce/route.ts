@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
 
   const { data: sub } = await sb
     .from('submissions')
-    .select('title, url')
+    .select('title, url, trigger_warning')
     .eq('id', subId)
     .eq('stream_id', session.streamId)
     .maybeSingle();
