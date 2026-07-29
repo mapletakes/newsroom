@@ -92,7 +92,7 @@ supabase/
 - **The mod view polls, it doesn't push.** The deck and mod views poll every 3-4 seconds. For v2, Supabase Realtime could replace this.
 - **DMCA risk is a heuristic, not legal advice.** We combine a host blacklist (Fox, Disney, sports leagues, music labels) with Claude's classification. Display as a signal, not a guarantee.
 - **Service-role Supabase from the server only.** No client-side DB access. RLS is on but we don't grant anon any policies.
-- **Three warning fields, on purpose.** `content_warning` is AI-guessed and internal (a triage hint on the card). `mod_notes` is an internal production aside. `trigger_warning` is the only one written *for the audience* — the streamer or a mod types it, and it's published verbatim: appended to the `!video` reply and the "Post to chat" message, and shown on the on-air overlay. Keeping them separate is what lets the first two stay candid.
+- **Three warning fields, on purpose.** `content_warning` is AI-guessed and internal (a triage hint on the card). `mod_notes` is an internal production aside. `trigger_warning` is the only one written *for the audience* — the streamer or a mod types it, and it's published verbatim: it opens the `!video` reply and the "Post to chat" message (ahead of the title and url, so it survives Twitch's pinned-message preview), and it's shown on the on-air overlay. Keeping them separate is what lets the first two stay candid.
 - **YouTube playlist handling** auto-expands into individual submissions when extracted, then the playlist itself is marked rejected with a `mod_notes` trail.
 - **Insert-first dedup** handles concurrent submissions without unique constraints, preserving the allow_duplicates feature.
 

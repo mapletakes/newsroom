@@ -23,22 +23,24 @@ describe('buildWatchingMessage', () => {
     expect(buildWatchingMessage('Title', URL_A, null)).toBe(plain);
   });
 
-  it('appends the warning after the url', () => {
+  // Leading placement is the whole point — Twitch's pinned banner and its
+  // notification previews only show the opening characters of a message.
+  it('puts the warning at the very front, before "Watching:"', () => {
     expect(buildWatchingMessage('Title', URL_A, 'graphic footage of the crash')).toBe(
-      `Watching: Title ${URL_A} ⚠ TW: graphic footage of the crash`,
+      `⚠ TW: graphic footage of the crash — Watching: Title ${URL_A}`,
     );
   });
 
   it('trims surrounding whitespace off the warning', () => {
     expect(buildWatchingMessage('Title', URL_A, '  discussion of suicide \n')).toBe(
-      `Watching: Title ${URL_A} ⚠ TW: discussion of suicide`,
+      `⚠ TW: discussion of suicide — Watching: Title ${URL_A}`,
     );
   });
 
-  it('strips playlist params from the url before the warning is appended', () => {
+  it('strips playlist params from the url', () => {
     const msg = buildWatchingMessage('Title', 'https://youtube.com/watch?v=abc&list=SECRET', 'gore');
     expect(msg).not.toContain('SECRET');
-    expect(msg.endsWith('⚠ TW: gore')).toBe(true);
+    expect(msg.startsWith('⚠ TW: gore — Watching: ')).toBe(true);
   });
 
   it('truncates the title, not the warning, to stay under the limit', () => {
@@ -46,22 +48,23 @@ describe('buildWatchingMessage', () => {
     const msg = buildWatchingMessage('T'.repeat(600), URL_A, warning);
     expect(msg.length).toBeLessThanOrEqual(MAX);
     expect(msg).toContain(URL_A);
-    expect(msg.endsWith(`⚠ TW: ${warning}`)).toBe(true);
+    expect(msg.startsWith(`⚠ TW: ${warning} — Watching: `)).toBe(true);
   });
 
   it('caps an over-long warning rather than letting it crowd out the title', () => {
     const msg = buildWatchingMessage('Senate passes budget bill', URL_A, 'W'.repeat(400));
     expect(msg.length).toBeLessThanOrEqual(MAX);
+    expect(msg.startsWith('⚠ TW: WWW')).toBe(true);
+    expect(msg).toContain('… — Watching: '); // the warning truncated, not the title
     expect(msg).toContain('Senate passes budget bill');
-    expect(msg).toContain('⚠ TW: ');
-    expect(msg.endsWith('…')).toBe(true);
+    expect(msg.endsWith(URL_A)).toBe(true);
   });
 
   it('drops the title entirely when the url and warning leave no room for it', () => {
     const longUrl = `https://example.com/${'p'.repeat(300)}`;
     const msg = buildWatchingMessage('A headline that will not fit', longUrl, 'W'.repeat(200));
     expect(msg.length).toBeLessThanOrEqual(MAX);
-    expect(msg.startsWith(`Watching: ${longUrl}`)).toBe(true);
-    expect(msg).not.toContain('…  '); // no collapsed-title double space
+    expect(msg.startsWith('⚠ TW: WWW')).toBe(true);
+    expect(msg.endsWith(`Watching: ${longUrl}`)).toBe(true); // no collapsed-title double space
   });
 });

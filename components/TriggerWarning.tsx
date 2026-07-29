@@ -105,7 +105,7 @@ export function TriggerWarningEditor({
         className="w-full text-xs"
       />
       <p className="font-mono text-[10px] text-ink/50">
-        Shown to viewers — on the overlay and appended to the chat post.
+        Shown to viewers — on the overlay, and leading the chat post so it survives pinning.
         {' '}
         {MAX_TRIGGER_WARNING_CHARS - draft.length} left.
       </p>

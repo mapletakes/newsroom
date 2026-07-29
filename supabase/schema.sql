@@ -115,7 +115,8 @@ create table if not exists public.submissions (
   -- Audience-facing trigger warning, written by the streamer or a mod.
   -- Deliberately separate from both content_warning (AI-guessed, internal
   -- triage) and mod_notes (internal production notes): this text is published
-  -- — appended to the !video / "Post to chat" message and shown on the
+  -- — it LEADS the !video / "Post to chat" message, ahead of the title and
+  -- url so it survives Twitch's pinned-message preview, and is shown on the
   -- on-air overlay — so it's the one note field that must be authored
   -- knowing viewers will read it verbatim.
   trigger_warning text,

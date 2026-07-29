@@ -15,15 +15,16 @@ const MAX_CHARS = 500;
 // and the message would no longer say what's actually on screen.
 const MAX_TW_CHARS = 180;
 const TW_PREFIX = '⚠ TW: ';
+const TW_SEP = ' — ';
 
 function ellipsize(s: string, max: number): string {
   return s.length > max ? s.slice(0, Math.max(0, max - 1)) + '…' : s;
 }
 
-// Builds "Watching: <title> <url>", plus " ⚠ TW: <warning>" when the item
-// carries one, truncating the title (never the url, never the warning's
-// prefix) to fit Twitch's message limit. Strips playlist params so an
-// unlisted playlist id is never posted publicly.
+// Builds "⚠ TW: <warning> — Watching: <title> <url>", dropping the warning
+// clause when the item doesn't carry one. Truncates the title (never the url,
+// never the warning's prefix) to fit Twitch's message limit, and strips
+// playlist params so an unlisted playlist id is never posted publicly.
 export function buildWatchingMessage(
   title: string | null,
   url: string,
@@ -32,26 +33,32 @@ export function buildWatchingMessage(
   const shareUrl = sanitizeShareUrl(url);
   const tw = (triggerWarning || '').trim();
 
-  // Budget the warning against what the url actually leaves, not just its own
-  // cap: the url is the one part never shortened (a broken link is worse than
-  // no link), so with a pathologically long one the warning has to give. A
-  // message over the limit is rejected by Twitch outright, which would lose
-  // the warning entirely rather than merely trim it.
-  let suffix = '';
+  // The warning LEADS the message rather than trailing it: Twitch's pinned
+  // banner and its notification previews show only the opening characters, so
+  // a warning after the url is precisely the part that gets cut off — and a
+  // viewer could click through before ever seeing it.
+  //
+  // Budgeted against what the url actually leaves, not just its own cap: the
+  // url is the one part never shortened (a broken link is worse than no
+  // link), so a pathologically long one forces the warning to give. An
+  // over-limit message is rejected by Twitch outright, which would lose the
+  // warning entirely rather than merely trim it.
+  let prefix = '';
   if (tw) {
-    const budget = Math.min(MAX_TW_CHARS, MAX_CHARS - `Watching: ${shareUrl}`.length - 1 - TW_PREFIX.length);
-    if (budget > 0) suffix = ` ${TW_PREFIX}${ellipsize(tw, budget)}`;
+    const core = `Watching: ${shareUrl}`.length + TW_PREFIX.length + TW_SEP.length;
+    const budget = Math.min(MAX_TW_CHARS, MAX_CHARS - core);
+    if (budget > 0) prefix = `${TW_PREFIX}${ellipsize(tw, budget)}${TW_SEP}`;
   }
 
   let t = title || shareUrl;
-  const fixed = `Watching:  ${shareUrl}`.length + suffix.length; // "Watching: " + space + url + warning
+  const fixed = prefix.length + `Watching:  ${shareUrl}`.length; // warning + "Watching: " + space + url
   if (fixed + t.length > MAX_CHARS) {
     const room = MAX_CHARS - fixed - 1;
     // With a long url and a warning there can be no room left at all; drop
     // the title rather than emit a bare "…" that says nothing.
     t = room > 0 ? t.slice(0, room) + '…' : '';
   }
-  return t ? `Watching: ${t} ${shareUrl}${suffix}` : `Watching: ${shareUrl}${suffix}`;
+  return t ? `${prefix}Watching: ${t} ${shareUrl}` : `${prefix}Watching: ${shareUrl}`;
 }
 
 export type AnnounceResult = { ok: boolean; error?: string; message?: string };
