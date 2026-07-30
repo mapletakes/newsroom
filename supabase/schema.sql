@@ -40,6 +40,18 @@ create table if not exists public.streams (
 alter table public.streams add column if not exists video_command text default '!video';
 alter table public.streams add column if not exists video_command_last_sent_at timestamptz;
 
+-- Per-stream theming. Two columns rather than one because they answer to
+-- different masters: app_theme is a DEFAULT that any mod can override locally
+-- (the deck has to stay legible for whoever is triaging at 2am), while
+-- overlay_theme is absolute — it's matching a stream's branding on air, with
+-- nobody around to adjust it. Stored as jsonb rather than a column per slot
+-- so the shape can grow without a migration each time; every read goes
+-- through sanitizeAppTheme/sanitizeOverlayTheme in lib/theme.ts, which drops
+-- anything unrecognised, so an older or newer shape degrades to defaults
+-- instead of breaking the page.
+alter table public.streams add column if not exists app_theme jsonb;
+alter table public.streams add column if not exists overlay_theme jsonb;
+
 -- Moderators on a stream
 create table if not exists public.moderators (
   stream_id uuid references public.streams(id) on delete cascade,

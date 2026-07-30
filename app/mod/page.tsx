@@ -3,6 +3,7 @@ import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase';
 import { isAdmin } from '@/lib/admin';
 import { canMemberCurate } from '@/lib/curate';
+import { StreamTheme } from '@/components/StreamTheme';
 import { ModView } from './ModView';
 
 export const dynamic = 'force-dynamic';
@@ -25,15 +26,18 @@ export default async function ModPage() {
   const canCurate = isModRole ? await canMemberCurate(session.streamId, session.twitchUserId) : true;
 
   return (
-    <ModView
-      channel={stream?.twitch_login || session.twitchLogin}
-      displayName={session.displayName}
-      streamDisplayName={stream?.display_name || session.displayName}
-      submitCommand={stream?.submit_command || null}
-      streamId={session.streamId}
-      isMod={isModRole}
-      isAdmin={isAdmin(session.twitchUserId)}
-      canCurate={canCurate}
-    />
+    <>
+      <StreamTheme />
+      <ModView
+        channel={stream?.twitch_login || session.twitchLogin}
+        displayName={session.displayName}
+        streamDisplayName={stream?.display_name || session.displayName}
+        submitCommand={stream?.submit_command || null}
+        streamId={session.streamId}
+        isMod={isModRole}
+        isAdmin={isAdmin(session.twitchUserId)}
+        canCurate={canCurate}
+      />
+    </>
   );
 }

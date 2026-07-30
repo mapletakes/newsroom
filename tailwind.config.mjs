@@ -8,10 +8,13 @@ export default {
   ],
   theme: {
     extend: {
+      // Indirected through custom properties (defaults in globals.css) so a
+      // stream's chosen typefaces can override them at runtime from an
+      // injected <style> — the families aren't known at build time.
       fontFamily: {
-        display: ['"Fraunces"', 'Georgia', 'serif'],
-        sans: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
-        mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+        display: 'var(--font-display)',
+        sans: 'var(--font-sans)',
+        mono: 'var(--font-mono)',
       },
       colors: {
         ink: 'rgb(var(--ink) / <alpha-value>)',

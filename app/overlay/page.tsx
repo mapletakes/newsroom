@@ -24,7 +24,10 @@ export default function OverlayPage({
 }: {
   searchParams: { token?: string; theme?: string; brand?: string; variant?: string };
 }) {
-  const theme = (THEMES as readonly string[]).includes(searchParams.theme || '')
+  // Legacy: colours now live on the stream row and reach the source through
+  // the poll, so this only applies to a browser source added before that
+  // existed and never reconfigured. Once a theme is saved in Settings it wins.
+  const fallbackPreset = (THEMES as readonly string[]).includes(searchParams.theme || '')
     ? (searchParams.theme as OverlayTheme)
     : null;
   const showBrand = searchParams.brand !== '0';
@@ -36,7 +39,12 @@ export default function OverlayPage({
       {/* The app shell paints the paper background; a browser source needs
           transparency so only the lower-third card shows over the stream. */}
       <style>{'html, body { background: transparent !important; }'}</style>
-      <OverlayView token={searchParams.token || ''} theme={theme} showBrand={showBrand} variant={variant} />
+      <OverlayView
+        token={searchParams.token || ''}
+        fallbackPreset={fallbackPreset}
+        showBrand={showBrand}
+        variant={variant}
+      />
     </>
   );
 }

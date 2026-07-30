@@ -3,6 +3,7 @@ import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase';
 import { isAdmin } from '@/lib/admin';
 import { canMemberCurate } from '@/lib/curate';
+import { StreamTheme } from '@/components/StreamTheme';
 import { ShelfDetailView } from './ShelfDetailView';
 
 export const dynamic = 'force-dynamic';
@@ -26,13 +27,16 @@ export default async function ShelfDetailPage({ params }: { params: { id: string
   const canCurate = session.role === 'streamer' || (await canMemberCurate(session.streamId, session.twitchUserId));
 
   return (
-    <ShelfDetailView
-      shelfId={params.id}
-      streamId={session.streamId}
-      displayName={session.displayName}
-      isAdmin={isAdmin(session.twitchUserId)}
-      isMod={session.role === 'mod'}
-      canCurate={canCurate}
-    />
+    <>
+      <StreamTheme />
+      <ShelfDetailView
+        shelfId={params.id}
+        streamId={session.streamId}
+        displayName={session.displayName}
+        isAdmin={isAdmin(session.twitchUserId)}
+        isMod={session.role === 'mod'}
+        canCurate={canCurate}
+      />
+    </>
   );
 }

@@ -2,6 +2,8 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase';
 import { isAdmin } from '@/lib/admin';
+import { StreamTheme } from '@/components/StreamTheme';
+import { sanitizeAppTheme, sanitizeOverlayTheme } from '@/lib/theme';
 import { SetupForm } from './SetupForm';
 
 export const dynamic = 'force-dynamic';
@@ -26,22 +28,27 @@ export default async function SetupPage() {
     .order('twitch_login', { ascending: true });
 
   return (
-    <SetupForm
-      streamId={session.streamId}
-      displayName={session.displayName}
-      submitCommand={stream?.submit_command ?? ''}
-      videoCommand={stream?.video_command ?? ''}
-      allowAnyone={stream?.allow_anyone ?? true}
-      allowDuplicates={stream?.allow_duplicates ?? false}
-      ignoredUsers={stream?.ignored_users ?? []}
-      preferredSources={stream?.preferred_sources ?? []}
-      addToken={stream?.add_token ?? null}
-      isAdmin={isAdmin(session.twitchUserId)}
-      moderators={(mods ?? []).map((m) => ({
-        twitchUserId: m.twitch_user_id,
-        login: m.twitch_login,
-        canCurate: m.can_curate === true,
-      }))}
-    />
+    <>
+      <StreamTheme />
+      <SetupForm
+        streamId={session.streamId}
+        displayName={session.displayName}
+        submitCommand={stream?.submit_command ?? ''}
+        videoCommand={stream?.video_command ?? ''}
+        allowAnyone={stream?.allow_anyone ?? true}
+        allowDuplicates={stream?.allow_duplicates ?? false}
+        ignoredUsers={stream?.ignored_users ?? []}
+        preferredSources={stream?.preferred_sources ?? []}
+        addToken={stream?.add_token ?? null}
+        appTheme={sanitizeAppTheme(stream?.app_theme)}
+        overlayTheme={sanitizeOverlayTheme(stream?.overlay_theme)}
+        isAdmin={isAdmin(session.twitchUserId)}
+        moderators={(mods ?? []).map((m) => ({
+          twitchUserId: m.twitch_user_id,
+          login: m.twitch_login,
+          canCurate: m.can_curate === true,
+        }))}
+      />
+    </>
   );
 }

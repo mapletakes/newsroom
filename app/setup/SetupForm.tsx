@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useEventSubStatus } from '@/lib/use-eventsub-status';
+import { ThemeSettings } from './ThemeSettings';
+import type { AppTheme, OverlayTheme } from '@/lib/theme';
 
 export function SetupForm({
   streamId,
@@ -19,6 +21,8 @@ export function SetupForm({
   ignoredUsers,
   preferredSources,
   addToken,
+  appTheme,
+  overlayTheme,
   isAdmin = false,
   moderators,
 }: {
@@ -31,6 +35,8 @@ export function SetupForm({
   ignoredUsers: string[];
   preferredSources: string[];
   addToken: string | null;
+  appTheme: AppTheme;
+  overlayTheme: OverlayTheme;
   isAdmin?: boolean;
   moderators: { twitchUserId: string; login: string; canCurate: boolean }[];
 }) {
@@ -82,6 +88,8 @@ export function SetupForm({
       <main className="px-6 py-10 max-w-2xl mx-auto w-full">
       <h1 className="font-display text-4xl font-bold mb-2">Settings</h1>
       <div className="rule-double mb-8" />
+
+      <ThemeSettings initialApp={appTheme} initialOverlay={overlayTheme} />
 
       <section className="mb-10">
         <h2 className="font-display text-2xl font-bold mb-4">Chat capture</h2>
@@ -370,8 +378,6 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
   const [copied, setCopied] = useState(false);
   const [tokenCopied, setTokenCopied] = useState(false);
   const [overlayCopied, setOverlayCopied] = useState(false);
-  // 'system' = no theme param; the overlay follows the embedding browser.
-  const [overlayTheme, setOverlayTheme] = useState('system');
   const [overlayBrand, setOverlayBrand] = useState(true);
   const [overlayVariant, setOverlayVariant] = useState('default');
   const linkRef = useRef<HTMLAnchorElement>(null);
@@ -381,7 +387,10 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
     ? `javascript:(function(){window.open('${origin}/quick-add?token=${token}&url='+encodeURIComponent(location.href),'nr_add','width=440,height=280');})();`
     : '';
   const overlayUrl = token
-    ? `${origin}/overlay?token=${token}${overlayTheme === 'system' ? '' : `&theme=${overlayTheme}`}${overlayBrand ? '' : '&brand=0'}${overlayVariant === 'default' ? '' : `&variant=${overlayVariant}`}`
+    // No &theme= any more: colours live on the stream row so they can change
+    // without re-pasting this into OBS. Only the two things a source genuinely
+    // can't be told later — layout and the mark — stay in the URL.
+    ? `${origin}/overlay?token=${token}${overlayBrand ? '' : '&brand=0'}${overlayVariant === 'default' ? '' : `&variant=${overlayVariant}`}`
     : '';
 
   // React blocks javascript: hrefs, so set it on the DOM node directly.
@@ -538,25 +547,6 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
-            <ToggleGroup
-              type="single"
-              value={overlayTheme}
-              onValueChange={(v) => { if (v) setOverlayTheme(v); }}
-              className="mb-2 text-[10px]"
-              aria-label="Overlay theme"
-            >
-              {([
-                ['system', 'System'],
-                ['light', 'Newsprint'],
-                ['dark', 'Dark'],
-                ['sepia', 'Sepia'],
-                ['contrast', 'High contrast'],
-              ] as const).map(([value, label]) => (
-                <ToggleGroupItem key={value} value={value}>
-                  {label}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
             <label className="flex items-center gap-2 mb-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -582,9 +572,10 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
               Up next). <strong>Full</strong> shows a lower third — headline, outlet, and type.
               <strong> Minimal</strong> is a single-line title-only chip. <strong>Up next</strong> is
               the full card plus a strip showing what&apos;s queued after it. All disappear between
-              items. Layout, theme, and mark visibility are baked into the URL (an OBS source has no
-              UI to change them later); System follows the embedding browser, which in OBS means
-              light.
+              items. Layout and mark visibility are baked into the URL, since an OBS source has no
+              UI to change them later. <strong>Colours and fonts are not</strong> — those come from
+              Theme above and reach a live source within about 30 seconds, so you can restyle the
+              overlay mid-show without touching OBS.
             </p>
           </div>
         </div>

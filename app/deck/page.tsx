@@ -3,6 +3,7 @@ import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase';
 import { isAdmin } from '@/lib/admin';
 import { canMemberCurate } from '@/lib/curate';
+import { StreamTheme } from '@/components/StreamTheme';
 import { DeckView } from './DeckView';
 
 export const dynamic = 'force-dynamic';
@@ -27,11 +28,14 @@ export default async function DeckPage() {
   }
 
   return (
-    <DeckView
-      displayName={session.displayName}
-      streamId={session.streamId}
-      isAdmin={isAdmin(session.twitchUserId)}
-      curateOnly={curateOnly}
-    />
+    <>
+      <StreamTheme />
+      <DeckView
+        displayName={session.displayName}
+        streamId={session.streamId}
+        isAdmin={isAdmin(session.twitchUserId)}
+        curateOnly={curateOnly}
+      />
+    </>
   );
 }

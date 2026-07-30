@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getApprovedSession } from '@/lib/session';
+import { sanitizeAppTheme, sanitizeOverlayTheme } from '@/lib/theme';
 
 export async function POST(req: NextRequest) {
   const session = await getApprovedSession();
@@ -27,6 +28,12 @@ export async function POST(req: NextRequest) {
       .map((s: string) => String(s).trim().toLowerCase().replace(/^(https?:\/\/)?(www\.)?/, ''))
       .filter(Boolean);
   }
+  // Normalised on the way in, not on the way out: these are read by the
+  // overlay on every poll and by every app page render, and a font family
+  // here ends up inside both a stylesheet URL and a CSS font-family value.
+  // Validating once at the write keeps every reader from having to.
+  if ('app_theme' in body) patch.app_theme = sanitizeAppTheme(body.app_theme);
+  if ('overlay_theme' in body) patch.overlay_theme = sanitizeOverlayTheme(body.overlay_theme);
 
   const sb = supabaseAdmin();
   const { error } = await sb.from('streams').update(patch).eq('id', session.streamId);

@@ -17,6 +17,19 @@
   --slate: 44 62 80;
 }
 
+/* Typeface slots. Declared on :root rather than baked into tailwind.config so
+   a stream's chosen fonts can override them from an injected <style> without
+   a rebuild — see components/StreamTheme.tsx. The families here are the three
+   loaded by the @import above; anything else a streamer picks is fetched at
+   runtime by lib/use-google-fonts.ts. Font stacks are deliberately NOT
+   scoped per palette: a theme is a colour decision and a typeface decision,
+   and they're set independently. */
+:root {
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
 html.dark, .theme-dark {
   --ink: 232 228 219;
   --paper: 20 20 22;
@@ -49,9 +62,16 @@ html.contrast, .theme-contrast {
 html, body {
   background-color: rgb(var(--paper));
   color: rgb(var(--ink));
-  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-family: var(--font-sans);
   font-feature-settings: 'ss01', 'ss02';
 }
+
+/* The overlay's own type slots. Separate from the app's --font-* because the
+   two are configured independently: a streamer can brand the on-air graphic
+   without changing the face they read the deck in all night. Defaults here
+   only matter until the theme's inline vars land on the card wrapper. */
+.ov-display { font-family: var(--ov-font-display, var(--font-display)); }
+.ov-mono { font-family: var(--ov-font-mono, var(--font-mono)); }
 
 ::selection {
   background-color: rgb(var(--ochre));

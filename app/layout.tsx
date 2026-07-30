@@ -17,7 +17,11 @@ export const metadata: Metadata = {
   icons: { icon: '/icon.svg', apple: '/icons/apple-touch-icon.png' },
 };
 
-const THEMES = ['light', 'dark', 'sepia', 'contrast'];
+// 'brand' is the stream's own palette, injected as `html.brand` by
+// <StreamTheme /> on the authed pages. Registered here so next-themes treats
+// it as a first-class choice a user can be switched to and can switch away
+// from, rather than something bolted onto the html element behind its back.
+const THEMES = ['light', 'dark', 'sepia', 'contrast', 'brand'];
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

@@ -21,7 +21,7 @@ function mockOverlayApi(nowPlaying: Record<string, unknown> | null) {
     vi.fn(() =>
       Promise.resolve(
         new Response(
-          JSON.stringify({ ok: true, streamId: 'stream-1', nowPlaying, next: null }),
+          JSON.stringify({ ok: true, streamId: 'stream-1', theme: null, nowPlaying, next: null }),
           { status: 200 },
         ),
       ),
@@ -30,7 +30,7 @@ function mockOverlayApi(nowPlaying: Record<string, unknown> | null) {
 }
 
 function renderOverlay(variant: OverlayVariant) {
-  return render(<OverlayView token="tok" theme={null} showBrand variant={variant} />);
+  return render(<OverlayView token="tok" fallbackPreset={null} showBrand variant={variant} />);
 }
 
 afterEach(() => {
@@ -72,7 +72,9 @@ describe('OverlayView — trigger warning', () => {
   // bar's 36px has to come back out of the row underneath, not off the end.
   describe('card height is unchanged by a warning', () => {
     const rowOf = (container: HTMLElement) =>
-      container.querySelector('.flex.flex-col > div:not(.bg-rust)') as HTMLElement;
+      container.querySelector('[data-ov="row"]') as HTMLElement;
+    const barOf = (container: HTMLElement) =>
+      container.querySelector('[data-ov="warning"]');
 
     it('gives the row the full 84px when there is no warning', async () => {
       mockOverlayApi({ ...NOW_PLAYING, triggerWarning: null });
@@ -80,7 +82,7 @@ describe('OverlayView — trigger warning', () => {
 
       await screen.findByText(NOW_PLAYING.title);
       expect(rowOf(container).className).toContain('h-[84px]');
-      expect(container.querySelector('.bg-rust.h-9')).toBeNull();
+      expect(barOf(container)).toBeNull();
     });
 
     it('splits the same 84px into a 44px bar and a 40px row when there is one', async () => {
@@ -88,7 +90,7 @@ describe('OverlayView — trigger warning', () => {
       const { container } = renderOverlay('default');
 
       await screen.findByText('graphic footage');
-      expect(container.querySelector('.bg-rust')!.className).toContain('h-11'); // 44px
+      expect(barOf(container)!.className).toContain('h-11'); // 44px
       expect(rowOf(container).className).toContain('h-10'); // 40px — 44 + 40 = 84
       expect(rowOf(container).className).not.toContain('h-[84px]');
     });

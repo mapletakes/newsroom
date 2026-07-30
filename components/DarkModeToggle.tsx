@@ -14,7 +14,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Icon, type IconName } from '@/components/ui/icon';
 
+// 'brand' is whatever the streamer set in Settings → Theme. Always offered,
+// even on a stream that hasn't set one: `html.brand` with nothing injected
+// simply inherits the :root palette, which IS that stream's default.
 const OPTIONS: { value: string; label: string; icon: IconName }[] = [
+  { value: 'brand', label: 'Stream default', icon: 'camera' },
   { value: 'system', label: 'System', icon: 'themeSystem' },
   { value: 'light', label: 'Newsprint', icon: 'themeLight' },
   { value: 'dark', label: 'Dark', icon: 'themeDark' },

@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { checkRateLimit, hashKey } from '@/lib/ratelimit';
 import { computePlayOrder } from '@/lib/play-order';
+import { sanitizeOverlayTheme } from '@/lib/theme';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,17 +44,28 @@ export async function GET(req: NextRequest) {
   const sb = supabaseAdmin();
   const { data: stream } = await sb
     .from('streams')
-    .select('id, now_playing_id, ungrouped_position')
+    .select('id, now_playing_id, ungrouped_position, overlay_theme')
     .eq('add_token', token)
     .maybeSingle();
   if (!stream) {
     return json({ ok: false, error: 'invalid token' }, { status: 401 });
   }
 
+  // Rides along on every poll rather than being baked into the OBS URL: a
+  // browser source has no UI to change anything after it's added, so this is
+  // the only way a colour tweak reaches a live source without the streamer
+  // re-pasting the URL mid-show.
+  //
+  // Explicitly null when nothing has been configured, rather than defaults —
+  // that's what lets the client keep honouring a legacy `?theme=` param on an
+  // OBS source added before this existed. Configure a theme and the stored
+  // one takes over; until then the URL still says what it always said.
+  const theme = stream.overlay_theme ? sanitizeOverlayTheme(stream.overlay_theme) : null;
+
   // streamId is returned so the overlay can subscribe to this stream's
   // realtime "changed" pings (they carry no data, just a refetch signal).
   if (!stream.now_playing_id) {
-    return json({ ok: true, streamId: stream.id, nowPlaying: null, next: null });
+    return json({ ok: true, streamId: stream.id, theme, nowPlaying: null, next: null });
   }
 
   // Full approved list + segments, ordered the same way the deck itself
@@ -88,6 +100,7 @@ export async function GET(req: NextRequest) {
   return json({
     ok: true,
     streamId: stream.id,
+    theme,
     nowPlaying: np ? toPayload(np) : null,
     next: nextItem ? toPayload(nextItem) : null,
   });
