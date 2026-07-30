@@ -83,13 +83,13 @@ describe('OverlayView — trigger warning', () => {
       expect(container.querySelector('.bg-rust.h-9')).toBeNull();
     });
 
-    it('splits the same 84px into a 36px bar and a 48px row when there is one', async () => {
+    it('splits the same 84px into a 44px bar and a 40px row when there is one', async () => {
       mockOverlayApi({ ...NOW_PLAYING, triggerWarning: 'graphic footage' });
       const { container } = renderOverlay('default');
 
       await screen.findByText('graphic footage');
-      expect(container.querySelector('.bg-rust')!.className).toContain('h-9'); // 36px
-      expect(rowOf(container).className).toContain('h-12'); // 48px — 36 + 48 = 84
+      expect(container.querySelector('.bg-rust')!.className).toContain('h-11'); // 44px
+      expect(rowOf(container).className).toContain('h-10'); // 40px — 44 + 40 = 84
       expect(rowOf(container).className).not.toContain('h-[84px]');
     });
 

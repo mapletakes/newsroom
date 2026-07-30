@@ -26,21 +26,33 @@ const metaLine = (item: NowPlaying) =>
 //
 // Fixed height, and the warning is clipped rather than wrapped. A browser
 // source is a fixed-size window (~800×100), not a page that scrolls, so a bar
-// free to grow just pushes the card off the bottom of it. default/ticker
-// therefore take these 36px back out of the row underneath instead of adding
-// to the card's total; minimal is a 40px chip with nothing to give up, so it
-// alone grows — it starts small enough to absorb it.
-const TW_BAR_H = 'h-9'; // 36px
+// free to grow just pushes the card off the bottom of it. Every variant below
+// takes these 44px back out of the row underneath instead of adding to the
+// card's total.
+//
+// Both the label and the warning are sized to fill the bar to within ~2px top
+// and bottom — the type is as large as 44px can carry. The label stacks onto
+// two lines to get there without eating the width the warning needs: spelled
+// out rather than abbreviated to "TW", since the one viewer who most needs to
+// read it is the one who doesn't know the shorthand.
+const TW_BAR_H = 'h-11'; // 44px
 
 function TriggerWarning({ text }: { text: string }) {
   return (
-    <div className={`${TW_BAR_H} shrink-0 flex items-center gap-2.5 bg-rust px-3 text-paper`}>
-      <span className="shrink-0 font-mono text-[10px] uppercase tracking-widest font-bold leading-none opacity-90">
+    <div className={`${TW_BAR_H} shrink-0 flex items-center gap-3 bg-rust px-3 py-[2px] text-paper`}>
+      {/* Stacked by wrapping inside a fixed width, deliberately not by a <br>
+          or a pair of spans: both of those split the label across nodes, and
+          it stops reading as the single phrase "trigger warning" to anything
+          walking the DOM. The width is sized to break at the space — wide
+          enough for "⚠ TRIGGER" even if the mono face falls back to a wider
+          one, narrow enough that the whole phrase can never sit on one line. */}
+      <span className="shrink-0 w-[124px] font-mono text-[20px] uppercase tracking-tight font-bold leading-none">
         ⚠ Trigger warning
       </span>
-      {/* The warning itself gets the rest of the bar at display size — it's
-          the part a viewer actually has to read, not the label. */}
-      <span className="min-w-0 flex-1 font-display text-xl font-bold leading-none truncate">
+      {/* 40px is the ceiling, not a taste call: it exactly fills the bar's
+          40px content box, and Fraunces' descenders spill only ~0.5px past
+          the line box into the 2px of padding. 44px spills past the bar. */}
+      <span className="min-w-0 flex-1 font-display text-[40px] font-black leading-none truncate">
         {text}
       </span>
     </div>
@@ -59,8 +71,8 @@ function TriggerWarning({ text }: { text: string }) {
 //   ticker  — the full lower-third plus a "next up" line underneath
 // A trigger warning adds a rust bar without changing the card's total height
 // in default/ticker (it takes the space back from the meta line), so an
-// existing browser source never needs resizing. minimal is the one exception
-// — it has nothing to give up, so it grows by the height of the bar.
+// existing browser source never needs resizing. minimal has less to give up,
+// so it grows — but stays inside the same 100px source.
 export function OverlayView({
   token,
   theme,
@@ -141,7 +153,10 @@ export function OverlayView({
         className={`${themeClass} m-2 inline-flex flex-col bg-paper border-2 border-ink shadow-[3px_3px_0_rgb(var(--ink))] max-w-[600px] overflow-hidden text-ink`}
       >
         {nowPlaying.triggerWarning && <TriggerWarning text={nowPlaying.triggerWarning} />}
-        <div className="h-10 flex items-center gap-2 px-3">
+        {/* The chip gives up 8px of its own 40px when a warning is present —
+            not the whole bar's worth, which would leave nothing, but enough
+            to keep the total inside a 100px source. */}
+        <div className={`${nowPlaying.triggerWarning ? 'h-8' : 'h-10'} flex items-center gap-2 px-3`}>
           <span className="inline-block w-2 h-2 shrink-0 rounded-full bg-rust live-dot" />
           <span className="font-display text-base font-bold leading-tight truncate">{nowPlaying.title}</span>
           {showBrand && (
@@ -160,7 +175,7 @@ export function OverlayView({
   const meta = metaLine(nowPlaying);
   const tw = nowPlaying.triggerWarning;
 
-  // 36px warning bar + 48px row = the same 84px the row occupied on its own,
+  // 44px warning bar + 40px row = the same 84px the row occupied on its own,
   // so a warning appearing mid-show never moves the card or grows it past the
   // browser source's height. The publisher/kind/duration line is what gives
   // way — when an item carries a warning, that's the line worth losing.
@@ -169,7 +184,7 @@ export function OverlayView({
       className={`${themeClass} m-2 flex flex-col bg-paper border-2 border-ink shadow-[4px_4px_0_rgb(var(--ink))] overflow-hidden text-ink`}
     >
       {tw && <TriggerWarning text={tw} />}
-      <div className={`${tw ? 'h-12' : 'h-[84px]'} flex items-center gap-4 px-4`}>
+      <div className={`${tw ? 'h-10' : 'h-[84px]'} flex items-center gap-4 px-4`}>
         <div className="shrink-0 flex flex-col items-center gap-1">
           <span className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-widest text-rust font-bold">
             <span className="inline-block w-2 h-2 rounded-full bg-rust live-dot" />
