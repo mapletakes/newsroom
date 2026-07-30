@@ -10,7 +10,9 @@ const VARIANTS = ['default', 'minimal', 'ticker'] as const;
 
 // OBS browser-source lower third. Add in OBS as a Browser Source pointed at
 // /overlay?token=<add token>[&theme=light|dark|sepia|contrast][&brand=0][&variant=default|minimal|ticker],
-// sized around 800×100 (default/minimal) or 800×120 (ticker). Renders nothing
+// sized around 800×100 (default/minimal) or 800×120 (ticker) — a trigger
+// warning fits inside those same heights, except on minimal, which grows by
+// ~36px when an item carries one. Renders nothing
 // (fully transparent) when the deck has no item on air. With no theme param,
 // it follows the browser's system preference — OBS's embedded browser
 // typically resolves that to light. brand=0 hides the small "The Broadside"

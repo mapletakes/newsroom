@@ -21,16 +21,28 @@ const metaLine = (item: NowPlaying) =>
 
 // Solid rust rather than the card's paper — a warning that has to be readable
 // at a glance over arbitrary stream footage can't rely on a tint. Shown at the
-// TOP of the card in every variant (including minimal, which is otherwise
-// deliberately one line): the whole point is that it's seen before the item
-// it's warning about.
+// TOP of the card: the whole point is that it's seen before the item it's
+// warning about.
+//
+// Fixed height, and the warning is clipped rather than wrapped. A browser
+// source is a fixed-size window (~800×100), not a page that scrolls, so a bar
+// free to grow just pushes the card off the bottom of it. default/ticker
+// therefore take these 36px back out of the row underneath instead of adding
+// to the card's total; minimal is a 40px chip with nothing to give up, so it
+// alone grows — it starts small enough to absorb it.
+const TW_BAR_H = 'h-9'; // 36px
+
 function TriggerWarning({ text }: { text: string }) {
   return (
-    <div className="flex items-baseline gap-2 bg-rust px-3 py-1.5 text-paper">
-      <span className="shrink-0 font-mono text-[11px] uppercase tracking-widest font-bold">
+    <div className={`${TW_BAR_H} shrink-0 flex items-center gap-2.5 bg-rust px-3 text-paper`}>
+      <span className="shrink-0 font-mono text-[10px] uppercase tracking-widest font-bold leading-none opacity-90">
         ⚠ Trigger warning
       </span>
-      <span className="min-w-0 font-sans text-sm font-semibold leading-snug">{text}</span>
+      {/* The warning itself gets the rest of the bar at display size — it's
+          the part a viewer actually has to read, not the label. */}
+      <span className="min-w-0 flex-1 font-display text-xl font-bold leading-none truncate">
+        {text}
+      </span>
     </div>
   );
 }
@@ -45,6 +57,10 @@ function TriggerWarning({ text }: { text: string }) {
 //   default — the full lower-third (title + publisher/kind/duration)
 //   minimal — a slim single-line title-only chip
 //   ticker  — the full lower-third plus a "next up" line underneath
+// A trigger warning adds a rust bar without changing the card's total height
+// in default/ticker (it takes the space back from the meta line), so an
+// existing browser source never needs resizing. minimal is the one exception
+// — it has nothing to give up, so it grows by the height of the bar.
 export function OverlayView({
   token,
   theme,
@@ -142,30 +158,35 @@ export function OverlayView({
   // triage aid for the streamer and mods, not something to put on stream in
   // front of viewers.
   const meta = metaLine(nowPlaying);
+  const tw = nowPlaying.triggerWarning;
 
+  // 36px warning bar + 48px row = the same 84px the row occupied on its own,
+  // so a warning appearing mid-show never moves the card or grows it past the
+  // browser source's height. The publisher/kind/duration line is what gives
+  // way — when an item carries a warning, that's the line worth losing.
   return (
     <div
       className={`${themeClass} m-2 flex flex-col bg-paper border-2 border-ink shadow-[4px_4px_0_rgb(var(--ink))] overflow-hidden text-ink`}
     >
-      {nowPlaying.triggerWarning && <TriggerWarning text={nowPlaying.triggerWarning} />}
-      <div className="h-[84px] flex items-center gap-4 px-4">
+      {tw && <TriggerWarning text={tw} />}
+      <div className={`${tw ? 'h-12' : 'h-[84px]'} flex items-center gap-4 px-4`}>
         <div className="shrink-0 flex flex-col items-center gap-1">
           <span className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-widest text-rust font-bold">
             <span className="inline-block w-2 h-2 rounded-full bg-rust live-dot" />
             On air
           </span>
-          {showBrand && (
+          {showBrand && !tw && (
             <span className="font-mono text-[8px] uppercase tracking-widest text-ink/40">
               The Broadside
             </span>
           )}
         </div>
-        <div className="shrink-0 w-px self-stretch my-3 bg-ink/20" />
+        <div className={`shrink-0 w-px self-stretch ${tw ? 'my-2' : 'my-3'} bg-ink/20`} />
         <div className="min-w-0 flex-1">
           <div className="font-display text-xl font-bold leading-tight truncate">
             {nowPlaying.title}
           </div>
-          {meta && (
+          {meta && !tw && (
             <div className="font-mono text-[11px] uppercase tracking-widest text-ink/60 truncate mt-0.5">
               {meta}
             </div>

@@ -66,4 +66,45 @@ describe('OverlayView — trigger warning', () => {
     await waitFor(() => expect(fetch).toHaveBeenCalled());
     expect(container).toBeEmptyDOMElement();
   });
+
+  // The bug this guards: a browser source is a fixed-size window, so a warning
+  // bar that ADDS height pushes the card off the bottom of it mid-show. The
+  // bar's 36px has to come back out of the row underneath, not off the end.
+  describe('card height is unchanged by a warning', () => {
+    const rowOf = (container: HTMLElement) =>
+      container.querySelector('.flex.flex-col > div:not(.bg-rust)') as HTMLElement;
+
+    it('gives the row the full 84px when there is no warning', async () => {
+      mockOverlayApi({ ...NOW_PLAYING, triggerWarning: null });
+      const { container } = renderOverlay('default');
+
+      await screen.findByText(NOW_PLAYING.title);
+      expect(rowOf(container).className).toContain('h-[84px]');
+      expect(container.querySelector('.bg-rust.h-9')).toBeNull();
+    });
+
+    it('splits the same 84px into a 36px bar and a 48px row when there is one', async () => {
+      mockOverlayApi({ ...NOW_PLAYING, triggerWarning: 'graphic footage' });
+      const { container } = renderOverlay('default');
+
+      await screen.findByText('graphic footage');
+      expect(container.querySelector('.bg-rust')!.className).toContain('h-9'); // 36px
+      expect(rowOf(container).className).toContain('h-12'); // 48px — 36 + 48 = 84
+      expect(rowOf(container).className).not.toContain('h-[84px]');
+    });
+
+    // What gives way is the publisher/kind/duration line — the least
+    // important thing on the card once an item carries a warning.
+    it('drops the meta line to make the room', async () => {
+      mockOverlayApi({ ...NOW_PLAYING, triggerWarning: null });
+      renderOverlay('default');
+      expect(await screen.findByText(/Reuters/)).toBeInTheDocument();
+      cleanup();
+
+      mockOverlayApi({ ...NOW_PLAYING, triggerWarning: 'graphic footage' });
+      renderOverlay('default');
+      await screen.findByText('graphic footage');
+      expect(screen.queryByText(/Reuters/)).not.toBeInTheDocument();
+    });
+  });
 });
