@@ -66,7 +66,7 @@ function ColorField({
   label,
   value,
   onChange,
-  /** Paired colour to grade against, if this slot sits on/under another. */
+  /** Paired colour to grade against, if this slot sits on or under another. */
   against,
   /** WCAG threshold for the size this slot actually renders at. */
   threshold = 4.5,
@@ -165,65 +165,88 @@ function FontField({
   );
 }
 
-// ── The section ───────────────────────────────────────────────
+// ── Shared save plumbing ──────────────────────────────────────
 
-export function ThemeSettings({
-  initialApp,
-  initialOverlay,
-}: {
-  initialApp: AppTheme;
-  initialOverlay: OverlayTheme;
-}) {
-  const [app, setApp] = useState<AppTheme>(initialApp);
-  const [ov, setOv] = useState<OverlayTheme>(initialOverlay);
-  const [variant, setVariant] = useState<OverlayVariant>('default');
-  const [previewTw, setPreviewTw] = useState(true);
+/** Both halves PATCH the same endpoint, and it only touches the keys it's
+ *  handed — so each can save on its own tab without clobbering the other. */
+function useThemeSave() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
 
-  const appPalette = resolveAppPalette(app);
-  const ovColors = resolveOverlayColors(ov);
-
-  const save = async () => {
+  const save = async (patch: Record<string, unknown>, reloadAfter: boolean) => {
     setSaving(true);
     setError('');
     try {
       const r = await fetch('/api/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ app_theme: app, overlay_theme: ov }),
+        body: JSON.stringify(patch),
       });
       if (!r.ok) throw new Error();
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
-      // The app's own palette is injected server-side, so it only changes on
-      // the next render of a page — reload so the streamer sees what they just
-      // picked instead of having to guess.
-      setTimeout(() => window.location.reload(), 400);
+      if (reloadAfter) setTimeout(() => window.location.reload(), 400);
     } catch {
-      setError('Could not save the theme.');
+      setError('Could not save.');
     } finally {
       setSaving(false);
     }
   };
 
-  const resetOverlayToPreset = (preset: string) =>
-    setOv({ ...ov, preset, colors: {} }); // clearing overrides is the point of picking a preset
+  return { save, saving, saved, error };
+}
+
+function SaveRow({
+  onSave,
+  onReset,
+  saving,
+  saved,
+  error,
+  note,
+}: {
+  onSave: () => void;
+  onReset: () => void;
+  saving: boolean;
+  saved: boolean;
+  error: string;
+  note?: string;
+}) {
+  return (
+    <>
+      <div className="flex items-center gap-3 mt-4">
+        <Button onClick={onSave} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
+        {saved && <span className="font-mono text-xs text-moss">Saved ✓</span>}
+        {error && <span className="font-mono text-xs text-rust">{error}</span>}
+        <button
+          type="button"
+          onClick={onReset}
+          className="ml-auto font-mono text-xs uppercase tracking-widest text-ink/50 hover:text-ink"
+        >
+          Reset to defaults
+        </button>
+      </div>
+      {note && <p className="text-xs text-ink/50 mt-2">{note}</p>}
+    </>
+  );
+}
+
+// ── App palette + type ────────────────────────────────────────
+
+export function AppThemeSettings({ initial }: { initial: AppTheme }) {
+  const [app, setApp] = useState<AppTheme>(initial);
+  const { save, saving, saved, error } = useThemeSave();
+  const palette = resolveAppPalette(app);
 
   return (
-    <section className="mb-10">
-      <h2 className="font-display text-2xl font-bold mb-1">Theme</h2>
-      <p className="text-xs text-ink/60 mb-6">
-        Two separate looks. The app theme is a <strong>default</strong> — your mods can still switch
-        to something they find easier to read. The overlay theme is what your viewers see, so it
-        applies exactly as set.
+    <section>
+      <p className="text-sm text-ink/70 mb-6 max-w-prose leading-relaxed">
+        How the deck, mod view, and shelf look. This is a <strong>default</strong>, not a rule — a
+        mod who finds another palette easier to read can still switch, and keeps that choice.
+        Viewers never see any of this; the on-air look lives under <strong>Overlay</strong>.
       </p>
 
-      {/* ── App ────────────────────────────────────────────── */}
-      <h3 className="font-mono text-xs uppercase tracking-widest text-ink/60 mb-2">
-        App (deck, mod view, shelf)
-      </h3>
+      <h3 className="font-mono text-xs uppercase tracking-widest text-ink/60 mb-2">Palette</h3>
       <ToggleGroup
         type="single"
         value={app.preset}
@@ -238,22 +261,23 @@ export function ThemeSettings({
       </ToggleGroup>
 
       {app.preset === 'custom' && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4 p-3 border border-ink/20">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6 p-3 border border-ink/20">
           {PALETTE_TOKENS.map((t) => (
             <ColorField
               key={t}
               label={TOKEN_LABELS[t]}
-              value={appPalette[t]}
-              // Everything on the deck is read at body size, so this is the
-              // one place the strict 4.5 threshold is the right bar.
-              against={t === 'paper' ? appPalette.ink : appPalette.paper}
+              value={palette[t]}
+              // Everything here is read at body size, so this is the one place
+              // the strict 4.5 threshold is the right bar.
+              against={t === 'paper' ? palette.ink : palette.paper}
               onChange={(hex) => setApp({ ...app, colors: { ...app.colors, [t]: hex } })}
             />
           ))}
         </div>
       )}
 
-      <div className="grid sm:grid-cols-3 gap-3 mb-8">
+      <h3 className="font-mono text-xs uppercase tracking-widest text-ink/60 mb-2">Type</h3>
+      <div className="grid sm:grid-cols-3 gap-3">
         {(['display', 'sans', 'mono'] as FontRole[]).map((role) => (
           <FontField
             key={role}
@@ -265,16 +289,40 @@ export function ThemeSettings({
         ))}
       </div>
 
-      {/* ── Overlay ────────────────────────────────────────── */}
-      <h3 className="font-mono text-xs uppercase tracking-widest text-ink/60 mb-2">
-        On-air overlay
-      </h3>
+      <SaveRow
+        saving={saving}
+        saved={saved}
+        error={error}
+        onSave={() => save({ app_theme: app }, true)}
+        onReset={() => setApp(DEFAULT_APP_THEME)}
+        note="The page reloads on save — the app's palette is applied server-side, so that's what makes it show up."
+      />
+    </section>
+  );
+}
+
+// ── Overlay palette + type ────────────────────────────────────
+
+export function OverlayThemeSettings({ initial }: { initial: OverlayTheme }) {
+  const [ov, setOv] = useState<OverlayTheme>(initial);
+  const [variant, setVariant] = useState<OverlayVariant>('default');
+  const [previewTw, setPreviewTw] = useState(true);
+  const { save, saving, saved, error } = useThemeSave();
+  const colors = resolveOverlayColors(ov);
+
+  return (
+    <section>
+      <h3 className="font-display text-xl font-bold mb-1">Colours &amp; type</h3>
+      <p className="text-xs text-ink/60 mb-4 max-w-prose">
+        What your viewers see. Unlike the app theme this applies exactly as set — there&apos;s
+        nobody at the browser source to adjust it.
+      </p>
 
       <div className="mb-3 flex flex-wrap gap-2 items-center">
         <ToggleGroup
           type="single"
           value={ov.preset}
-          onValueChange={(v) => { if (v) resetOverlayToPreset(v); }}
+          onValueChange={(v) => { if (v) setOv({ ...ov, preset: v, colors: {} }); }}
           className="text-[10px]"
           aria-label="Overlay palette starting point"
         >
@@ -282,7 +330,7 @@ export function ThemeSettings({
             <ToggleGroupItem key={value} value={value}>{label}</ToggleGroupItem>
           ))}
         </ToggleGroup>
-        <span className="font-mono text-[10px] text-ink/40">starting point — tweak any colour below</span>
+        <span className="font-mono text-[10px] text-ink/40">starting point — tweak anything below</span>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3 p-3 border border-ink/20">
@@ -290,11 +338,11 @@ export function ThemeSettings({
           <ColorField
             key={slot}
             label={OVERLAY_SLOT_LABELS[slot]}
-            value={ovColors[slot]}
-            against={CONTRAST_PAIR[slot] ? ovColors[CONTRAST_PAIR[slot]!] : undefined}
-            // The overlay's type is large and bold, where WCAG asks 3.0
-            // rather than 4.5 — grading it at body-text strictness would flag
-            // perfectly legible pairings, including the one we ship.
+            value={colors[slot]}
+            against={CONTRAST_PAIR[slot] ? colors[CONTRAST_PAIR[slot]!] : undefined}
+            // The overlay's type is large and bold, where WCAG asks 3.0 rather
+            // than 4.5 — grading it at body strictness would flag perfectly
+            // legible pairings, including the one we ship.
             threshold={3}
             onChange={(hex) => setOv({ ...ov, colors: { ...ov.colors, [slot]: hex } })}
           />
@@ -313,13 +361,12 @@ export function ThemeSettings({
         ))}
       </div>
 
-      <label className="flex items-center gap-2 mb-4 cursor-pointer">
+      <label className="flex items-center gap-2 mb-6 cursor-pointer">
         <input type="checkbox" checked={ov.flat} onChange={(e) => setOv({ ...ov, flat: e.target.checked })} />
         <span className="font-mono text-xs">Flat card (no drop shadow)</span>
       </label>
 
-      {/* ── Preview ────────────────────────────────────────── */}
-      <p className="font-mono text-xs uppercase tracking-widest text-ink/60 mb-2">Preview</p>
+      <h3 className="font-mono text-xs uppercase tracking-widest text-ink/60 mb-2">Preview</h3>
       <div className="mb-2 flex flex-wrap gap-2 items-center">
         <ToggleGroup
           type="single"
@@ -338,8 +385,8 @@ export function ThemeSettings({
         </label>
       </div>
       {/* Checkerboard, because a browser source is transparent — a preview on
-          flat paper hides exactly the problem a streamer needs to catch, which
-          is a card that vanishes into their own footage. */}
+          flat paper hides exactly the problem worth catching, which is a card
+          that vanishes into the streamer's own footage. */}
       <div
         className="p-2 overflow-x-auto border border-ink/20"
         style={{
@@ -355,33 +402,20 @@ export function ThemeSettings({
             theme={ov}
             variant={variant}
             showBrand
-            nowPlaying={{
-              ...SAMPLE,
-              triggerWarning: previewTw ? 'graphic footage of the crash' : null,
-            }}
+            nowPlaying={{ ...SAMPLE, triggerWarning: previewTw ? 'graphic footage of the crash' : null }}
             next={SAMPLE_NEXT}
           />
         </div>
       </div>
 
-      <div className="flex items-center gap-3 mt-4">
-        <Button onClick={save} disabled={saving}>
-          {saving ? 'Saving…' : 'Save theme'}
-        </Button>
-        {saved && <span className="font-mono text-xs text-moss">Saved ✓</span>}
-        {error && <span className="font-mono text-xs text-rust">{error}</span>}
-        <button
-          type="button"
-          onClick={() => { setApp(DEFAULT_APP_THEME); setOv(DEFAULT_OVERLAY_THEME); }}
-          className="ml-auto font-mono text-xs uppercase tracking-widest text-ink/50 hover:text-ink"
-        >
-          Reset to Broadside defaults
-        </button>
-      </div>
-      <p className="text-xs text-ink/50 mt-2">
-        The overlay picks up a saved change within about 30 seconds — no need to touch the browser
-        source in OBS, even mid-show.
-      </p>
+      <SaveRow
+        saving={saving}
+        saved={saved}
+        error={error}
+        onSave={() => save({ overlay_theme: ov }, false)}
+        onReset={() => setOv(DEFAULT_OVERLAY_THEME)}
+        note="A live browser source picks this up within about 30 seconds — no need to touch OBS, even mid-show."
+      />
     </section>
   );
 }

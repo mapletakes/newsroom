@@ -8,8 +8,27 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useEventSubStatus } from '@/lib/use-eventsub-status';
-import { ThemeSettings } from './ThemeSettings';
+import { AppThemeSettings, OverlayThemeSettings } from './ThemeSettings';
 import type { AppTheme, OverlayTheme } from '@/lib/theme';
+
+// Settings outgrew a single scroll — six short panels beat one long page you
+// can lose your place in. Everything about a given surface lives in one place:
+// in particular the overlay's URL, layout and colours are one tab, having
+// previously been split between "Quick add" and "Theme" for no better reason
+// than the order they were built in.
+const TABS = [
+  ['chat', 'Chat'],
+  ['deck', 'Deck'],
+  ['appearance', 'Appearance'],
+  ['overlay', 'Overlay'],
+  ['quickadd', 'Quick add'],
+  ['account', 'Account'],
+] as const;
+type TabId = (typeof TABS)[number][0];
+
+function isTabId(v: string): v is TabId {
+  return (TABS as readonly (readonly [string, string])[]).some(([id]) => id === v);
+}
 
 export function SetupForm({
   streamId,
@@ -50,6 +69,34 @@ export function SetupForm({
   const [sourceInput, setSourceInput] = useState('');
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  // The add token is one secret behind two features (quick-add and the
+  // overlay URL), so it lives here rather than inside either tab — otherwise
+  // regenerating it on one tab would leave the other showing a dead URL until
+  // a reload.
+  const [token, setToken] = useState<string | null>(addToken);
+
+  const [tab, setTab] = useState<TabId>('chat');
+  // Deep-linkable and refresh-proof via the hash, which needs no router round
+  // trip. Read in an effect rather than at init so the server and the first
+  // client render agree. The hashchange listener is what makes an edited URL
+  // and the back button work — without it the hash and the visible tab drift
+  // apart, and a shared link only lands right on a cold load.
+  useEffect(() => {
+    const apply = () => {
+      const fromHash = window.location.hash.replace(/^#/, '');
+      if (isTabId(fromHash)) setTab(fromHash);
+    };
+    apply();
+    window.addEventListener('hashchange', apply);
+    return () => window.removeEventListener('hashchange', apply);
+  }, []);
+  // pushState, not replaceState, so each tab is a back-button step — landing
+  // on Settings and pressing back should return you to the deck, but stepping
+  // through five tabs and pressing back should go back one tab.
+  const selectTab = (id: TabId) => {
+    setTab(id);
+    if (window.location.hash !== `#${id}`) history.pushState(null, '', `#${id}`);
+  };
 
   const save = async () => {
     setSaving(true);
@@ -86,11 +133,24 @@ export function SetupForm({
       />
 
       <main className="px-6 py-10 max-w-2xl mx-auto w-full">
-      <h1 className="font-display text-4xl font-bold mb-2">Settings</h1>
-      <div className="rule-double mb-8" />
+      <h1 className="font-display text-4xl font-bold mb-3">Settings</h1>
 
-      <ThemeSettings initialApp={appTheme} initialOverlay={overlayTheme} />
+      <ToggleGroup
+        type="single"
+        value={tab}
+        onValueChange={(v) => { if (v && isTabId(v)) selectTab(v); }}
+        className="gap-0 border-b-2 border-ink/20 mb-8"
+        aria-label="Settings section"
+      >
+        {TABS.map(([id, label]) => (
+          <ToggleGroupItem key={id} value={id} variant="tab" className="text-xs">
+            {label}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
 
+      {tab === 'chat' && (
+      <>
       <section className="mb-10">
         <h2 className="font-display text-2xl font-bold mb-4">Chat capture</h2>
 
@@ -213,8 +273,22 @@ export function SetupForm({
           )}
         </div>
 
-        <div className="rule-double my-8" />
+        <Button onClick={save} disabled={saving} className="px-6 py-3">
+          {saving ? 'Saving...' : 'Save'}
+        </Button>
+        {saved && <span className="ml-3 font-mono text-xs text-moss">Saved</span>}
+      </section>
 
+      <section className="mb-10">
+        <h2 className="font-display text-2xl font-bold mb-4">Chat connection</h2>
+        <EventSubStatus />
+      </section>
+      </>
+      )}
+
+      {tab === 'deck' && (
+      <>
+      <section className="mb-10">
         <h2 className="font-display text-2xl font-bold mb-4">Related coverage</h2>
 
         <div className="mb-6">
@@ -281,20 +355,31 @@ export function SetupForm({
       </section>
 
       <section className="mb-10">
-        <h2 className="font-display text-2xl font-bold mb-4">Quick add</h2>
-        <QuickAdd initialToken={addToken} />
-      </section>
-
-      <section className="mb-10">
         <h2 className="font-display text-2xl font-bold mb-4">Deck curators</h2>
         <Curators initial={moderators} />
       </section>
+      </>
+      )}
 
+      {tab === 'appearance' && <AppThemeSettings initial={appTheme} />}
+
+      {tab === 'overlay' && (
+      <>
+        <OverlaySource token={token} />
+        <div className="rule-double my-8" />
+        <OverlayThemeSettings initial={overlayTheme} />
+      </>
+      )}
+
+      {tab === 'quickadd' && (
       <section className="mb-10">
-        <h2 className="font-display text-2xl font-bold mb-4">Chat connection</h2>
-        <EventSubStatus />
+        <h2 className="font-display text-2xl font-bold mb-4">Quick add</h2>
+        <QuickAdd token={token} setToken={setToken} />
       </section>
+      )}
 
+      {tab === 'account' && (
+      <>
       <section className="mb-10">
         <h2 className="font-display text-2xl font-bold mb-4">Account</h2>
         <div className="font-mono text-sm mb-4">
@@ -315,6 +400,8 @@ export function SetupForm({
           <div><a href="/api/notes?format=markdown" className="underline hover:text-rust text-ink/60">-&gt; Preview latest notes (don&apos;t mark exported)</a></div>
         </div>
       </section>
+      </>
+      )}
       </main>
     </div>
   );
@@ -372,25 +459,21 @@ function Curators({ initial }: { initial: { twitchUserId: string; login: string;
 
 // -- Quick add (bookmarklet) widget --
 
-function QuickAdd({ initialToken }: { initialToken: string | null }) {
-  const [token, setToken] = useState<string | null>(initialToken);
+function QuickAdd({
+  token,
+  setToken,
+}: {
+  token: string | null;
+  setToken: (t: string | null) => void;
+}) {
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [tokenCopied, setTokenCopied] = useState(false);
-  const [overlayCopied, setOverlayCopied] = useState(false);
-  const [overlayBrand, setOverlayBrand] = useState(true);
-  const [overlayVariant, setOverlayVariant] = useState('default');
   const linkRef = useRef<HTMLAnchorElement>(null);
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const bookmarklet = token
     ? `javascript:(function(){window.open('${origin}/quick-add?token=${token}&url='+encodeURIComponent(location.href),'nr_add','width=440,height=280');})();`
-    : '';
-  const overlayUrl = token
-    // No &theme= any more: colours live on the stream row so they can change
-    // without re-pasting this into OBS. Only the two things a source genuinely
-    // can't be told later — layout and the mark — stay in the URL.
-    ? `${origin}/overlay?token=${token}${overlayBrand ? '' : '&brand=0'}${overlayVariant === 'default' ? '' : `&variant=${overlayVariant}`}`
     : '';
 
   // React blocks javascript: hrefs, so set it on the DOM node directly.
@@ -424,17 +507,6 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
       await navigator.clipboard.writeText(bookmarklet);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* clipboard unavailable */
-    }
-  };
-
-  const copyOverlay = async () => {
-    if (!overlayUrl) return;
-    try {
-      await navigator.clipboard.writeText(overlayUrl);
-      setOverlayCopied(true);
-      setTimeout(() => setOverlayCopied(false), 1500);
     } catch {
       /* clipboard unavailable */
     }
@@ -526,61 +598,105 @@ function QuickAdd({ initialToken }: { initialToken: string | null }) {
             </p>
           </div>
 
-          <div>
-            <p className="font-mono text-xs uppercase tracking-widest text-ink/60 mb-2">
-              OBS overlay (browser source)
-            </p>
-            <ToggleGroup
-              type="single"
-              value={overlayVariant}
-              onValueChange={(v) => { if (v) setOverlayVariant(v); }}
-              className="mb-2 text-[10px]"
-              aria-label="Overlay layout"
-            >
-              {([
-                ['default', 'Full'],
-                ['minimal', 'Minimal'],
-                ['ticker', 'Up next'],
-              ] as const).map(([value, label]) => (
-                <ToggleGroupItem key={value} value={value}>
-                  {label}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
-            <label className="flex items-center gap-2 mb-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={overlayBrand}
-                onChange={(e) => setOverlayBrand(e.target.checked)}
-              />
-              <span className="font-mono text-xs">Show &ldquo;The Broadside&rdquo; mark on the card</span>
-            </label>
-            <div className="flex gap-1 items-center">
-              <Input
-                readOnly
-                value={overlayUrl}
-                onFocus={(e) => e.currentTarget.select()}
-                className="flex-1 min-w-0 text-xs bg-ink/10 border-ink/20"
-                aria-label="Overlay URL"
-              />
-              <Button type="button" size="sm" className="shrink-0" onClick={copyOverlay}>
-                {overlayCopied ? 'Copied!' : 'Copy'}
-              </Button>
-            </div>
-            <p className="text-xs text-ink/50 mt-2">
-              Add this as a <strong>Browser Source</strong> in OBS (about 800×100, or 800×120 for
-              Up next). <strong>Full</strong> shows a lower third — headline, outlet, and type.
-              <strong> Minimal</strong> is a single-line title-only chip. <strong>Up next</strong> is
-              the full card plus a strip showing what&apos;s queued after it. All disappear between
-              items. Layout and mark visibility are baked into the URL, since an OBS source has no
-              UI to change them later. <strong>Colours and fonts are not</strong> — those come from
-              Theme above and reach a live source within about 30 seconds, so you can restyle the
-              overlay mid-show without touching OBS.
-            </p>
-          </div>
         </div>
       )}
     </div>
+  );
+}
+
+// -- OBS browser source (the overlay's URL, layout and mark) --
+
+/**
+ * Lives on the Overlay tab next to the colours, rather than under Quick add
+ * where it started. It only ended up there because it happens to be built from
+ * the same add token, which is an implementation detail — a streamer setting up
+ * their on-air graphic shouldn't have to know it to find this.
+ */
+function OverlaySource({ token }: { token: string | null }) {
+  const [copied, setCopied] = useState(false);
+  const [brand, setBrand] = useState(true);
+  const [variant, setVariant] = useState('default');
+
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const url = token
+    // No &theme=: colours live on the stream row so they can change without
+    // re-pasting this into OBS. Only the two things a source genuinely can't
+    // be told later — layout and the mark — stay in the URL.
+    ? `${origin}/overlay?token=${token}${brand ? '' : '&brand=0'}${variant === 'default' ? '' : `&variant=${variant}`}`
+    : '';
+
+  const copy = async () => {
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard unavailable */
+    }
+  };
+
+  return (
+    <section>
+      <h2 className="font-display text-2xl font-bold mb-1">Overlay</h2>
+      <p className="text-sm text-ink/70 mb-6 max-w-prose leading-relaxed">
+        The on-air lower third: what&apos;s playing, and any trigger warning on it. Add it to OBS
+        once — after that, everything below updates a live source on its own.
+      </p>
+
+      {!token ? (
+        <p className="font-mono text-xs text-ink/60">
+          Generate an add token under <strong>Quick add</strong> first — the overlay URL is built
+          from it.
+        </p>
+      ) : (
+        <>
+          <h3 className="font-display text-xl font-bold mb-2">Browser source</h3>
+          <ToggleGroup
+            type="single"
+            value={variant}
+            onValueChange={(v) => { if (v) setVariant(v); }}
+            className="mb-2 text-[10px]"
+            aria-label="Overlay layout"
+          >
+            {([
+              ['default', 'Full'],
+              ['minimal', 'Minimal'],
+              ['ticker', 'Up next'],
+            ] as const).map(([value, label]) => (
+              <ToggleGroupItem key={value} value={value}>
+                {label}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+          <label className="flex items-center gap-2 mb-2 cursor-pointer">
+            <input type="checkbox" checked={brand} onChange={(e) => setBrand(e.target.checked)} />
+            <span className="font-mono text-xs">Show &ldquo;The Broadside&rdquo; mark on the card</span>
+          </label>
+          <div className="flex gap-1 items-center">
+            <Input
+              readOnly
+              value={url}
+              onFocus={(e) => e.currentTarget.select()}
+              className="flex-1 min-w-0 text-xs bg-ink/10 border-ink/20"
+              aria-label="Overlay URL"
+            />
+            <Button type="button" size="sm" className="shrink-0" onClick={copy}>
+              {copied ? 'Copied!' : 'Copy'}
+            </Button>
+          </div>
+          <p className="text-xs text-ink/50 mt-2">
+            Add as a <strong>Browser Source</strong> in OBS, about 800×100 (800×120 for Up next).
+            <strong> Full</strong> shows a lower third — headline, outlet, and type.
+            <strong> Minimal</strong> is a single-line title-only chip. <strong>Up next</strong>
+            {' '}adds a strip showing what&apos;s queued after it. All disappear between items.
+            Layout and the mark are baked into this URL, since an OBS source has no UI to change
+            them later — so changing either means re-copying it. Colours and type don&apos;t: those
+            reach a live source on their own.
+          </p>
+        </>
+      )}
+    </section>
   );
 }
 
