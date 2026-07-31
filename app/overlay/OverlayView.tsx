@@ -294,12 +294,17 @@ export function OverlayCard({
           className={`shrink-0 w-px self-stretch ${tw ? 'my-2' : 'my-3'}`}
           style={{ background: 'rgb(var(--ov-border-rgb) / 0.2)' }}
         />
+        {/* Two sizes, because the row is two different heights. With no
+            warning the row has the full 84px and the title can be read from
+            across a room; with one it has 40px and shares the card with type
+            twice its size, so it drops back to a supporting role rather than
+            competing. The meta line only ever renders in the tall case. */}
         <div className="min-w-0 flex-1">
-          <div className="ov-display text-xl font-bold leading-tight truncate">
+          <div className={`ov-display ${tw ? 'text-xl' : 'text-[30px]'} font-bold leading-tight truncate`}>
             {nowPlaying.title}
           </div>
           {meta && !tw && (
-            <div className="ov-mono text-[11px] uppercase tracking-widest truncate mt-0.5 opacity-60">
+            <div className="ov-mono text-[16px] uppercase tracking-widest truncate mt-0.5 opacity-60">
               {meta}
             </div>
           )}

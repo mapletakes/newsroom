@@ -95,6 +95,19 @@ describe('OverlayView — trigger warning', () => {
       expect(rowOf(container).className).not.toContain('h-[84px]');
     });
 
+    // The title has to shrink along with its row: 30px reads well in the full
+    // 84px, but would crowd the 40px left once a warning takes the top half.
+    it('sizes the title to the row it is in', async () => {
+      mockOverlayApi({ ...NOW_PLAYING, triggerWarning: null });
+      renderOverlay('default');
+      expect((await screen.findByText(NOW_PLAYING.title)).className).toContain('text-[30px]');
+      cleanup();
+
+      mockOverlayApi({ ...NOW_PLAYING, triggerWarning: 'graphic footage' });
+      renderOverlay('default');
+      expect((await screen.findByText(NOW_PLAYING.title)).className).toContain('text-xl');
+    });
+
     // What gives way is the publisher/kind/duration line — the least
     // important thing on the card once an item carries a warning.
     it('drops the meta line to make the room', async () => {
