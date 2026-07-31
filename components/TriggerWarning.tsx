@@ -51,12 +51,17 @@ export function TriggerWarningEditor({
   value,
   onSave,
   label = 'Trigger warning',
+  defaultOpen = false,
 }: {
   value: string | null;
   onSave: (value: string | null) => Promise<{ ok?: boolean } | void> | void;
   label?: string;
+  /** Start expanded. For callers that already spent a tap getting here — the
+   *  mobile deck's ⚠ button — where collapsing first would mean two taps to
+   *  reach the field. */
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [draft, setDraft] = useState(value || '');
   const [saving, setSaving] = useState(false);
 

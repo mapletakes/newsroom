@@ -25,4 +25,21 @@ if (typeof Element !== 'undefined') {
     Element.prototype.releasePointerCapture = () => {};
     Element.prototype.hasPointerCapture = () => false;
   }
+  // jsdom has no layout engine and so no matchMedia. Reporting "doesn't
+  // match" puts useMediaQuery in its desktop branch, which is what the
+  // existing DeckView tests are written against — a component test that
+  // wants the mobile deck should stub this itself rather than rely on a
+  // global default.
+  if (typeof window.matchMedia === 'undefined') {
+    window.matchMedia = ((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+  }
 }

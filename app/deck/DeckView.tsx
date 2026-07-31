@@ -9,6 +9,8 @@ import { positionsFromOrder, insertAtIndex, isSameOrder } from '@/lib/reorder';
 import { queryKeys } from '@/lib/query-keys';
 import { ArchiveButton } from '@/components/ArchiveButton';
 import { QuickLinksDrawer } from './QuickLinksDrawer';
+import { DeckMobile } from './DeckMobile';
+import { useMediaQuery, MOBILE_QUERY } from '@/lib/use-media-query';
 import { ChatStatusBanner } from './ChatStatusBanner';
 import { GettingStarted } from './GettingStarted';
 import { ShortcutsModal } from './ShortcutsModal';
@@ -439,6 +441,11 @@ export function DeckView({
   const movingIdsRef = useRef<string[]>([]);
 
   const { confirm, confirmDialog } = useConfirm();
+
+  // Which of the two decks to mount. False until mounted, so the server and
+  // the first client render agree — see lib/use-media-query.ts for why this
+  // mounts one tree rather than CSS-hiding the other.
+  const isMobile = useMediaQuery(MOBILE_QUERY);
 
   const [addUrl, setAddUrl] = useState('');
   const [adding, setAdding] = useState(false);
@@ -1261,6 +1268,41 @@ export function DeckView({
     }
   };
 
+  // Shared by the mobile shell's add form, which has its own local input
+  // rather than the sidebar's — same write, different chrome.
+  const addLinkByUrl = async (url: string): Promise<boolean> => {
+    const r = await fetch('/api/deck/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    }).catch(() => null);
+    if (!r || !r.ok) {
+      const err = r ? await r.json().catch(() => ({})) : {};
+      toast.error(err.error || 'Failed to add');
+      return false;
+    }
+    const data = await r.json();
+    toast.success(data.expanded ? `Added ${data.count} videos from playlist` : 'Added to deck');
+    queryClient.invalidateQueries({ queryKey: queueKey });
+    return true;
+  };
+
+  // Touch stand-in for dragging a card up the list: put this item immediately
+  // after whatever's on air, in the on-air item's own block. Covers the live
+  // need ("do this one next") without asking anyone to drag inside a
+  // scrolling list on a phone.
+  const playNext = (id: string) => {
+    if (!active || id === active.id) return;
+    const moving = queue.find((s) => s.id === id);
+    if (!moving) return;
+    const target = containerOf(active.id);
+    const rest = containerItems(target).filter((s) => s.id !== id);
+    const at = rest.findIndex((s) => s.id === active.id);
+    const ordered = [...rest.slice(0, at + 1), moving, ...rest.slice(at + 1)];
+    moveItems([id], target === 'ungrouped' ? null : target, ordered.map((s) => s.id));
+    toast.success('Playing next');
+  };
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -1283,9 +1325,30 @@ export function DeckView({
     activeDragItem && selectedIds.has(activeDragItem.id) && selectedCount > 1 ? selectedCount : 1;
 
   return (
+    <>
+    {confirmDialog}
+    {isMobile ? (
+      <DeckMobile
+        active={active}
+        orderedQueue={orderedQueue}
+        totalRemainingSeconds={totalRemainingSeconds}
+        elapsedSeconds={elapsedSeconds}
+        loaded={loaded}
+        curateOnly={curateOnly}
+        displayName={displayName}
+        isAdmin={isAdmin}
+        onSelect={activateItem}
+        onPlayed={markPlayed}
+        onSkip={skip}
+        onRemove={removeFromQueue}
+        onAnnounce={announce}
+        onPlayNext={playNext}
+        onSaveTriggerWarning={saveTriggerWarning}
+        onAddUrl={addLinkByUrl}
+      />
+    ) : (
     <div className="min-h-screen flex flex-col">
       {!curateOnly && <QuickLinksDrawer />}
-      {confirmDialog}
       <ShortcutsModal open={shortcutsOpen} onOpenChange={setShortcutsOpen} curateOnly={curateOnly} />
       <AppHeader
         className="sticky top-0 z-20 bg-paper border-b-2 border-ink pl-10 pr-6 py-3 gap-6"
@@ -1763,5 +1826,7 @@ export function DeckView({
         </aside>
       </main>
     </div>
+    )}
+    </>
   );
 }
