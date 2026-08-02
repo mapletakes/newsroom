@@ -28,10 +28,12 @@ async function fetchApproved(): Promise<Question[]> {
  * screened by a mod on a completely separate page (/questions) before it
  * ever reaches here, and mixing the two lists would blur that boundary.
  *
- * `variant` picks the trigger: 'tab' is the desktop deck's right-edge
- * launcher (QuickLinksDrawer's pattern, mirrored on the opposite edge so the
- * two don't collide); 'icon' is a compact button for the mobile header,
- * which has no room to spare for a floating side tab.
+ * `variant` picks the trigger: 'tab' is the desktop deck's left-edge
+ * launcher, stacked directly under QuickLinksDrawer's "Links" tab — the two
+ * are both "stuff you keep glancing at during the show" in the same spot,
+ * rather than split across opposite edges of the screen. 'icon' is a compact
+ * button for the mobile header, which has no room to spare for a floating
+ * side tab.
  */
 export function QuestionsPanel({
   streamId,
@@ -86,7 +88,13 @@ export function QuestionsPanel({
       <SheetTrigger asChild>
         {variant === 'tab' ? (
           <button
-            className="fixed right-0 top-20 z-30 flex flex-col items-center gap-1.5 bg-ink text-paper px-1.5 py-3 rounded-l-sm shadow-lg hover:bg-rust transition-colors"
+            // Stacked under QuickLinksDrawer's left-edge "Links" tab (top-20),
+            // not mirrored on the opposite edge — see the doc comment above.
+            // Links renders at 93px tall (top 80 to bottom 173); top-[184px]
+            // clears it with an 11px gap, measured in the browser rather than
+            // assumed — the badge below makes this button taller than Links'
+            // own, so guessing from Links' height alone would've collided.
+            className="fixed left-0 top-[184px] z-30 flex flex-col items-center gap-1.5 bg-ink text-paper px-1.5 py-3 rounded-r-sm shadow-lg hover:bg-rust transition-colors"
             aria-label="Open questions"
             title="Questions"
           >
@@ -116,7 +124,7 @@ export function QuestionsPanel({
         )}
       </SheetTrigger>
 
-      <SheetContent side="right">
+      <SheetContent side="left">
         <div className="flex items-center gap-2 border-b-2 border-ink px-4 py-3">
           <Icon name="help" className="text-ink" />
           <SheetTitle>Questions</SheetTitle>
