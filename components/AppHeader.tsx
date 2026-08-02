@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import { Wordmark } from './ui/wordmark';
 import { DarkModeToggle } from './DarkModeToggle';
 import { cn } from '@/lib/utils';
@@ -8,17 +9,16 @@ import { cn } from '@/lib/utils';
 // vary per page and stay as a pass-through className rather than baked in
 // here, since e.g. the deck's sticky+left-padding (for the QuickLinksDrawer
 // tab) and admin's borderless mb-8 header are both genuinely different.
-export function AppHeader({
-  section,
-  right,
-  className,
-}: {
-  section: React.ReactNode;
-  right?: React.ReactNode;
-  className?: string;
-}) {
+//
+// Forwards its ref to the <header> element so pages that float a DeckRail
+// below it can measure its real rendered height (which varies by nav-link
+// count and stream-name length) instead of assuming one.
+export const AppHeader = forwardRef<
+  HTMLElement,
+  { section: React.ReactNode; right?: React.ReactNode; className?: string }
+>(function AppHeader({ section, right, className }, ref) {
   return (
-    <header className={cn('flex items-center flex-wrap', className)}>
+    <header ref={ref} className={cn('flex items-center flex-wrap', className)}>
       <Wordmark />
       <span className="font-mono text-xs uppercase tracking-widest text-ink/60">/ {section}</span>
       <div className="ml-auto flex items-center gap-4 font-mono text-xs">
@@ -27,4 +27,4 @@ export function AppHeader({
       </div>
     </header>
   );
-}
+});

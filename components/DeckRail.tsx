@@ -20,10 +20,21 @@ import { Icon, type IconName } from '@/components/ui/icon';
  * Each panel still owns its own <Sheet> — Radix requires the trigger to live
  * inside its own Root — which works because a Sheet renders nothing itself:
  * the trigger renders inline here, and the content portals out to the body.
+ *
+ * `headerHeight` is the same fix applied one level up: a hardcoded top offset
+ * assumed every page's header was the same height, which broke the first time
+ * a header had more nav links and a long stream name wrapped it onto three
+ * lines instead of one — the rail rendered on top of the header's own wrapped
+ * content instead of below it. Pass the header's live measured height (see
+ * useElementHeight) instead of guessing; omit it and the rail falls back to
+ * the old top-20 spot.
  */
-export function DeckRail({ children }: { children: React.ReactNode }) {
+export function DeckRail({ children, headerHeight }: { children: React.ReactNode; headerHeight?: number | null }) {
   return (
-    <div className="fixed left-0 top-20 z-30 flex flex-col items-start gap-2">
+    <div
+      className="fixed left-0 z-30 flex flex-col items-start gap-2"
+      style={{ top: headerHeight != null ? headerHeight + 8 : '5rem' }}
+    >
       {children}
     </div>
   );

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { SubmissionCard, type Submission } from '@/components/SubmissionCard';
@@ -10,6 +10,7 @@ import { TriggerWarningEditor } from '@/components/TriggerWarning';
 import { AppHeader } from '@/components/AppHeader';
 import { ModStatusPanel } from '@/components/ModStatusPanel';
 import { DeckRail } from '@/components/DeckRail';
+import { useElementHeight } from '@/lib/use-element-height';
 import { useInvalidateOnChange } from '@/lib/use-invalidate-on-change';
 import { queryKeys } from '@/lib/query-keys';
 import { useConfirm } from '@/components/ui/confirm-dialog';
@@ -66,6 +67,8 @@ export function ModView({
   modStatusEnabled?: boolean;
 }) {
   const queryClient = useQueryClient();
+  const headerRef = useRef<HTMLElement>(null);
+  const headerHeight = useElementHeight(headerRef);
   const [filter, setFilter] = useState<'pending' | 'approved' | 'played' | 'rejected'>('pending');
   const queueKey = queryKeys.queue(streamId, filter);
   const queueKeyAllFilters = queryKeys.queue(streamId); // prefix — matches every filter's cached query
@@ -218,12 +221,13 @@ export function ModView({
     <div className="min-h-screen flex flex-col">
       {confirmDialog}
       {modStatusEnabled && (
-        <DeckRail>
+        <DeckRail headerHeight={headerHeight}>
           <ModStatusPanel streamId={streamId} enabled={modStatusEnabled} variant="tab" />
         </DeckRail>
       )}
       {/* Bar */}
       <AppHeader
+        ref={headerRef}
         className="border-b-2 border-ink pl-10 pr-6 py-3 gap-6"
         section={<>mod triage{isMod && <> · {streamDisplayName}</>}</>}
         right={

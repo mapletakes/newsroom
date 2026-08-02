@@ -12,6 +12,7 @@ import { QuickLinksDrawer } from './QuickLinksDrawer';
 import { QuestionsPanel } from '@/components/QuestionsPanel';
 import { DeckRail } from '@/components/DeckRail';
 import { ModStatusPanel } from '@/components/ModStatusPanel';
+import { useElementHeight } from '@/lib/use-element-height';
 import { DeckMobile } from './DeckMobile';
 import { useMediaQuery, MOBILE_QUERY } from '@/lib/use-media-query';
 import { ChatStatusBanner } from './ChatStatusBanner';
@@ -381,6 +382,8 @@ export function DeckView({
   const queryClient = useQueryClient();
   const queueKey = queryKeys.queue(streamId, 'approved');
   const segmentsKey = queryKeys.segments(streamId);
+  const headerRef = useRef<HTMLElement>(null);
+  const headerHeight = useElementHeight(headerRef);
 
   // Shared across every mutation below (see beginPendingWrite/settlePendingWrite):
   // while any write is pending, the two queryFns return whatever's already
@@ -1374,13 +1377,14 @@ export function DeckView({
       />
     ) : (
     <div className="min-h-screen flex flex-col">
-      <DeckRail>
+      <DeckRail headerHeight={headerHeight}>
         {!curateOnly && <QuickLinksDrawer />}
         <QuestionsPanel streamId={streamId} enabled={questionsEnabled} open={questionsOpen} variant="tab" />
         <ModStatusPanel streamId={streamId} enabled={modStatusEnabled} variant="tab" />
       </DeckRail>
       <ShortcutsModal open={shortcutsOpen} onOpenChange={setShortcutsOpen} curateOnly={curateOnly} />
       <AppHeader
+        ref={headerRef}
         className="sticky top-0 z-20 bg-paper border-b-2 border-ink pl-10 pr-6 py-3 gap-6"
         section={
           curateOnly

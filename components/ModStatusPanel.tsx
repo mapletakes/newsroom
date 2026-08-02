@@ -215,6 +215,16 @@ function useModStatus(streamId: string, enabled: boolean) {
     enabled,
     placeholderData: keepPreviousData,
     refetchInterval: 120000,
+    // The app disables this globally (staleTime: Infinity, no
+    // refetch-on-focus) so a background refetch can never clobber a mid-edit
+    // optimistic update — see query-provider.tsx. Nothing here has that
+    // hazard: this board has no optimistic update of its own, and the note
+    // field already guards against a refetch stomping live typing via the
+    // `focused` check below. Without this override, someone checking who's
+    // around gets whatever was cached from up to 2 minutes ago — which is
+    // exactly the "it's not showing up" gap this closes, since tabbing back
+    // to check is the actual moment people look.
+    refetchOnWindowFocus: true,
   });
 
   useModStatusRealtime(enabled ? streamId : null, () => {
