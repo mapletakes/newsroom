@@ -327,12 +327,12 @@ export function ModView({
 
       {/* List */}
       <main className="px-3 sm:px-6 py-6 max-w-5xl mx-auto w-full">
-        {/* Above the queue, not in a drawer: on the mod view this is the one
-            surface where you're also the person who has to keep their own
-            status honest, so it shouldn't need opening to notice. */}
+        {/* A slim clickable summary, not a permanently-expanded roster — the
+            full board (and your own status control) is one tap away in a
+            drawer, same pattern as the deck's rail. */}
         {modStatusEnabled && (
           <div className="mb-6">
-            <ModStatusPanel streamId={streamId} enabled={modStatusEnabled} variant="inline" />
+            <ModStatusPanel streamId={streamId} enabled={modStatusEnabled} variant="bar" />
           </div>
         )}
         {!loaded ? (

@@ -113,10 +113,18 @@ function SelfControl({
   me,
   onSave,
   saving,
+  error,
+  justSaved,
 }: {
   me: ModStatusRow;
   onSave: (status: ModStatusValue, note: string) => void;
   saving: boolean;
+  /** The server's own error message, not a generic fallback — a save that
+   *  fails is otherwise indistinguishable from one that silently succeeded,
+   *  which is exactly the "not sure if it's being saved" complaint this
+   *  exists to close off. */
+  error: string | null;
+  justSaved: boolean;
 }) {
   const [note, setNote] = useState(me.note ?? '');
 
@@ -179,6 +187,9 @@ function SelfControl({
           {saving ? '…' : 'Save'}
         </Button>
       </div>
+      {/* Every save ends in one of these two, never silence. */}
+      {error && <p className="mt-1.5 font-mono text-[10px] text-rust">⚠ {error}</p>}
+      {!error && justSaved && <p className="mt-1.5 font-mono text-[10px] text-moss">Saved ✓</p>}
       {me.status && (
         <button
           type="button"
@@ -210,6 +221,8 @@ function useModStatus(streamId: string, enabled: boolean) {
     queryClient.invalidateQueries({ queryKey: key });
   });
 
+  const [justSaved, setJustSaved] = useState(false);
+
   const mutation = useMutation({
     mutationFn: async (vars: { status: ModStatusValue; note: string }) => {
       const r = await fetch('/api/mod-status', {
@@ -217,13 +230,31 @@ function useModStatus(streamId: string, enabled: boolean) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: vars.status, note: vars.note }),
       });
-      if (!r.ok) throw new Error('failed');
+      if (!r.ok) {
+        // Surfaced verbatim, not a generic "failed" — a save that errors
+        // silently is indistinguishable from one that quietly succeeded,
+        // which is the whole failure mode this is meant to close off. The
+        // route's own real reasons (mod status not enabled, no moderator
+        // row for this account, a DB error) are worth seeing as-is.
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e.detail || e.error || `save failed (${r.status})`);
+      }
+    },
+    onSuccess: () => {
+      setJustSaved(true);
+      setTimeout(() => setJustSaved(false), 2500);
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: key }),
   });
 
   const mods = data ?? [];
-  return { mods, me: mods.find((m) => m.isSelf) ?? null, mutation };
+  return {
+    mods,
+    me: mods.find((m) => m.isSelf) ?? null,
+    mutation,
+    justSaved,
+    error: mutation.isError ? mutation.error.message : null,
+  };
 }
 
 /**
@@ -235,16 +266,21 @@ function useModStatus(streamId: string, enabled: boolean) {
  * ignore.
  *
  * `variant` picks the surface:
- *   'tab'    — launcher in the deck's left-edge DeckRail, for the streamer,
- *              who reads the board and (being absent from `moderators`) has
- *              nothing of their own to set.
- *   'inline' — the strip in the mod view, where the person looking at it
- *              usually does have a row of their own.
- *   'menu'   — drawer only, no trigger of its own; opened from the mobile
- *              deck's ☰ menu via `open`/`onOpenChange`. A fourth icon in
- *              that header doesn't fit: at 375px the wordmark has no
- *              shrink-0, so the extra control squeezes "The Broadside" onto
- *              two lines and the header grows from 62px to 82px.
+ *   'tab'  — launcher in the deck's left-edge DeckRail, for the streamer,
+ *            who reads the board and (being absent from `moderators`) has
+ *            nothing of their own to set.
+ *   'bar'  — a slim clickable summary row in the mod view's normal flow,
+ *            opening the same drawer. Replaced an always-expanded inline
+ *            block that showed the full roster and the self-control
+ *            permanently, which ate a fixed slice of the screen even when
+ *            nobody needed to look at it — this is the mod view's equivalent
+ *            of the deck's rail tab, just laid out for a horizontal header
+ *            instead of a vertical edge.
+ *   'menu' — drawer only, no trigger of its own; opened from the mobile
+ *            deck's ☰ menu via `open`/`onOpenChange`. A fourth icon in that
+ *            header doesn't fit: at 375px the wordmark has no shrink-0, so
+ *            the extra control squeezes "The Broadside" onto two lines and
+ *            the header grows from 62px to 82px.
  */
 export function ModStatusPanel({
   streamId,
@@ -255,12 +291,12 @@ export function ModStatusPanel({
 }: {
   streamId: string;
   enabled: boolean;
-  variant: 'tab' | 'menu' | 'inline';
+  variant: 'tab' | 'bar' | 'menu';
   /** Only for variant='menu' — the caller owns the open state. */
   open?: boolean;
   onOpenChange?: (v: boolean) => void;
 }) {
-  const { mods, me, mutation } = useModStatus(streamId, enabled);
+  const { mods, me, mutation, justSaved, error } = useModStatus(streamId, enabled);
 
   if (!enabled) return null;
 
@@ -283,23 +319,11 @@ export function ModStatusPanel({
           </div>
         )}
       </div>
-      {me && <SelfControl me={me} onSave={save} saving={mutation.isPending} />}
+      {me && (
+        <SelfControl me={me} onSave={save} saving={mutation.isPending} error={error} justSaved={justSaved} />
+      )}
     </>
   );
-
-  if (variant === 'inline') {
-    return (
-      <div className="flex flex-col border border-ink/20">
-        <div className="flex items-center gap-2 border-b border-ink/20 px-3 py-2">
-          <span className="font-mono text-xs uppercase tracking-widest text-ink/60">Mod availability</span>
-          <span className="font-mono text-[10px] text-ink/40">
-            {attentive}/{mods.length} attentive
-          </span>
-        </div>
-        {body}
-      </div>
-    );
-  }
 
   return (
     <Sheet
@@ -308,6 +332,22 @@ export function ModStatusPanel({
       {variant === 'tab' && (
         <SheetTrigger asChild>
           <RailTab icon="radioChecked" label="Mods" count={attentive} />
+        </SheetTrigger>
+      )}
+      {variant === 'bar' && (
+        <SheetTrigger asChild>
+          <button
+            type="button"
+            className="w-full flex items-center gap-2 border border-ink/20 px-3 py-2 hover:border-ink transition-colors"
+          >
+            <Icon name="radioChecked" className="text-ink/60" />
+            <span className="font-mono text-xs uppercase tracking-widest text-ink/60">Mod availability</span>
+            {me && <StatusDot status={me.status} />}
+            <span className="font-mono text-[10px] text-ink/40 ml-auto">
+              {attentive}/{mods.length} attentive
+            </span>
+            <Icon name="expand" className="text-ink/30" />
+          </button>
         </SheetTrigger>
       )}
       <SheetContent side="left">
