@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { formatDateTime, relativeTime } from '@/lib/url';
 
 export type ChannelRow = {
@@ -30,7 +31,50 @@ function eventsubBadge(status: string) {
     none: { label: 'none', cls: 'text-ink/40' },
   };
   const m = map[status] || { label: status.replace(/_/g, ' '), cls: 'text-rust' };
-  return <span className={`font-mono text-[11px] uppercase tracking-widest ${m.cls}`}>{m.label}</span>;
+  return <span className={`font-mono text-[11px] uppercase tracking-widest whitespace-nowrap ${m.cls}`}>{m.label}</span>;
+}
+
+/**
+ * A per-channel flag that's both its own status display and the control that
+ * flips it — one cell, not a read-only badge in one column plus a same-named
+ * button in Actions. That pairing is what was crowding Actions: three flags
+ * (access, questions, mod status) each carried a redundant copy of
+ * themselves over there, and every new admin-gated feature this session
+ * added another pair. Collapsing them here is the actual fix, not just
+ * cosmetic — Actions goes back to holding only genuine one-off actions
+ * (Re-sub), which is why it no longer needs to wrap.
+ */
+function ToggleBadge({
+  on,
+  onLabel,
+  offLabel,
+  onClick,
+  busy,
+  title,
+}: {
+  on: boolean;
+  onLabel: string;
+  offLabel: string;
+  onClick: () => void;
+  busy: boolean;
+  title?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy}
+      title={title}
+      className={cn(
+        'font-mono text-[11px] uppercase tracking-widest whitespace-nowrap px-2 py-1 border transition-colors disabled:opacity-40',
+        on
+          ? 'border-moss/50 text-moss hover:bg-moss hover:text-paper hover:border-moss'
+          : 'border-ink/25 text-ink/40 hover:border-ink hover:text-ink',
+      )}
+    >
+      {busy ? '…' : on ? onLabel : offLabel}
+    </button>
+  );
 }
 
 export function AdminChannels({ initial }: { initial: ChannelRow[] }) {
@@ -137,7 +181,14 @@ export function AdminChannels({ initial }: { initial: ChannelRow[] }) {
           {pruning ? 'Pruning…' : 'Prune stale EventSub subs'}
         </Button>
       </div>
-      <table className="w-full text-sm border-collapse">
+      {/* w-full alone caps the table AT the container width, so the browser's
+          table layout shrinks columns (and wraps their contents) to fit
+          rather than growing past it — which is what was chopping the
+          Actions buttons. min-w-max forces the table back to its natural
+          content width instead, so once that exceeds the viewport, the
+          overflow-x-auto wrapper above scrolls the whole table horizontally
+          rather than deforming individual cells. */}
+      <table className="w-full min-w-max text-sm border-collapse">
         <thead>
           <tr className="font-mono text-[11px] uppercase tracking-widest text-ink/50 text-left border-b-2 border-ink">
             <th className="py-2 pr-4">Channel</th>
@@ -180,68 +231,54 @@ export function AdminChannels({ initial }: { initial: ChannelRow[] }) {
               <td className="py-2 pr-4 font-mono text-ink/70 whitespace-nowrap">~${row.estCost.toFixed(2)}</td>
               <td className="py-2 pr-4">
                 {row.chatEnabled ? (
-                  <span className="font-mono text-[11px] uppercase tracking-widest text-moss">ready</span>
+                  <span className="font-mono text-[11px] uppercase tracking-widest text-moss whitespace-nowrap">ready</span>
                 ) : (
-                  <span className="font-mono text-[11px] uppercase tracking-widest text-ink/30">—</span>
+                  <span className="font-mono text-[11px] uppercase tracking-widest text-ink/30 whitespace-nowrap">—</span>
                 )}
               </td>
               <td className="py-2 pr-4">{eventsubBadge(row.eventsub)}</td>
               <td className="py-2 pr-4">
-                {row.approved ? (
-                  <span className="font-mono text-[11px] uppercase tracking-widest text-moss">approved</span>
-                ) : (
-                  <span className="font-mono text-[11px] uppercase tracking-widest text-rust">blocked</span>
-                )}
+                <ToggleBadge
+                  on={row.approved}
+                  onLabel="Approved"
+                  offLabel="Blocked"
+                  onClick={() => toggleApproved(row)}
+                  busy={busy === row.id + ':access'}
+                  title={row.approved ? 'Click to block' : 'Click to approve'}
+                />
               </td>
               <td className="py-2 pr-4">
-                {row.questionsEnabled ? (
-                  <span className="font-mono text-[11px] uppercase tracking-widest text-moss">on</span>
-                ) : (
-                  <span className="font-mono text-[11px] uppercase tracking-widest text-ink/30">off</span>
-                )}
+                <ToggleBadge
+                  on={row.questionsEnabled}
+                  onLabel="On"
+                  offLabel="Off"
+                  onClick={() => toggleQuestions(row)}
+                  busy={busy === row.id + ':questions'}
+                  title={
+                    (row.questionsEnabled ? 'Click to disable' : 'Click to enable') +
+                    ' — chat Q&A (the !question-style command)'
+                  }
+                />
               </td>
               <td className="py-2 pr-4">
-                {row.modStatusEnabled ? (
-                  <span className="font-mono text-[11px] uppercase tracking-widest text-moss">on</span>
-                ) : (
-                  <span className="font-mono text-[11px] uppercase tracking-widest text-ink/30">off</span>
-                )}
+                <ToggleBadge
+                  on={row.modStatusEnabled}
+                  onLabel="On"
+                  offLabel="Off"
+                  onClick={() => toggleModStatus(row)}
+                  busy={busy === row.id + ':modstatus'}
+                  title={
+                    (row.modStatusEnabled ? 'Click to disable' : 'Click to enable') +
+                    ' — mod availability board'
+                  }
+                />
               </td>
               <td className="py-2">
                 <div className="flex items-center gap-2 flex-wrap">
                   <Button
                     variant="outline"
                     size="xs"
-                    className="text-[11px]"
-                    onClick={() => toggleApproved(row)}
-                    disabled={busy === row.id + ':access'}
-                  >
-                    {row.approved ? 'Block' : 'Approve'}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    className="text-[11px]"
-                    onClick={() => toggleQuestions(row)}
-                    disabled={busy === row.id + ':questions'}
-                    title="Chat Q&A — the !question-style command"
-                  >
-                    {row.questionsEnabled ? 'Disable Q&A' : 'Enable Q&A'}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    className="text-[11px]"
-                    onClick={() => toggleModStatus(row)}
-                    disabled={busy === row.id + ':modstatus'}
-                    title="Mod availability board (green/yellow/red)"
-                  >
-                    {row.modStatusEnabled ? 'Disable mod status' : 'Enable mod status'}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    className="text-[11px]"
+                    className="text-[11px] whitespace-nowrap"
                     onClick={() => resubscribe(row)}
                     disabled={busy === row.id + ':sub'}
                   >
