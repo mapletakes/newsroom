@@ -24,7 +24,7 @@ export default async function AdminPage({
   const sb = supabaseAdmin();
   const { data: streams } = await sb
     .from('streams')
-    .select('id, twitch_user_id, twitch_login, display_name, created_at, approved, access_token, questions_enabled')
+    .select('id, twitch_user_id, twitch_login, display_name, created_at, approved, access_token, questions_enabled, mod_status_enabled')
     .order('created_at', { ascending: true });
 
   // EventSub status for every channel in one Twitch call.
@@ -65,6 +65,7 @@ export default async function AdminPage({
         createdAt: st.created_at,
         approved: st.approved !== false,
         questionsEnabled: st.questions_enabled === true,
+        modStatusEnabled: st.mod_status_enabled === true,
         chatEnabled: !!st.access_token,
         eventsub: subStatus.get(st.twitch_user_id) || 'none',
         total: total.count ?? 0,

@@ -6,6 +6,7 @@ export const queryKeys = {
     status ? (['queue', streamId, status] as const) : (['queue', streamId] as const),
   questions: (streamId: string | null, status?: string) =>
     status ? (['questions', streamId, status] as const) : (['questions', streamId] as const),
+  modStatus: (streamId: string | null) => ['mod-status', streamId] as const,
   segments: (streamId: string | null) => ['segments', streamId] as const,
   quickLinks: () => ['quick-links'] as const,
   shelves: () => ['shelves'] as const,

@@ -8,6 +8,7 @@ import { SwipeRow } from '@/components/SwipeRow';
 import { SaveToListMenu } from '@/components/SaveToListMenu';
 import { TriggerWarningEditor } from '@/components/TriggerWarning';
 import { AppHeader } from '@/components/AppHeader';
+import { ModStatusPanel } from '@/components/ModStatusPanel';
 import { useInvalidateOnChange } from '@/lib/use-invalidate-on-change';
 import { queryKeys } from '@/lib/query-keys';
 import { useConfirm } from '@/components/ui/confirm-dialog';
@@ -50,6 +51,7 @@ export function ModView({
   isAdmin = false,
   canCurate = false,
   questionsEnabled = false,
+  modStatusEnabled = false,
 }: {
   channel: string;
   displayName: string;
@@ -60,6 +62,7 @@ export function ModView({
   isAdmin?: boolean;
   canCurate?: boolean;
   questionsEnabled?: boolean;
+  modStatusEnabled?: boolean;
 }) {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<'pending' | 'approved' | 'played' | 'rejected'>('pending');
@@ -324,6 +327,14 @@ export function ModView({
 
       {/* List */}
       <main className="px-3 sm:px-6 py-6 max-w-5xl mx-auto w-full">
+        {/* Above the queue, not in a drawer: on the mod view this is the one
+            surface where you're also the person who has to keep their own
+            status honest, so it shouldn't need opening to notice. */}
+        {modStatusEnabled && (
+          <div className="mb-6">
+            <ModStatusPanel streamId={streamId} enabled={modStatusEnabled} variant="inline" />
+          </div>
+        )}
         {!loaded ? (
           <div className="space-y-3">
             {[0, 1, 2].map((i) => (

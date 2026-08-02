@@ -15,7 +15,7 @@ export default async function DeckPage() {
   const sb = supabaseAdmin();
   const { data: stream } = await sb
     .from('streams')
-    .select('approved, questions_enabled, questions_open')
+    .select('approved, questions_enabled, questions_open, mod_status_enabled')
     .eq('id', session.streamId)
     .maybeSingle();
   if (stream?.approved === false) redirect('/blocked');
@@ -43,6 +43,7 @@ export default async function DeckPage() {
         canSetNowPlaying={canSetNowPlaying}
         questionsEnabled={stream?.questions_enabled === true}
         questionsOpen={stream?.questions_open !== false}
+        modStatusEnabled={stream?.mod_status_enabled === true}
       />
     </>
   );

@@ -60,3 +60,11 @@ export function broadcastQueueChange(streamId: string): Promise<void> {
 export function broadcastQuestionsChange(streamId: string): Promise<void> {
   return broadcastChange(`questions:${streamId}`, streamId);
 }
+
+/** Pings `mod-status:${streamId}` — the mod roster on both the mod view and
+ *  the deck rail. Its own topic for the same reason as questions: a mod
+ *  flipping to "back in 20" shouldn't make every open deck refetch the
+ *  submissions queue. */
+export function broadcastModStatusChange(streamId: string): Promise<void> {
+  return broadcastChange(`mod-status:${streamId}`, streamId);
+}

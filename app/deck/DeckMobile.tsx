@@ -12,6 +12,7 @@ import { Wordmark } from '@/components/ui/wordmark';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { TriggerWarningBanner, TriggerWarningEditor } from '@/components/TriggerWarning';
 import { QuestionsPanel } from '@/components/QuestionsPanel';
+import { ModStatusPanel } from '@/components/ModStatusPanel';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -218,6 +219,7 @@ export function DeckMobile({
   streamId,
   questionsEnabled,
   questionsOpen,
+  modStatusEnabled,
   onSelect,
   onPlayed,
   onSkip,
@@ -238,6 +240,7 @@ export function DeckMobile({
   streamId: string;
   questionsEnabled: boolean;
   questionsOpen: boolean;
+  modStatusEnabled: boolean;
   onSelect: (id: string) => void;
   onPlayed: () => void;
   onSkip: () => void;
@@ -248,6 +251,7 @@ export function DeckMobile({
   onAddUrl: (url: string) => Promise<boolean>;
 }) {
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [modStatusOpen, setModStatusOpen] = useState(false);
   const [showWarningEditor, setShowWarningEditor] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [addUrl, setAddUrl] = useState('');
@@ -285,6 +289,19 @@ export function DeckMobile({
               ☰
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              {modStatusEnabled && (
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    // Let the menu finish closing before the drawer opens —
+                    // Radix's menu and dialog otherwise fight over focus in
+                    // the same tick and the drawer can open unfocused.
+                    e.preventDefault();
+                    setTimeout(() => setModStatusOpen(true), 0);
+                  }}
+                >
+                  Mod availability
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem asChild><Link href="/mod">Mod View</Link></DropdownMenuItem>
               <DropdownMenuItem asChild><Link href="/shelf">Shelf</Link></DropdownMenuItem>
               {!curateOnly && (
@@ -462,6 +479,14 @@ export function DeckMobile({
           </Button>
         </div>
       )}
+
+      <ModStatusPanel
+        streamId={streamId}
+        enabled={modStatusEnabled}
+        variant="menu"
+        open={modStatusOpen}
+        onOpenChange={setModStatusOpen}
+      />
 
       <QueueSheet
         items={orderedQueue}

@@ -5,6 +5,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { Sheet, SheetClose, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
+import { RailTab } from '@/components/DeckRail';
 import { queryKeys } from '@/lib/query-keys';
 import { useQuestionsRealtime } from '@/lib/use-questions-realtime';
 import { relativeTime } from '@/lib/url';
@@ -28,12 +29,11 @@ async function fetchApproved(): Promise<Question[]> {
  * screened by a mod on a completely separate page (/questions) before it
  * ever reaches here, and mixing the two lists would blur that boundary.
  *
- * `variant` picks the trigger: 'tab' is the desktop deck's left-edge
- * launcher, stacked directly under QuickLinksDrawer's "Links" tab — the two
- * are both "stuff you keep glancing at during the show" in the same spot,
- * rather than split across opposite edges of the screen. 'icon' is a compact
- * button for the mobile header, which has no room to spare for a floating
- * side tab.
+ * `variant` picks the trigger: 'tab' is a launcher in the desktop deck's
+ * left-edge DeckRail, alongside "Links" — both are "stuff you keep glancing
+ * at during the show", so they share one spot rather than being split across
+ * opposite edges of the screen. 'icon' is a compact button for the mobile
+ * header, which has no room to spare for a floating side rail.
  */
 export function QuestionsPanel({
   streamId,
@@ -93,27 +93,9 @@ export function QuestionsPanel({
     <Sheet>
       <SheetTrigger asChild>
         {variant === 'tab' ? (
-          <button
-            // Stacked under QuickLinksDrawer's left-edge "Links" tab (top-20),
-            // not mirrored on the opposite edge — see the doc comment above.
-            // Links renders at 93px tall (top 80 to bottom 173); top-[184px]
-            // clears it with an 11px gap, measured in the browser rather than
-            // assumed — the badge below makes this button taller than Links'
-            // own, so guessing from Links' height alone would've collided.
-            className="fixed left-0 top-[184px] z-30 flex flex-col items-center gap-1.5 bg-ink text-paper px-1.5 py-3 rounded-r-sm shadow-lg hover:bg-rust transition-colors"
-            aria-label="Open questions"
-            title="Questions"
-          >
-            <Icon name="help" className="text-lg" />
-            <span className="[writing-mode:vertical-rl] font-mono text-[10px] uppercase tracking-widest">
-              Questions
-            </span>
-            {questions.length > 0 && (
-              <span className="shrink-0 min-w-[1.25rem] h-5 px-1 flex items-center justify-center rounded-full bg-rust text-paper font-mono text-[10px] font-bold">
-                {questions.length}
-              </span>
-            )}
-          </button>
+          // Positioned by DeckRail, not by itself — see components/DeckRail.tsx
+          // for why the hand-tuned offsets this used to carry are gone.
+          <RailTab icon="help" label="Questions" count={questions.length} />
         ) : (
           <button
             className="relative w-11 h-11 inline-flex items-center justify-center rounded border border-ink/20"

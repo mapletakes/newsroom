@@ -67,10 +67,27 @@ create table if not exists public.moderators (
   -- ever offers this alongside can_curate and clears it when can_curate is
   -- revoked, but it's enforced independently server-side regardless.
   can_set_now_playing boolean default false,
+  -- Availability the mod sets for themselves, so a growing mod team can see
+  -- who's actually watching chat right now. Deliberately NOT presence: there
+  -- is no heartbeat and nothing is inferred from being logged in. It's a
+  -- self-reported claim, and status_updated_at is what keeps it honest —
+  -- every surface renders the age beside the colour, so a "green" set four
+  -- hours ago reads as four hours old rather than as green.
+  --   null   -- never set; renders neutral
+  --   green  -- here and attentive
+  --   yellow -- here, but split attention
+  --   red    -- not available
+  status text,
+  status_note text,
+  status_updated_at timestamptz,
   primary key (stream_id, twitch_user_id)
 );
 -- For databases created before can_set_now_playing existed.
 alter table public.moderators add column if not exists can_set_now_playing boolean default false;
+-- For databases created before mod status existed.
+alter table public.moderators add column if not exists status text;
+alter table public.moderators add column if not exists status_note text;
+alter table public.moderators add column if not exists status_updated_at timestamptz;
 
 -- Segments: named, ordered groups for organising the streamer deck "up next"
 create table if not exists public.segments (
@@ -306,6 +323,13 @@ alter table public.streams add column if not exists question_command text defaul
 -- question_command would do) and without an admin's involvement. Defaults to
 -- true so an account an admin just enabled works immediately.
 alter table public.streams add column if not exists questions_open boolean default true;
+
+-- Mod availability board (see moderators.status). Super-admin gated and off
+-- by default, same as questions_enabled — it's only worth anything to
+-- channels with a mod team big enough that "who's actually watching right
+-- now" is a real question, and it puts mods' names and availability on a
+-- shared screen, so it's opt-in per account rather than on for everyone.
+alter table public.streams add column if not exists mod_status_enabled boolean default false;
 
 -- Status flow mirrors submissions (pending -> approved -> played) with one
 -- addition: rejected can still be un-rejected back to pending, same as the

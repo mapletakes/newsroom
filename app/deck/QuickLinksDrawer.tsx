@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Input } from '@/components/ui/input';
 import { Sheet, SheetClose, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 import { Icon } from '@/components/ui/icon';
+import { RailTab } from '@/components/DeckRail';
 import { queryKeys } from '@/lib/query-keys';
 import {
   DndContext,
@@ -186,18 +187,9 @@ export function QuickLinksDrawer() {
 
   return (
     <Sheet>
-      {/* Left-edge launcher tab — always reachable while running the show. */}
+      {/* Positioned by DeckRail, not by itself — see components/DeckRail.tsx. */}
       <SheetTrigger asChild>
-        <button
-          className="fixed left-0 top-20 z-30 flex flex-col items-center gap-1.5 bg-ink text-paper px-1.5 py-3 rounded-r-sm shadow-lg hover:bg-rust transition-colors"
-          aria-label="Open on-hand links"
-          title="On-hand links"
-        >
-          <Icon name="bookmark" className="text-lg" />
-          <span className="[writing-mode:vertical-rl] font-mono text-[10px] uppercase tracking-widest">
-            Links
-          </span>
-        </button>
+        <RailTab icon="bookmark" label="Links" />
       </SheetTrigger>
 
       <SheetContent side="left">

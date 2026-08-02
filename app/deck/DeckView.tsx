@@ -10,6 +10,8 @@ import { queryKeys } from '@/lib/query-keys';
 import { ArchiveButton } from '@/components/ArchiveButton';
 import { QuickLinksDrawer } from './QuickLinksDrawer';
 import { QuestionsPanel } from '@/components/QuestionsPanel';
+import { DeckRail } from '@/components/DeckRail';
+import { ModStatusPanel } from '@/components/ModStatusPanel';
 import { DeckMobile } from './DeckMobile';
 import { useMediaQuery, MOBILE_QUERY } from '@/lib/use-media-query';
 import { ChatStatusBanner } from './ChatStatusBanner';
@@ -362,6 +364,7 @@ export function DeckView({
   canSetNowPlaying = true,
   questionsEnabled = false,
   questionsOpen = true,
+  modStatusEnabled = false,
 }: {
   displayName: string;
   streamId: string;
@@ -373,6 +376,7 @@ export function DeckView({
   canSetNowPlaying?: boolean;
   questionsEnabled?: boolean;
   questionsOpen?: boolean;
+  modStatusEnabled?: boolean;
 }) {
   const queryClient = useQueryClient();
   const queueKey = queryKeys.queue(streamId, 'approved');
@@ -1358,6 +1362,7 @@ export function DeckView({
         streamId={streamId}
         questionsEnabled={questionsEnabled}
         questionsOpen={questionsOpen}
+        modStatusEnabled={modStatusEnabled}
         onSelect={activateItem}
         onPlayed={markPlayed}
         onSkip={skip}
@@ -1369,8 +1374,11 @@ export function DeckView({
       />
     ) : (
     <div className="min-h-screen flex flex-col">
-      {!curateOnly && <QuickLinksDrawer />}
-      <QuestionsPanel streamId={streamId} enabled={questionsEnabled} open={questionsOpen} variant="tab" />
+      <DeckRail>
+        {!curateOnly && <QuickLinksDrawer />}
+        <QuestionsPanel streamId={streamId} enabled={questionsEnabled} open={questionsOpen} variant="tab" />
+        <ModStatusPanel streamId={streamId} enabled={modStatusEnabled} variant="tab" />
+      </DeckRail>
       <ShortcutsModal open={shortcutsOpen} onOpenChange={setShortcutsOpen} curateOnly={curateOnly} />
       <AppHeader
         className="sticky top-0 z-20 bg-paper border-b-2 border-ink pl-10 pr-6 py-3 gap-6"
