@@ -16,7 +16,7 @@ export default async function QuestionsPage() {
   const sb = supabaseAdmin();
   const { data: stream } = await sb
     .from('streams')
-    .select('approved, questions_enabled, question_command, twitch_login')
+    .select('approved, questions_enabled, question_command, questions_open, twitch_login')
     .eq('id', session.streamId)
     .maybeSingle();
 
@@ -57,6 +57,7 @@ export default async function QuestionsPage() {
         isMod={session.role === 'mod'}
         isAdmin={isAdmin(session.twitchUserId)}
         questionCommand={stream.question_command || null}
+        questionsOpen={stream.questions_open !== false}
       />
     </>
   );

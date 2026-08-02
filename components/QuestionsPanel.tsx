@@ -38,10 +38,16 @@ async function fetchApproved(): Promise<Question[]> {
 export function QuestionsPanel({
   streamId,
   enabled,
+  open = true,
   variant,
 }: {
   streamId: string;
   enabled: boolean;
+  /** The streamer's own pause (streams.questions_open), distinct from
+   *  `enabled` (the admin's account-level flag). Doesn't hide the panel —
+   *  approved questions already waiting are still worth seeing — just adds a
+   *  note explaining why nothing new is arriving. */
+  open?: boolean;
   variant: 'tab' | 'icon';
 }) {
   const queryClient = useQueryClient();
@@ -134,6 +140,12 @@ export function QuestionsPanel({
             </button>
           </SheetClose>
         </div>
+
+        {!open && (
+          <div className="px-4 py-2 bg-rust/10 border-b border-rust/30 font-mono text-[11px] text-rust">
+            ⏸ Paused — chat&apos;s command is quiet. <Link href="/setup#questions" className="underline">Reopen</Link>
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto p-3 space-y-2">
           {questions.length === 0 ? (

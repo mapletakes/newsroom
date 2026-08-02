@@ -16,12 +16,12 @@ export async function POST(req: NextRequest) {
   if (typeof body.video_command === 'string') {
     patch.video_command = body.video_command.trim() || null;
   }
-  if ('question_command' in body && typeof body.question_command === 'string') {
-    // Streamer-configurable, but only takes effect once a super admin has
+  if ('question_command' in body || 'questions_open' in body) {
+    // Both streamer-configurable, but only take effect once a super admin has
     // opted the account into Questions — see schema.sql on
-    // streams.questions_enabled. Every Save on this page sends this field
+    // streams.questions_enabled. Every Save on this page sends these fields
     // (it's shared body-building, same as submit_command/video_command), so
-    // silently dropping it for an account without the flag is the correct
+    // silently dropping them for an account without the flag is the correct
     // behavior, not an error.
     const { data: current } = await sb
       .from('streams')
@@ -29,25 +29,31 @@ export async function POST(req: NextRequest) {
       .eq('id', session.streamId)
       .maybeSingle();
     if (current?.questions_enabled) {
-      const trimmed = body.question_command.trim();
-      // Ambiguous dispatch otherwise: the EventSub handler prefix-matches
-      // one command per message, so two identical commands would mean
-      // whichever branch happens to run first always wins and the other
-      // never fires. Checked against whatever this same request is ALSO
-      // setting submit_command/video_command to, not just their stored
-      // values, so a same-request collision is caught too.
-      const effectiveSubmit = (typeof body.submit_command === 'string' ? body.submit_command : null) ?? null;
-      const effectiveVideo = (typeof body.video_command === 'string' ? body.video_command : null) ?? null;
-      const collidesWith = [effectiveSubmit, effectiveVideo]
-        .filter((c): c is string => !!c && !!c.trim())
-        .find((c) => c.trim().toLowerCase() === trimmed.toLowerCase());
-      if (trimmed && collidesWith) {
-        return NextResponse.json(
-          { error: 'duplicate command', detail: `Question command can't be the same as another command ("${collidesWith.trim()}").` },
-          { status: 400 },
-        );
+      if (typeof body.question_command === 'string') {
+        const trimmed = body.question_command.trim();
+        // Ambiguous dispatch otherwise: the EventSub handler prefix-matches
+        // one command per message, so two identical commands would mean
+        // whichever branch happens to run first always wins and the other
+        // never fires. Checked against whatever this same request is ALSO
+        // setting submit_command/video_command to, not just their stored
+        // values, so a same-request collision is caught too.
+        const effectiveSubmit = (typeof body.submit_command === 'string' ? body.submit_command : null) ?? null;
+        const effectiveVideo = (typeof body.video_command === 'string' ? body.video_command : null) ?? null;
+        const collidesWith = [effectiveSubmit, effectiveVideo]
+          .filter((c): c is string => !!c && !!c.trim())
+          .find((c) => c.trim().toLowerCase() === trimmed.toLowerCase());
+        if (trimmed && collidesWith) {
+          return NextResponse.json(
+            { error: 'duplicate command', detail: `Question command can't be the same as another command ("${collidesWith.trim()}").` },
+            { status: 400 },
+          );
+        }
+        patch.question_command = trimmed || null;
       }
-      patch.question_command = trimmed || null;
+      // The streamer's own pause, distinct from question_command: turning
+      // this off stops new questions without clearing whatever command
+      // they've configured (blanking question_command would do that).
+      if (typeof body.questions_open === 'boolean') patch.questions_open = body.questions_open;
     }
   }
   if (typeof body.allow_anyone === 'boolean') patch.allow_anyone = body.allow_anyone;

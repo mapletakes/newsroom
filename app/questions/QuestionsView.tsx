@@ -59,6 +59,7 @@ export function QuestionsView({
   isMod,
   isAdmin,
   questionCommand,
+  questionsOpen = true,
 }: {
   streamId: string;
   displayName: string;
@@ -66,6 +67,7 @@ export function QuestionsView({
   isMod: boolean;
   isAdmin: boolean;
   questionCommand: string | null;
+  questionsOpen?: boolean;
 }) {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<StatusKey>('pending');
@@ -182,11 +184,20 @@ export function QuestionsView({
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
-        {questionCommand && (
-          <span className="ml-auto text-ink/50">
-            command: <code className="text-ink/70">{questionCommand}</code>
-          </span>
-        )}
+        <span className="ml-auto flex items-center gap-2">
+          {/* Only called out when paused — the normal "open" state needs no
+              announcement, same as the app doesn't badge a "low" DMCA risk. */}
+          {!questionsOpen && (
+            <span className="text-rust font-bold">
+              ⏸ paused — <Link href="/setup#questions" className="underline">reopen in Settings</Link>
+            </span>
+          )}
+          {questionCommand && (
+            <span className="text-ink/50">
+              command: <code className="text-ink/70">{questionCommand}</code>
+            </span>
+          )}
+        </span>
       </div>
 
       <main className="px-3 sm:px-6 py-6 max-w-3xl mx-auto w-full">

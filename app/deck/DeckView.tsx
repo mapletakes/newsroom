@@ -360,12 +360,14 @@ export function DeckView({
   isAdmin = false,
   curateOnly = false,
   questionsEnabled = false,
+  questionsOpen = true,
 }: {
   displayName: string;
   streamId: string;
   isAdmin?: boolean;
   curateOnly?: boolean;
   questionsEnabled?: boolean;
+  questionsOpen?: boolean;
 }) {
   const queryClient = useQueryClient();
   const queueKey = queryKeys.queue(streamId, 'approved');
@@ -1342,6 +1344,7 @@ export function DeckView({
         isAdmin={isAdmin}
         streamId={streamId}
         questionsEnabled={questionsEnabled}
+        questionsOpen={questionsOpen}
         onSelect={activateItem}
         onPlayed={markPlayed}
         onSkip={skip}
@@ -1354,7 +1357,7 @@ export function DeckView({
     ) : (
     <div className="min-h-screen flex flex-col">
       {!curateOnly && <QuickLinksDrawer />}
-      <QuestionsPanel streamId={streamId} enabled={questionsEnabled} variant="tab" />
+      <QuestionsPanel streamId={streamId} enabled={questionsEnabled} open={questionsOpen} variant="tab" />
       <ShortcutsModal open={shortcutsOpen} onOpenChange={setShortcutsOpen} curateOnly={curateOnly} />
       <AppHeader
         className="sticky top-0 z-20 bg-paper border-b-2 border-ink pl-10 pr-6 py-3 gap-6"

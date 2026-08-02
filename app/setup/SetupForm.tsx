@@ -50,6 +50,7 @@ export function SetupForm({
   overlayTheme,
   questionsEnabled = false,
   questionCommand,
+  questionsOpen = true,
   isAdmin = false,
   moderators,
 }: {
@@ -66,12 +67,14 @@ export function SetupForm({
   overlayTheme: OverlayTheme;
   questionsEnabled?: boolean;
   questionCommand: string;
+  questionsOpen?: boolean;
   isAdmin?: boolean;
   moderators: { twitchUserId: string; login: string; canCurate: boolean }[];
 }) {
   const [cmd, setCmd] = useState(submitCommand);
   const [videoCmd, setVideoCmd] = useState(videoCommand);
   const [questionCmd, setQuestionCmd] = useState(questionCommand);
+  const [questionsAreOpen, setQuestionsAreOpen] = useState(questionsOpen);
   const [open, setOpen] = useState(allowAnyone);
   const [dupes, setDupes] = useState(allowDuplicates);
   const [ignored, setIgnored] = useState<string[]>(ignoredUsers);
@@ -127,9 +130,11 @@ export function SetupForm({
         ignored_users: ignored,
         preferred_sources: sources,
         // Sent unconditionally (same as the other command fields, sent from
-        // every tab's Save) — the server only persists it when the account
-        // has questions_enabled, so this is a no-op for accounts without it.
+        // every tab's Save) — the server only persists these when the
+        // account has questions_enabled, so this is a no-op for accounts
+        // without it.
         question_command: questionCmd,
+        questions_open: questionsAreOpen,
       }),
     });
     setSaving(false);
@@ -418,6 +423,26 @@ export function SetupForm({
           before it&apos;s visible to you — see <Link href="/questions" className="underline hover:text-rust">the Questions page</Link> —
           and approved questions also show up in a panel on the deck while you&apos;re live.
         </p>
+
+        <label className="flex items-start gap-3 mb-6 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={questionsAreOpen}
+            onChange={(e) => setQuestionsAreOpen(e.target.checked)}
+            className="mt-1"
+          />
+          <span>
+            <span className="font-mono text-xs uppercase tracking-widest">
+              Currently open to new questions
+            </span>
+            <span className="block text-xs text-ink/60 mt-0.5">
+              Turn this off any time to pause new submissions — chat&apos;s command goes quiet
+              immediately. Nothing already collected is affected, and mods can still triage what&apos;s
+              there. Unlike clearing the command below, turning this back on doesn&apos;t require
+              retyping it.
+            </span>
+          </span>
+        </label>
 
         <label className="block mb-6">
           <span className="font-mono text-xs uppercase tracking-widest text-ink/60">

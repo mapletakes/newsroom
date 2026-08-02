@@ -217,6 +217,7 @@ export function DeckMobile({
   isAdmin,
   streamId,
   questionsEnabled,
+  questionsOpen,
   onSelect,
   onPlayed,
   onSkip,
@@ -236,6 +237,7 @@ export function DeckMobile({
   isAdmin: boolean;
   streamId: string;
   questionsEnabled: boolean;
+  questionsOpen: boolean;
   onSelect: (id: string) => void;
   onPlayed: () => void;
   onSkip: () => void;
@@ -273,7 +275,7 @@ export function DeckMobile({
           {orderedQueue.length} up
         </span>
         <span className="ml-auto flex items-center gap-1">
-          <QuestionsPanel streamId={streamId} enabled={questionsEnabled} variant="icon" />
+          <QuestionsPanel streamId={streamId} enabled={questionsEnabled} open={questionsOpen} variant="icon" />
           <DarkModeToggle />
           <DropdownMenu>
             <DropdownMenuTrigger

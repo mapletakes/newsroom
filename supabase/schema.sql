@@ -289,6 +289,15 @@ alter table public.submissions add column if not exists prep_note text;
 alter table public.streams add column if not exists questions_enabled boolean default false;
 alter table public.streams add column if not exists question_command text default '!question';
 
+-- The streamer's own on/off switch, separate from both of the above:
+-- questions_enabled is the super admin deciding the ACCOUNT may use this at
+-- all; question_command is what triggers it. questions_open is the streamer
+-- deciding whether they're currently taking questions — a "pause" they can
+-- flip without clearing their configured command (which blanking
+-- question_command would do) and without an admin's involvement. Defaults to
+-- true so an account an admin just enabled works immediately.
+alter table public.streams add column if not exists questions_open boolean default true;
+
 -- Status flow mirrors submissions (pending -> approved -> played) with one
 -- addition: rejected can still be un-rejected back to pending, same as the
 -- mod queue, so a mod's misclick isn't permanent.

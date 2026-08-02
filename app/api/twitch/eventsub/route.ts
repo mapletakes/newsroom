@@ -132,7 +132,7 @@ export async function POST(req: NextRequest) {
   // Look up stream
   const { data: stream } = await sb
     .from('streams')
-    .select('id, twitch_user_id, submit_command, allow_anyone, ignored_users, approved, video_command, now_playing_id, video_command_last_sent_at, questions_enabled, question_command')
+    .select('id, twitch_user_id, submit_command, allow_anyone, ignored_users, approved, video_command, now_playing_id, video_command_last_sent_at, questions_enabled, question_command, questions_open')
     .eq('twitch_user_id', broadcasterUserId)
     .single();
   if (!stream) return new NextResponse(null, { status: 204 });
@@ -170,16 +170,19 @@ export async function POST(req: NextRequest) {
     return new NextResponse(null, { status: 204 });
   }
 
-  // !question — gated behind the account-level flag a super admin sets (see
-  // schema.sql: a question is free text that can reach the streamer's
-  // eyeline live, unlike a link a mod always screens first). When the flag
-  // is off, pass null so matchQuestionCommand can never match, rather than
-  // trusting stream.question_command alone — a stream that had questions
-  // enabled in the past and got it revoked keeps its command text in the
-  // row, and it must stay inert.
+  // !question — two independent gates, both must pass. questions_enabled is
+  // the super admin's account-level switch (see schema.sql: a question is
+  // free text that can reach the streamer's eyeline live, unlike a link a
+  // mod always screens first). questions_open is the streamer's own pause —
+  // separate so they can stop taking questions mid-show without clearing
+  // their configured command text. Either being off passes null, so
+  // matchQuestionCommand can never match rather than trusting
+  // stream.question_command alone — a stream that had this enabled in the
+  // past (by either party) and got it turned off keeps its command text in
+  // the row, and it must stay inert either way.
   const questionText = matchQuestionCommand(
     messageText,
-    stream.questions_enabled ? stream.question_command : null,
+    stream.questions_enabled && stream.questions_open ? stream.question_command : null,
   );
   if (questionText !== null) {
     // Per-asker, not per-channel like video_command's cooldown: one person
