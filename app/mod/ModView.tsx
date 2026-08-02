@@ -9,6 +9,7 @@ import { SaveToListMenu } from '@/components/SaveToListMenu';
 import { TriggerWarningEditor } from '@/components/TriggerWarning';
 import { AppHeader } from '@/components/AppHeader';
 import { ModStatusPanel } from '@/components/ModStatusPanel';
+import { DeckRail } from '@/components/DeckRail';
 import { useInvalidateOnChange } from '@/lib/use-invalidate-on-change';
 import { queryKeys } from '@/lib/query-keys';
 import { useConfirm } from '@/components/ui/confirm-dialog';
@@ -216,9 +217,14 @@ export function ModView({
   return (
     <div className="min-h-screen flex flex-col">
       {confirmDialog}
+      {modStatusEnabled && (
+        <DeckRail>
+          <ModStatusPanel streamId={streamId} enabled={modStatusEnabled} variant="tab" />
+        </DeckRail>
+      )}
       {/* Bar */}
       <AppHeader
-        className="border-b-2 border-ink px-6 py-3 gap-6"
+        className="border-b-2 border-ink pl-10 pr-6 py-3 gap-6"
         section={<>mod triage{isMod && <> · {streamDisplayName}</>}</>}
         right={
           <>
@@ -327,14 +333,6 @@ export function ModView({
 
       {/* List */}
       <main className="px-3 sm:px-6 py-6 max-w-5xl mx-auto w-full">
-        {/* A slim clickable summary, not a permanently-expanded roster — the
-            full board (and your own status control) is one tap away in a
-            drawer, same pattern as the deck's rail. */}
-        {modStatusEnabled && (
-          <div className="mb-6">
-            <ModStatusPanel streamId={streamId} enabled={modStatusEnabled} variant="bar" />
-          </div>
-        )}
         {!loaded ? (
           <div className="space-y-3">
             {[0, 1, 2].map((i) => (

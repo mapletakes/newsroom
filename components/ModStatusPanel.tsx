@@ -266,16 +266,18 @@ function useModStatus(streamId: string, enabled: boolean) {
  * ignore.
  *
  * `variant` picks the surface:
- *   'tab'  — launcher in the deck's left-edge DeckRail, for the streamer,
- *            who reads the board and (being absent from `moderators`) has
- *            nothing of their own to set.
- *   'bar'  — a slim clickable summary row in the mod view's normal flow,
- *            opening the same drawer. Replaced an always-expanded inline
- *            block that showed the full roster and the self-control
- *            permanently, which ate a fixed slice of the screen even when
- *            nobody needed to look at it — this is the mod view's equivalent
- *            of the deck's rail tab, just laid out for a horizontal header
- *            instead of a vertical edge.
+ *   'tab'  — launcher in a left-edge DeckRail. Used on both the streamer's
+ *            deck and the mod view, via the same RailTab component, so the
+ *            same visual language means the same interaction on both:
+ *            fixed to the edge, and the drawer it opens emerges from that
+ *            same edge. A first version put an inline bar in the mod view's
+ *            normal document flow instead — styled with an expand chevron,
+ *            which reads as "opens in place" — and had it pop a detached
+ *            left-edge drawer regardless, which is precisely the mismatch
+ *            between what a control looks like and what it does that
+ *            prompted this rewrite. On the deck the streamer reads the board
+ *            and (being absent from `moderators`) has nothing of their own
+ *            to set; on the mod view the person looking at it usually does.
  *   'menu' — drawer only, no trigger of its own; opened from the mobile
  *            deck's ☰ menu via `open`/`onOpenChange`. A fourth icon in that
  *            header doesn't fit: at 375px the wordmark has no shrink-0, so
@@ -291,7 +293,7 @@ export function ModStatusPanel({
 }: {
   streamId: string;
   enabled: boolean;
-  variant: 'tab' | 'bar' | 'menu';
+  variant: 'tab' | 'menu';
   /** Only for variant='menu' — the caller owns the open state. */
   open?: boolean;
   onOpenChange?: (v: boolean) => void;
@@ -332,22 +334,6 @@ export function ModStatusPanel({
       {variant === 'tab' && (
         <SheetTrigger asChild>
           <RailTab icon="radioChecked" label="Mods" count={attentive} />
-        </SheetTrigger>
-      )}
-      {variant === 'bar' && (
-        <SheetTrigger asChild>
-          <button
-            type="button"
-            className="w-full flex items-center gap-2 border border-ink/20 px-3 py-2 hover:border-ink transition-colors"
-          >
-            <Icon name="radioChecked" className="text-ink/60" />
-            <span className="font-mono text-xs uppercase tracking-widest text-ink/60">Mod availability</span>
-            {me && <StatusDot status={me.status} />}
-            <span className="font-mono text-[10px] text-ink/40 ml-auto">
-              {attentive}/{mods.length} attentive
-            </span>
-            <Icon name="expand" className="text-ink/30" />
-          </button>
         </SheetTrigger>
       )}
       <SheetContent side="left">
