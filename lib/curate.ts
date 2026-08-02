@@ -24,3 +24,31 @@ export async function sessionCanCurate(session: Session): Promise<boolean> {
   if (session.role === 'streamer') return true;
   return canMemberCurate(session.streamId, session.twitchUserId);
 }
+
+// Whether a moderator may set/change which approved item is on air — a
+// narrower, separately-granted permission for correcting a streamer's
+// misclick or forgotten advance. Distinct from can_curate: organizing the
+// deck (segments, reorder) never puts anything on screen, but this does.
+export async function canMemberSetNowPlaying(
+  streamId: string,
+  twitchUserId: string,
+): Promise<boolean> {
+  const sb = supabaseAdmin();
+  const { data } = await sb
+    .from('moderators')
+    .select('can_set_now_playing')
+    .eq('stream_id', streamId)
+    .eq('twitch_user_id', twitchUserId)
+    .maybeSingle();
+  return data?.can_set_now_playing === true;
+}
+
+// Whether a session may set the on-air item: the streamer always can; a mod
+// only if granted can_set_now_playing. Use this to gate
+// POST /api/deck/now-playing — the client already suppresses the request for
+// a curate-only mod without this permission (see DeckView's now-playing
+// effect), but that's a UX nicety, not the enforcement boundary.
+export async function sessionCanSetNowPlaying(session: Session): Promise<boolean> {
+  if (session.role === 'streamer') return true;
+  return canMemberSetNowPlaying(session.streamId, session.twitchUserId);
+}

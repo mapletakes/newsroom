@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getApprovedSession } from '@/lib/session';
+import { sessionCanSetNowPlaying } from '@/lib/curate';
 import { broadcastQueueChange } from '@/lib/realtime';
 
-// The streamer's deck reports which approved item it's currently showing so
-// the mod view can display what's on air.
+// The deck reports which approved item it's currently showing so the mod
+// view/overlay can display what's on air. Open to the streamer and, since a
+// mod may be granted can_set_now_playing (correcting a misclick or forgotten
+// advance), to those mods too — enforced here, not just by the client
+// suppressing the request for mods without it.
 export async function POST(req: NextRequest) {
   const session = await getApprovedSession();
-  if (!session || session.role !== 'streamer') {
+  if (!session || !(await sessionCanSetNowPlaying(session))) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 

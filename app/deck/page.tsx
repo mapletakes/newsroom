@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase';
 import { isAdmin } from '@/lib/admin';
-import { canMemberCurate } from '@/lib/curate';
+import { canMemberCurate, canMemberSetNowPlaying } from '@/lib/curate';
 import { StreamTheme } from '@/components/StreamTheme';
 import { DeckView } from './DeckView';
 
@@ -21,11 +21,16 @@ export default async function DeckPage() {
   if (stream?.approved === false) redirect('/blocked');
 
   // Mods may only reach the deck if the streamer authorized them to curate,
-  // and then only in curate-only mode (no live playback controls).
+  // and then only in curate-only mode (no live playback controls) — unless
+  // also separately granted can_set_now_playing, which lets them correct
+  // what's on air without the rest of live playback control.
   const curateOnly = session.role === 'mod';
   if (curateOnly && !(await canMemberCurate(session.streamId, session.twitchUserId))) {
     redirect('/mod');
   }
+  const canSetNowPlaying = curateOnly
+    ? await canMemberSetNowPlaying(session.streamId, session.twitchUserId)
+    : true;
 
   return (
     <>
@@ -35,6 +40,7 @@ export default async function DeckPage() {
         streamId={session.streamId}
         isAdmin={isAdmin(session.twitchUserId)}
         curateOnly={curateOnly}
+        canSetNowPlaying={canSetNowPlaying}
         questionsEnabled={stream?.questions_enabled === true}
         questionsOpen={stream?.questions_open !== false}
       />

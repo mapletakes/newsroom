@@ -60,8 +60,17 @@ create table if not exists public.moderators (
   added_at timestamptz default now(),
   -- if true, this mod may curate the streamer deck (organize, not play)
   can_curate boolean default false,
+  -- if true, this mod may also set/change which approved item is on air —
+  -- for correcting a streamer's misclick or forgotten advance, not for
+  -- running the show. Meaningless without can_curate (a mod without it can
+  -- never reach the deck at all — see app/deck/page.tsx), so the UI only
+  -- ever offers this alongside can_curate and clears it when can_curate is
+  -- revoked, but it's enforced independently server-side regardless.
+  can_set_now_playing boolean default false,
   primary key (stream_id, twitch_user_id)
 );
+-- For databases created before can_set_now_playing existed.
+alter table public.moderators add column if not exists can_set_now_playing boolean default false;
 
 -- Segments: named, ordered groups for organising the streamer deck "up next"
 create table if not exists public.segments (

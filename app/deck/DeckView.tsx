@@ -359,6 +359,7 @@ export function DeckView({
   streamId,
   isAdmin = false,
   curateOnly = false,
+  canSetNowPlaying = true,
   questionsEnabled = false,
   questionsOpen = true,
 }: {
@@ -366,6 +367,10 @@ export function DeckView({
   streamId: string;
   isAdmin?: boolean;
   curateOnly?: boolean;
+  /** Only meaningful when curateOnly — the streamer always may. A curate mod
+   *  granted this can correct what's on air (a misclick, a forgotten
+   *  advance) without the rest of live playback control. */
+  canSetNowPlaying?: boolean;
   questionsEnabled?: boolean;
   questionsOpen?: boolean;
 }) {
@@ -583,9 +588,12 @@ export function DeckView({
   }, [orderedQueue]);
 
   // Report the now-playing item to the server so the mod view can show it.
-  // Curators don't drive the live show, so they never set "on air".
+  // Curators don't drive the live show by default, so they never set "on
+  // air" — unless separately granted canSetNowPlaying, in which case their
+  // clicks are just as real as the streamer's own (the server enforces this
+  // too; this is what keeps a plain curator's clicks a local-only preview).
   useEffect(() => {
-    if (curateOnly) return;
+    if (curateOnly && !canSetNowPlaying) return;
     if (lastSentNowPlaying.current === activeId) return;
     lastSentNowPlaying.current = activeId;
     fetch('/api/deck/now-playing', {
@@ -593,7 +601,7 @@ export function DeckView({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: activeId }),
     }).catch(() => {});
-  }, [activeId, curateOnly]);
+  }, [activeId, curateOnly, canSetNowPlaying]);
 
   const active = useMemo(() => {
     const found = queue.find((s) => s.id === activeId) || null;
@@ -1333,6 +1341,11 @@ export function DeckView({
     <>
     {confirmDialog}
     {isMobile ? (
+      // No canSetNowPlaying prop here: mobile's tap-to-select still routes
+      // through this component's own onSelect={activateItem} below, which
+      // drives the same activeId state the now-playing effect above already
+      // gates on canSetNowPlaying — the permission is enforced once, centrally,
+      // regardless of which surface triggered the change.
       <DeckMobile
         active={active}
         orderedQueue={orderedQueue}
@@ -1361,7 +1374,13 @@ export function DeckView({
       <ShortcutsModal open={shortcutsOpen} onOpenChange={setShortcutsOpen} curateOnly={curateOnly} />
       <AppHeader
         className="sticky top-0 z-20 bg-paper border-b-2 border-ink pl-10 pr-6 py-3 gap-6"
-        section={curateOnly ? 'curating deck' : 'streamer deck'}
+        section={
+          curateOnly
+            ? canSetNowPlaying
+              ? 'curating deck · sets live'
+              : 'curating deck'
+            : 'streamer deck'
+        }
         right={
           <>
             <span className="uppercase tracking-widest">{queue.length} approved</span>

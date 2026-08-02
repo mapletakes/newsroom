@@ -23,7 +23,7 @@ export default async function SetupPage() {
 
   const { data: mods } = await sb
     .from('moderators')
-    .select('twitch_user_id, twitch_login, can_curate')
+    .select('twitch_user_id, twitch_login, can_curate, can_set_now_playing')
     .eq('stream_id', session.streamId)
     .order('twitch_login', { ascending: true });
 
@@ -50,6 +50,7 @@ export default async function SetupPage() {
           twitchUserId: m.twitch_user_id,
           login: m.twitch_login,
           canCurate: m.can_curate === true,
+          canSetNowPlaying: m.can_set_now_playing === true,
         }))}
       />
     </>
