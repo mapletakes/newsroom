@@ -165,7 +165,18 @@ function SelfControl({
           maxLength={MAX_STATUS_NOTE_CHARS}
           onChange={(e) => setNote(e.target.value)}
           onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
+          onBlur={() => {
+            setFocused(false);
+            // Clicking a status color saves whatever's in this field *at that
+            // click*, so typing a note after already picking a color — a
+            // completely natural order — left it sitting here unsent unless
+            // Save was clicked again separately. It looked saved locally
+            // (this field is uncontrolled, so it just keeps showing what was
+            // typed) while nothing reached the server, which is exactly why
+            // the note never showed up for anyone else. Saving on blur closes
+            // that gap without requiring the extra click.
+            if (note !== (me.note ?? '')) onSave(me.status, note);
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault();

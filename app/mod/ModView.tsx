@@ -245,7 +245,7 @@ export function ModView({
       />
 
       {/* On air — what the streamer is currently showing on the deck */}
-      <div className="px-3 sm:px-6 py-2 bg-rust/10 border-b border-rust/30 flex items-center gap-3 flex-wrap min-h-[2.75rem]">
+      <div className="pl-10 pr-3 sm:pr-6 py-2 bg-rust/10 border-b border-rust/30 flex items-center gap-3 flex-wrap min-h-[2.75rem]">
         <span className="shrink-0 font-mono text-xs uppercase tracking-widest text-rust font-bold flex items-center gap-1">
           <span className="inline-block w-2 h-2 rounded-full bg-rust animate-pulse" />
           On air
@@ -303,7 +303,7 @@ export function ModView({
       </div>
 
       {/* Filter tabs */}
-      <div className="px-3 sm:px-6 py-3 border-b border-ink/20 flex items-center gap-1 flex-wrap font-mono text-xs uppercase">
+      <div className="pl-10 pr-3 sm:pr-6 py-3 border-b border-ink/20 flex items-center gap-1 flex-wrap font-mono text-xs uppercase">
         <ToggleGroup
           type="single"
           value={filter}
@@ -336,7 +336,7 @@ export function ModView({
       </div>
 
       {/* List */}
-      <main className="px-3 sm:px-6 py-6 max-w-5xl mx-auto w-full">
+      <main className="pl-10 pr-3 sm:pr-6 py-6 max-w-5xl mx-auto w-full">
         {!loaded ? (
           <div className="space-y-3">
             {[0, 1, 2].map((i) => (
