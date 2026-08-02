@@ -16,12 +16,18 @@ import type { AppTheme, OverlayTheme } from '@/lib/theme';
 // in particular the overlay's URL, layout and colours are one tab, having
 // previously been split between "Quick add" and "Theme" for no better reason
 // than the order they were built in.
+// 'questions' is always in the type/parsing set (so an old bookmarked
+// #questions hash degrades gracefully rather than crashing) but is filtered
+// out of the rendered ToggleGroup below unless the account has it
+// admin-enabled. It's a super-admin-gated feature, not a streamer setting:
+// see schema.sql on streams.questions_enabled for why.
 const TABS = [
   ['chat', 'Chat'],
   ['deck', 'Deck'],
   ['appearance', 'Appearance'],
   ['overlay', 'Overlay'],
   ['quickadd', 'Quick add'],
+  ['questions', 'Questions'],
   ['account', 'Account'],
 ] as const;
 type TabId = (typeof TABS)[number][0];
@@ -42,6 +48,8 @@ export function SetupForm({
   addToken,
   appTheme,
   overlayTheme,
+  questionsEnabled = false,
+  questionCommand,
   isAdmin = false,
   moderators,
 }: {
@@ -56,11 +64,14 @@ export function SetupForm({
   addToken: string | null;
   appTheme: AppTheme;
   overlayTheme: OverlayTheme;
+  questionsEnabled?: boolean;
+  questionCommand: string;
   isAdmin?: boolean;
   moderators: { twitchUserId: string; login: string; canCurate: boolean }[];
 }) {
   const [cmd, setCmd] = useState(submitCommand);
   const [videoCmd, setVideoCmd] = useState(videoCommand);
+  const [questionCmd, setQuestionCmd] = useState(questionCommand);
   const [open, setOpen] = useState(allowAnyone);
   const [dupes, setDupes] = useState(allowDuplicates);
   const [ignored, setIgnored] = useState<string[]>(ignoredUsers);
@@ -69,6 +80,7 @@ export function SetupForm({
   const [sourceInput, setSourceInput] = useState('');
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   // The add token is one secret behind two features (quick-add and the
   // overlay URL), so it lives here rather than inside either tab — otherwise
   // regenerating it on one tab would leave the other showing a dead URL until
@@ -84,12 +96,15 @@ export function SetupForm({
   useEffect(() => {
     const apply = () => {
       const fromHash = window.location.hash.replace(/^#/, '');
-      if (isTabId(fromHash)) setTab(fromHash);
+      // A #questions hash saved from before the account had this enabled (or
+      // after an admin later disabled it) shouldn't select a tab that isn't
+      // being rendered — falls back to whatever's already selected.
+      if (isTabId(fromHash) && (fromHash !== 'questions' || questionsEnabled)) setTab(fromHash);
     };
     apply();
     window.addEventListener('hashchange', apply);
     return () => window.removeEventListener('hashchange', apply);
-  }, []);
+  }, [questionsEnabled]);
   // pushState, not replaceState, so each tab is a back-button step — landing
   // on Settings and pressing back should return you to the deck, but stepping
   // through five tabs and pressing back should go back one tab.
@@ -100,15 +115,30 @@ export function SetupForm({
 
   const save = async () => {
     setSaving(true);
+    setSaveError('');
     const r = await fetch('/api/setup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ submit_command: cmd, video_command: videoCmd, allow_anyone: open, allow_duplicates: dupes, ignored_users: ignored, preferred_sources: sources }),
+      body: JSON.stringify({
+        submit_command: cmd,
+        video_command: videoCmd,
+        allow_anyone: open,
+        allow_duplicates: dupes,
+        ignored_users: ignored,
+        preferred_sources: sources,
+        // Sent unconditionally (same as the other command fields, sent from
+        // every tab's Save) — the server only persists it when the account
+        // has questions_enabled, so this is a no-op for accounts without it.
+        question_command: questionCmd,
+      }),
     });
     setSaving(false);
     if (r.ok) {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+    } else {
+      const data = await r.json().catch(() => ({}));
+      setSaveError(data.detail || data.error || 'Could not save.');
     }
   };
 
@@ -142,7 +172,7 @@ export function SetupForm({
         className="gap-0 border-b-2 border-ink/20 mb-8"
         aria-label="Settings section"
       >
-        {TABS.map(([id, label]) => (
+        {TABS.filter(([id]) => id !== 'questions' || questionsEnabled).map(([id, label]) => (
           <ToggleGroupItem key={id} value={id} variant="tab" className="text-xs">
             {label}
           </ToggleGroupItem>
@@ -277,6 +307,7 @@ export function SetupForm({
           {saving ? 'Saving...' : 'Save'}
         </Button>
         {saved && <span className="ml-3 font-mono text-xs text-moss">Saved</span>}
+        {saveError && <span className="ml-3 font-mono text-xs text-rust">{saveError}</span>}
       </section>
 
       <section className="mb-10">
@@ -352,6 +383,7 @@ export function SetupForm({
           {saving ? 'Saving...' : 'Save'}
         </Button>
         {saved && <span className="ml-3 font-mono text-xs text-moss">Saved</span>}
+        {saveError && <span className="ml-3 font-mono text-xs text-rust">{saveError}</span>}
       </section>
 
       <section className="mb-10">
@@ -375,6 +407,40 @@ export function SetupForm({
       <section className="mb-10">
         <h2 className="font-display text-2xl font-bold mb-4">Quick add</h2>
         <QuickAdd token={token} setToken={setToken} />
+      </section>
+      )}
+
+      {tab === 'questions' && questionsEnabled && (
+      <section className="mb-10">
+        <h2 className="font-display text-2xl font-bold mb-1">Questions</h2>
+        <p className="text-sm text-ink/70 mb-6 max-w-prose leading-relaxed">
+          Let viewers submit questions for an interview or Q&amp;A segment. A mod clears each one
+          before it&apos;s visible to you — see <Link href="/questions" className="underline hover:text-rust">the Questions page</Link> —
+          and approved questions also show up in a panel on the deck while you&apos;re live.
+        </p>
+
+        <label className="block mb-6">
+          <span className="font-mono text-xs uppercase tracking-widest text-ink/60">
+            Question command (leave blank to disable)
+          </span>
+          <Input
+            value={questionCmd}
+            onChange={(e) => setQuestionCmd(e.target.value)}
+            placeholder="!question"
+            className="w-full mt-1 p-3"
+          />
+          <span className="block mt-1 text-xs text-ink/60">
+            Viewers type e.g. <code>!question what made you run?</code>. Gated the same as link
+            submission — if &quot;Allow anyone to submit&quot; on the Chat tab is off, only subs,
+            VIPs, and mods can ask. Limited to one question every 20 seconds per viewer.
+          </span>
+        </label>
+
+        <Button onClick={save} disabled={saving} className="px-6 py-3">
+          {saving ? 'Saving...' : 'Save'}
+        </Button>
+        {saved && <span className="ml-3 font-mono text-xs text-moss">Saved</span>}
+        {saveError && <span className="ml-3 font-mono text-xs text-rust">{saveError}</span>}
       </section>
       )}
 

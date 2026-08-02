@@ -42,6 +42,8 @@ export default async function SetupPage() {
         addToken={stream?.add_token ?? null}
         appTheme={sanitizeAppTheme(stream?.app_theme)}
         overlayTheme={sanitizeOverlayTheme(stream?.overlay_theme)}
+        questionsEnabled={stream?.questions_enabled === true}
+        questionCommand={stream?.question_command ?? ''}
         isAdmin={isAdmin(session.twitchUserId)}
         moderators={(mods ?? []).map((m) => ({
           twitchUserId: m.twitch_user_id,

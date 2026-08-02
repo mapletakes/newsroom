@@ -9,6 +9,7 @@ import { positionsFromOrder, insertAtIndex, isSameOrder } from '@/lib/reorder';
 import { queryKeys } from '@/lib/query-keys';
 import { ArchiveButton } from '@/components/ArchiveButton';
 import { QuickLinksDrawer } from './QuickLinksDrawer';
+import { QuestionsPanel } from '@/components/QuestionsPanel';
 import { DeckMobile } from './DeckMobile';
 import { useMediaQuery, MOBILE_QUERY } from '@/lib/use-media-query';
 import { ChatStatusBanner } from './ChatStatusBanner';
@@ -358,11 +359,13 @@ export function DeckView({
   streamId,
   isAdmin = false,
   curateOnly = false,
+  questionsEnabled = false,
 }: {
   displayName: string;
   streamId: string;
   isAdmin?: boolean;
   curateOnly?: boolean;
+  questionsEnabled?: boolean;
 }) {
   const queryClient = useQueryClient();
   const queueKey = queryKeys.queue(streamId, 'approved');
@@ -1337,6 +1340,8 @@ export function DeckView({
         curateOnly={curateOnly}
         displayName={displayName}
         isAdmin={isAdmin}
+        streamId={streamId}
+        questionsEnabled={questionsEnabled}
         onSelect={activateItem}
         onPlayed={markPlayed}
         onSkip={skip}
@@ -1349,6 +1354,7 @@ export function DeckView({
     ) : (
     <div className="min-h-screen flex flex-col">
       {!curateOnly && <QuickLinksDrawer />}
+      <QuestionsPanel streamId={streamId} enabled={questionsEnabled} variant="tab" />
       <ShortcutsModal open={shortcutsOpen} onOpenChange={setShortcutsOpen} curateOnly={curateOnly} />
       <AppHeader
         className="sticky top-0 z-20 bg-paper border-b-2 border-ink pl-10 pr-6 py-3 gap-6"

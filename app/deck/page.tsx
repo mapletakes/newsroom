@@ -15,7 +15,7 @@ export default async function DeckPage() {
   const sb = supabaseAdmin();
   const { data: stream } = await sb
     .from('streams')
-    .select('approved')
+    .select('approved, questions_enabled')
     .eq('id', session.streamId)
     .maybeSingle();
   if (stream?.approved === false) redirect('/blocked');
@@ -35,6 +35,7 @@ export default async function DeckPage() {
         streamId={session.streamId}
         isAdmin={isAdmin(session.twitchUserId)}
         curateOnly={curateOnly}
+        questionsEnabled={stream?.questions_enabled === true}
       />
     </>
   );

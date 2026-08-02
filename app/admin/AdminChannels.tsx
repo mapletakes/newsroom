@@ -11,6 +11,7 @@ export type ChannelRow = {
   displayName: string | null;
   createdAt: string;
   approved: boolean;
+  questionsEnabled: boolean;
   chatEnabled: boolean;
   eventsub: string;
   total: number;
@@ -72,6 +73,22 @@ export function AdminChannels({ initial }: { initial: ChannelRow[] }) {
     }
   };
 
+  const toggleQuestions = async (row: ChannelRow) => {
+    const enabled = !row.questionsEnabled;
+    setBusy(row.id + ':questions');
+    const r = await fetch('/api/admin/questions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ streamId: row.id, enabled }),
+    });
+    setBusy(null);
+    if (r.ok) {
+      setRows((rs) => rs.map((x) => (x.id === row.id ? { ...x, questionsEnabled: enabled } : x)));
+    } else {
+      setRowNote(row.id, 'failed');
+    }
+  };
+
   const resubscribe = async (row: ChannelRow) => {
     setBusy(row.id + ':sub');
     const r = await fetch('/api/admin/resubscribe', {
@@ -116,6 +133,7 @@ export function AdminChannels({ initial }: { initial: ChannelRow[] }) {
             <th className="py-2 pr-4">Chat</th>
             <th className="py-2 pr-4">EventSub</th>
             <th className="py-2 pr-4">Access</th>
+            <th className="py-2 pr-4" title="Chat Q&A — the !question-style command">Questions</th>
             <th className="py-2">Actions</th>
           </tr>
         </thead>
@@ -157,6 +175,13 @@ export function AdminChannels({ initial }: { initial: ChannelRow[] }) {
                   <span className="font-mono text-[11px] uppercase tracking-widest text-rust">blocked</span>
                 )}
               </td>
+              <td className="py-2 pr-4">
+                {row.questionsEnabled ? (
+                  <span className="font-mono text-[11px] uppercase tracking-widest text-moss">on</span>
+                ) : (
+                  <span className="font-mono text-[11px] uppercase tracking-widest text-ink/30">off</span>
+                )}
+              </td>
               <td className="py-2">
                 <div className="flex items-center gap-2 flex-wrap">
                   <Button
@@ -167,6 +192,16 @@ export function AdminChannels({ initial }: { initial: ChannelRow[] }) {
                     disabled={busy === row.id + ':access'}
                   >
                     {row.approved ? 'Block' : 'Approve'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    className="text-[11px]"
+                    onClick={() => toggleQuestions(row)}
+                    disabled={busy === row.id + ':questions'}
+                    title="Chat Q&A — the !question-style command"
+                  >
+                    {row.questionsEnabled ? 'Disable Q&A' : 'Enable Q&A'}
                   </Button>
                   <Button
                     variant="outline"
@@ -184,7 +219,7 @@ export function AdminChannels({ initial }: { initial: ChannelRow[] }) {
           ))}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={11} className="py-8 text-center text-ink/50 font-mono text-sm">
+              <td colSpan={12} className="py-8 text-center text-ink/50 font-mono text-sm">
                 No channels yet.
               </td>
             </tr>

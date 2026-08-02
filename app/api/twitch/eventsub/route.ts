@@ -12,7 +12,9 @@ import {
 import { supabaseAdmin } from '@/lib/supabase';
 import { extractUrlsFromMessage } from '@/lib/url';
 import { submitUrlToQueue } from '@/lib/submit-url';
+import { matchQuestionCommand, submitQuestionToQueue } from '@/lib/submit-question';
 import { announceSubmission } from '@/lib/announce';
+import { checkRateLimit, hashKey } from '@/lib/ratelimit';
 
 export const maxDuration = 30;
 
@@ -130,7 +132,7 @@ export async function POST(req: NextRequest) {
   // Look up stream
   const { data: stream } = await sb
     .from('streams')
-    .select('id, twitch_user_id, submit_command, allow_anyone, ignored_users, approved, video_command, now_playing_id, video_command_last_sent_at')
+    .select('id, twitch_user_id, submit_command, allow_anyone, ignored_users, approved, video_command, now_playing_id, video_command_last_sent_at, questions_enabled, question_command')
     .eq('twitch_user_id', broadcasterUserId)
     .single();
   if (!stream) return new NextResponse(null, { status: 204 });
@@ -160,8 +162,43 @@ export async function POST(req: NextRequest) {
   const isSub = badgeSet.has('subscriber');
   const isVip = badgeSet.has('vip');
 
-  // Permission gate
+  // Permission gate — shared with the question command below: "everyone,
+  // same as link submission's default" was the deliberate call here, so
+  // asking a question is gated exactly like submitting a link, not by a
+  // second, question-specific permission model.
   if (!stream.allow_anyone && !(isSub || isMod || isVip)) {
+    return new NextResponse(null, { status: 204 });
+  }
+
+  // !question — gated behind the account-level flag a super admin sets (see
+  // schema.sql: a question is free text that can reach the streamer's
+  // eyeline live, unlike a link a mod always screens first). When the flag
+  // is off, pass null so matchQuestionCommand can never match, rather than
+  // trusting stream.question_command alone — a stream that had questions
+  // enabled in the past and got it revoked keeps its command text in the
+  // row, and it must stay inert.
+  const questionText = matchQuestionCommand(
+    messageText,
+    stream.questions_enabled ? stream.question_command : null,
+  );
+  if (questionText !== null) {
+    // Per-asker, not per-channel like video_command's cooldown: one person
+    // shouldn't be able to flood the mod queue during exactly the moment
+    // questions matter most (a live interview). checkRateLimit fails open
+    // if Upstash isn't configured, same as every other rate-limited path.
+    const limited = await checkRateLimit('question', hashKey(`${stream.id}:${chatterName.toLowerCase()}`));
+    if (limited.ok) {
+      waitUntil(
+        submitQuestionToQueue({
+          streamId: stream.id,
+          text: questionText,
+          asker: chatterName,
+          isSub,
+          isMod,
+          isVip,
+        }).catch((err) => console.error('background submitQuestionToQueue failed:', err)),
+      );
+    }
     return new NextResponse(null, { status: 204 });
   }
 

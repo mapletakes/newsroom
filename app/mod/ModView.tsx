@@ -49,6 +49,7 @@ export function ModView({
   isMod = false,
   isAdmin = false,
   canCurate = false,
+  questionsEnabled = false,
 }: {
   channel: string;
   displayName: string;
@@ -58,6 +59,7 @@ export function ModView({
   isMod?: boolean;
   isAdmin?: boolean;
   canCurate?: boolean;
+  questionsEnabled?: boolean;
 }) {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<'pending' | 'approved' | 'played' | 'rejected'>('pending');
@@ -222,6 +224,7 @@ export function ModView({
             {!isMod && <Link href="/deck" className="underline hover:text-rust">Streamer Deck →</Link>}
             {isMod && canCurate && <Link href="/deck" className="underline hover:text-rust">Curate Deck →</Link>}
             <Link href="/shelf" className="underline hover:text-rust">Shelf</Link>
+            {questionsEnabled && <Link href="/questions" className="underline hover:text-rust">Questions</Link>}
             {!isMod && <Link href="/setup" className="underline hover:text-rust">Settings</Link>}
             {isAdmin && <Link href="/admin" className="underline hover:text-rust">Admin</Link>}
           </>

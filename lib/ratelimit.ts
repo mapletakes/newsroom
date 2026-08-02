@@ -35,11 +35,12 @@ export function hashKey(raw: string): string {
   return crypto.createHash('sha256').update(raw).digest('hex').slice(0, 32);
 }
 
-type Kind = 'write' | 'read' | 'poll';
+type Kind = 'write' | 'read' | 'poll' | 'question';
 
 let writeLimiter: Ratelimit | undefined;
 let readLimiter: Ratelimit | undefined;
 let pollLimiter: Ratelimit | undefined;
+let questionLimiter: Ratelimit | undefined;
 
 function limiterFor(kind: Kind): Ratelimit | null {
   const r = getRedis();
@@ -61,16 +62,27 @@ function limiterFor(kind: Kind): Ratelimit | null {
       prefix: 'rl:read',
     }));
   }
-  // overlay: legitimate traffic is ~1 poll/30s plus the occasional
-  // realtime-triggered refresh — well under 10/10s even on a fast-paced
-  // show. Sized to cut off a runaway client loop within seconds rather
-  // than let it run wild (this would have capped the blast radius of the
-  // realtime reconnect bug well before it became hundreds of thousands of
-  // requests).
-  return (pollLimiter ??= new Ratelimit({
+  if (kind === 'poll') {
+    // overlay: legitimate traffic is ~1 poll/30s plus the occasional
+    // realtime-triggered refresh — well under 10/10s even on a fast-paced
+    // show. Sized to cut off a runaway client loop within seconds rather
+    // than let it run wild (this would have capped the blast radius of the
+    // realtime reconnect bug well before it became hundreds of thousands of
+    // requests).
+    return (pollLimiter ??= new Ratelimit({
+      redis: r,
+      limiter: Ratelimit.slidingWindow(10, '10 s'),
+      prefix: 'rl:poll',
+    }));
+  }
+  // !question command: keyed per-asker (not per-channel, unlike video_command
+  // — one person shouldn't be able to flood the mod queue during exactly the
+  // moment questions matter most). One every 20s is enough for a real asker
+  // rephrasing or adding a follow-up, tight enough to blunt a spam bot.
+  return (questionLimiter ??= new Ratelimit({
     redis: r,
-    limiter: Ratelimit.slidingWindow(10, '10 s'),
-    prefix: 'rl:poll',
+    limiter: Ratelimit.slidingWindow(1, '20 s'),
+    prefix: 'rl:question',
   }));
 }
 

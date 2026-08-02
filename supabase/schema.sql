@@ -277,6 +277,42 @@ alter table public.lists add column if not exists ungrouped_position int default
 -- being retyped.
 alter table public.submissions add column if not exists prep_note text;
 
+-- Audience Q&A. Gated behind a super-admin flag (questions_enabled) rather
+-- than being on for everyone by default — unlike a submitted link, which a
+-- mod always sees before it's played, a question is free text that can reach
+-- the streamer's eyeline live during an interview, so it's opt-in per account
+-- rather than opt-out.
+--
+-- question_command follows video_command's convention: blank disables it even
+-- when the account-level flag is on, so a streamer can turn the chat command
+-- off without losing the feature or waiting on an admin.
+alter table public.streams add column if not exists questions_enabled boolean default false;
+alter table public.streams add column if not exists question_command text default '!question';
+
+-- Status flow mirrors submissions (pending -> approved -> played) with one
+-- addition: rejected can still be un-rejected back to pending, same as the
+-- mod queue, so a mod's misclick isn't permanent.
+--   pending   -- just landed from chat, not yet triaged
+--   approved  -- cleared by a mod; visible in the streamer's deck panel
+--   answered  -- the streamer marked it handled
+--   rejected  -- a mod declined it (spam, abuse, off-topic)
+create table if not exists public.questions (
+  id uuid primary key default gen_random_uuid(),
+  stream_id uuid references public.streams(id) on delete cascade,
+  text text not null,
+  asker_login text,
+  asker_is_sub boolean default false,
+  asker_is_mod boolean default false,
+  asker_is_vip boolean default false,
+  status text not null default 'pending',
+  position int,
+  created_at timestamptz default now(),
+  approved_at timestamptz,
+  answered_at timestamptz
+);
+create index if not exists questions_stream_status_idx on public.questions(stream_id, status, position);
+create index if not exists questions_stream_created_idx on public.questions(stream_id, created_at desc);
+
 -- ============================================================
 -- Row Level Security
 -- ============================================================
@@ -295,6 +331,7 @@ alter table public.show_notes enable row level security;
 alter table public.lists enable row level security;
 alter table public.list_items enable row level security;
 alter table public.list_segments enable row level security;
+alter table public.questions enable row level security;
 
 -- Public read of streams (for the deck/mod views via service-role queries)
 -- We do NOT grant anon any access; the API routes use the service role.

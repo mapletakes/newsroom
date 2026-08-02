@@ -11,6 +11,7 @@ import { Icon } from '@/components/ui/icon';
 import { Wordmark } from '@/components/ui/wordmark';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { TriggerWarningBanner, TriggerWarningEditor } from '@/components/TriggerWarning';
+import { QuestionsPanel } from '@/components/QuestionsPanel';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -214,6 +215,8 @@ export function DeckMobile({
   curateOnly,
   displayName,
   isAdmin,
+  streamId,
+  questionsEnabled,
   onSelect,
   onPlayed,
   onSkip,
@@ -231,6 +234,8 @@ export function DeckMobile({
   curateOnly: boolean;
   displayName: string;
   isAdmin: boolean;
+  streamId: string;
+  questionsEnabled: boolean;
   onSelect: (id: string) => void;
   onPlayed: () => void;
   onSkip: () => void;
@@ -268,6 +273,7 @@ export function DeckMobile({
           {orderedQueue.length} up
         </span>
         <span className="ml-auto flex items-center gap-1">
+          <QuestionsPanel streamId={streamId} enabled={questionsEnabled} variant="icon" />
           <DarkModeToggle />
           <DropdownMenu>
             <DropdownMenuTrigger

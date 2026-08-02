@@ -37,6 +37,7 @@ export default async function ModPage() {
         isMod={isModRole}
         isAdmin={isAdmin(session.twitchUserId)}
         canCurate={canCurate}
+        questionsEnabled={stream?.questions_enabled === true}
       />
     </>
   );
