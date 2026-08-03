@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSession, getApprovedSession } from '@/lib/session';
-import { sanitizeModStatus, sanitizeStatusNote } from '@/lib/mod-status';
+import { sanitizeModStatus, sanitizeStatusNote, STATUS_RESET_AFTER_MS } from '@/lib/mod-status';
 import { broadcastModStatusChange } from '@/lib/realtime';
 
 export const dynamic = 'force-dynamic';
@@ -10,6 +10,28 @@ async function modStatusEnabledFor(streamId: string): Promise<boolean> {
   const sb = supabaseAdmin();
   const { data } = await sb.from('streams').select('mod_status_enabled').eq('id', streamId).maybeSingle();
   return data?.mod_status_enabled === true;
+}
+
+// Resets any status on this stream that's aged past STATUS_RESET_AFTER_MS —
+// run before every GET so a viewer never sees stale data just because the
+// daily cleanup cron (see app/api/cron/cleanup) hasn't reached it yet.
+// Best-effort: a failure here shouldn't block the roster itself from
+// loading, so it only logs.
+async function resetStaleStatuses(streamId: string): Promise<void> {
+  const sb = supabaseAdmin();
+  const cutoff = new Date(Date.now() - STATUS_RESET_AFTER_MS).toISOString();
+  const { error } = await sb
+    .from('moderators')
+    .update({
+      status: null,
+      status_note: null,
+      status_updated_at: new Date().toISOString(),
+      status_via_mobile: false,
+    })
+    .eq('stream_id', streamId)
+    .not('status', 'is', null)
+    .lt('status_updated_at', cutoff);
+  if (error) console.error('mod-status: stale reset failed:', error.message);
 }
 
 // The roster: every mod on this stream with their self-reported availability.
@@ -22,6 +44,8 @@ export async function GET() {
   if (!(await modStatusEnabledFor(session.streamId))) {
     return NextResponse.json({ error: 'mod status not enabled' }, { status: 403 });
   }
+
+  await resetStaleStatuses(session.streamId);
 
   const sb = supabaseAdmin();
   const { data, error } = await sb

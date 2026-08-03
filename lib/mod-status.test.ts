@@ -12,6 +12,7 @@ import {
   MOD_STATUS_TOKEN,
   sanitizeModStatus,
   sanitizeStatusNote,
+  STATUS_RESET_AFTER_MS,
   STATUS_STALE_AFTER_MS,
 } from './mod-status';
 
@@ -103,5 +104,14 @@ describe('isStatusStale', () => {
   it('does not treat an unparseable timestamp as stale', () => {
     // Better to show it plainly than to label it stale on a parse failure.
     expect(isStatusStale('not a date', now)).toBe(false);
+  });
+});
+
+describe('STATUS_RESET_AFTER_MS', () => {
+  it('is 12 hours, and strictly longer than the dim-only stale window', () => {
+    // The two constants encode different intents (dim-and-nudge vs.
+    // actually clear it out) — reset must never fire before stale does.
+    expect(STATUS_RESET_AFTER_MS).toBe(12 * 60 * 60 * 1000);
+    expect(STATUS_RESET_AFTER_MS).toBeGreaterThan(STATUS_STALE_AFTER_MS);
   });
 });

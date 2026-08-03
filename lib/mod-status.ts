@@ -69,3 +69,14 @@ export function isStatusStale(updatedAt: string | null | undefined, now = Date.n
   if (Number.isNaN(t)) return false;
   return now - t > STATUS_STALE_AFTER_MS;
 }
+
+// A genuinely different concern from the 2-hour dim above: that one nudges
+// the person who set it to update their own, and deliberately never rewrites
+// the row. This is the backstop for when they never do — someone who went
+// home hours ago (or a whole stream ago) shouldn't still read as "green" to
+// the rest of the team indefinitely, so past this the row is actually reset
+// to no status server-side, not just dimmed. Enforced in two places: lazily
+// whenever the roster is fetched (so an active viewer never sees stale data,
+// win or lose the race with the cron), and by the daily cleanup cron as a
+// backstop for streams nobody's currently looking at.
+export const STATUS_RESET_AFTER_MS = 12 * 60 * 60 * 1000; // 12 hours
