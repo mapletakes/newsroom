@@ -6,6 +6,15 @@ import { sanitizeAppTheme, sanitizeOverlayTheme } from '@/lib/theme';
 export async function POST(req: NextRequest) {
   const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
+  // Streamer-only. Everything this route writes is channel-wide — chat
+  // commands, the brand palette, ignored users — so it's the streamer's to
+  // set, not a mod's. The Settings link has always been hidden from mods in
+  // the mod view, but a hidden link was the ONLY thing stopping one from
+  // posting here directly. Mods get their own appearance at /api/prefs, which
+  // can only change what they personally see.
+  if (session.role !== 'streamer') {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
 
   const body = await req.json();
   const sb = supabaseAdmin();

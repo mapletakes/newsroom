@@ -12,6 +12,13 @@ export default async function SetupPage() {
   const session = await getSession();
   if (!session) redirect('/login');
 
+  // Mods have no business on this page: it configures the channel (chat
+  // commands, brand, ignored users) and hands the streamer's add_token to
+  // whoever renders it. Hiding the nav link was never a gate — the page had
+  // to be entered by hand to get here, but nothing stopped that. Their own
+  // appearance lives at /preferences, which is scoped to just them.
+  if (session.role !== 'streamer') redirect('/preferences');
+
   const sb = supabaseAdmin();
   const { data: stream } = await sb
     .from('streams')

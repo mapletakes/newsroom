@@ -21,7 +21,10 @@ export const metadata: Metadata = {
 // <StreamTheme /> on the authed pages. Registered here so next-themes treats
 // it as a first-class choice a user can be switched to and can switch away
 // from, rather than something bolted onto the html element behind its back.
-const THEMES = ['light', 'dark', 'sepia', 'contrast', 'brand'];
+// 'brand' is the stream's branding, 'mine' the viewer's own (see
+// components/StreamTheme.tsx). Both have to be listed here or next-themes
+// won't put the class on <html> at all, and the injected rules never match.
+const THEMES = ['light', 'dark', 'sepia', 'contrast', 'brand', 'mine'];
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

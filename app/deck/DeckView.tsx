@@ -1421,6 +1421,13 @@ export function DeckView({
                 Settings
               </Link>
             )}
+            {/* A curate mod has no channel settings to reach, but their own
+                appearance is still theirs to set. */}
+            {curateOnly && (
+              <Link href="/preferences" className="underline hover:text-rust">
+                Preferences
+              </Link>
+            )}
             {isAdmin && (
               <Link href="/admin" className="underline hover:text-rust">
                 Admin

@@ -239,7 +239,11 @@ export function ModView({
             <Link href="/shelf" className="underline hover:text-rust">Shelf</Link>
             {questionsEnabled && <Link href="/questions" className="underline hover:text-rust">Questions</Link>}
             {modStatusEnabled && <Link href="/mod-status" className="underline hover:text-rust">Mod Status</Link>}
+            {/* Two different pages, deliberately: /setup is the channel and is
+                the streamer's, /preferences is just how this person wants the
+                app to look. */}
             {!isMod && <Link href="/setup" className="underline hover:text-rust">Settings</Link>}
+            {isMod && <Link href="/preferences" className="underline hover:text-rust">Preferences</Link>}
             {isAdmin && <Link href="/admin" className="underline hover:text-rust">Admin</Link>}
           </>
         }

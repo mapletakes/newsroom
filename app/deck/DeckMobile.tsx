@@ -317,6 +317,9 @@ export function DeckMobile({
               {!curateOnly && (
                 <DropdownMenuItem asChild><Link href="/setup">Settings</Link></DropdownMenuItem>
               )}
+              {curateOnly && (
+                <DropdownMenuItem asChild><Link href="/preferences">Preferences</Link></DropdownMenuItem>
+              )}
               {!curateOnly && (
                 <DropdownMenuItem asChild>
                   <a href="/api/notes?format=markdown&commit=1">Export notes</a>

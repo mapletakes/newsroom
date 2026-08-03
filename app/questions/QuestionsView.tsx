@@ -167,6 +167,7 @@ export function QuestionsView({
             {!isMod && <Link href="/deck" className="underline hover:text-rust">Streamer Deck →</Link>}
             {isMod && <Link href="/mod" className="underline hover:text-rust">Mod View →</Link>}
             {!isMod && <Link href="/setup#questions" className="underline hover:text-rust">Settings</Link>}
+            {isMod && <Link href="/preferences" className="underline hover:text-rust">Preferences</Link>}
             {isAdmin && <Link href="/admin" className="underline hover:text-rust">Admin</Link>}
           </>
         }

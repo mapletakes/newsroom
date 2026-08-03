@@ -167,9 +167,15 @@ function FontField({
 
 // ── Shared save plumbing ──────────────────────────────────────
 
-/** Both halves PATCH the same endpoint, and it only touches the keys it's
- *  handed — so each can save on its own tab without clobbering the other. */
-function useThemeSave() {
+/** Both halves POST the same endpoint, and it only touches the keys it's
+ *  handed — so each can save on its own tab without clobbering the other.
+ *
+ *  `endpoint` is a parameter because the app-palette editor is reused
+ *  verbatim on /preferences, where the identical form writes one person's own
+ *  theme (/api/prefs) instead of the channel's (/api/setup). Same shape, same
+ *  validation, different row — worth a prop rather than a second copy of the
+ *  editor that would drift. */
+function useThemeSave(endpoint = '/api/setup') {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
@@ -178,7 +184,7 @@ function useThemeSave() {
     setSaving(true);
     setError('');
     try {
-      const r = await fetch('/api/setup', {
+      const r = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch),
@@ -233,17 +239,33 @@ function SaveRow({
 
 // ── App palette + type ────────────────────────────────────────
 
-export function AppThemeSettings({ initial }: { initial: AppTheme }) {
+export function AppThemeSettings({
+  initial,
+  endpoint = '/api/setup',
+  intro,
+  saveNote = "The page reloads on save — the app's palette is applied server-side, so that's what makes it show up.",
+}: {
+  initial: AppTheme;
+  /** Where to POST. /api/setup writes the channel brand; /api/prefs writes
+   *  the signed-in person's own theme. */
+  endpoint?: string;
+  intro?: React.ReactNode;
+  saveNote?: string;
+}) {
   const [app, setApp] = useState<AppTheme>(initial);
-  const { save, saving, saved, error } = useThemeSave();
+  const { save, saving, saved, error } = useThemeSave(endpoint);
   const palette = resolveAppPalette(app);
 
   return (
     <section>
       <p className="text-sm text-ink/70 mb-6 max-w-prose leading-relaxed">
-        How the deck, mod view, and shelf look. This is a <strong>default</strong>, not a rule — a
-        mod who finds another palette easier to read can still switch, and keeps that choice.
-        Viewers never see any of this; the on-air look lives under <strong>Overlay</strong>.
+        {intro ?? (
+          <>
+            How the deck, mod view, and shelf look. This is a <strong>default</strong>, not a rule — a
+            mod who finds another palette easier to read can still switch, and keeps that choice.
+            Viewers never see any of this; the on-air look lives under <strong>Overlay</strong>.
+          </>
+        )}
       </p>
 
       <h3 className="font-mono text-xs uppercase tracking-widest text-ink/60 mb-2">Palette</h3>
@@ -295,7 +317,7 @@ export function AppThemeSettings({ initial }: { initial: AppTheme }) {
         error={error}
         onSave={() => save({ app_theme: app }, true)}
         onReset={() => setApp(DEFAULT_APP_THEME)}
-        note="The page reloads on save — the app's palette is applied server-side, so that's what makes it show up."
+        note={saveNote}
       />
     </section>
   );

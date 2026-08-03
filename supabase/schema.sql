@@ -384,6 +384,29 @@ alter table public.streams
   add column if not exists overlay_question_id uuid
   references public.questions(id) on delete set null;
 
+-- Per-PERSON appearance, as opposed to streams.app_theme, which is a
+-- channel's brand and is shared by everyone who looks at it.
+--
+-- Exists because a mod has no channel of their own to carry a preference on.
+-- Their only durable row is in `moderators`, which is per stream — so a mod
+-- who works three channels would have had to set their theme three times, and
+-- the header's preset picker (next-themes) only ever lived in localStorage,
+-- meaning it reset on every new browser or device.
+--
+-- Keyed on twitch_user_id and NOT scoped to a stream, deliberately: this
+-- follows the person, not the channel. Nothing here can affect what anyone
+-- else sees, which is what makes it safe to let a mod edit while
+-- streams.app_theme stays streamer-only.
+--
+-- No FK: a Twitch user exists independently of whether they currently moderate
+-- anywhere, and a preference shouldn't evaporate because a streamer removed
+-- them from one channel's mod list.
+create table if not exists public.user_prefs (
+  twitch_user_id text primary key,
+  app_theme jsonb,
+  updated_at timestamptz default now()
+);
+
 -- ============================================================
 -- Row Level Security
 -- ============================================================
