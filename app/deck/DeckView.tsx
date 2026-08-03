@@ -1425,7 +1425,12 @@ export function DeckView({
 
       <main className="flex-1 grid lg:grid-cols-2 gap-0 pl-3">
         {/* Active card */}
-        <section className="p-8 border-r border-ink/20">
+        {/* The divider follows the axis the panes are laid out on: a right
+            edge only once there are two columns to separate, a bottom edge
+            while they're stacked. Before the touch deck was gated on pointer
+            type this stacked case was unreachable, so the right border was
+            the only one it ever needed. */}
+        <section className="p-8 border-b lg:border-b-0 lg:border-r border-ink/20">
           {!loaded ? (
             <div>
               <div className="flex gap-2 mb-4">

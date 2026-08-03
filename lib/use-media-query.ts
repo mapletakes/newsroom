@@ -30,6 +30,24 @@ export function useMediaQuery(query: string): boolean {
   return matches;
 }
 
-/** Below Tailwind's `lg` — the width at which the deck's two-pane layout stops
- *  fitting and the touch layout takes over. */
-export const MOBILE_QUERY = '(max-width: 1023px)';
+/**
+ * When to mount the touch deck instead of the desktop one.
+ *
+ * Width alone was the wrong question. At `(max-width: 1023px)` — Tailwind's
+ * `lg` — an ordinary split-screen window trips it: half of a 1440p display is
+ * ~720px, half of 1080p is ~960px. A curator working beside another window
+ * would get bumped to the touch layout, losing drag-to-reorder and the
+ * keyboard shortcuts, on a machine plainly driving a mouse.
+ *
+ * `pointer: coarse` reports the PRIMARY input, so it separates the two cases
+ * width can't: a narrowed desktop window stays `fine` and keeps the full
+ * deck, while a phone or tablet stays `coarse` and still gets the touch one.
+ * Width is kept alongside it — a coarse-pointer tablet with room for two
+ * panes has no reason to be handed the narrow layout.
+ *
+ * The `max-width: 639px` clause is a floor under that, and applies whatever
+ * the pointer is. Pointer alone would let someone drag a mouse-driven window
+ * down to phone width and keep a layout built for two panes; below Tailwind's
+ * `sm` the touch deck is the better answer no matter what's driving it.
+ */
+export const MOBILE_QUERY = '(max-width: 639px), (max-width: 1023px) and (pointer: coarse)';
