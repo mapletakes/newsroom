@@ -238,6 +238,7 @@ export function ModView({
             {isMod && canCurate && <Link href="/deck" className="underline hover:text-rust">Curate Deck →</Link>}
             <Link href="/shelf" className="underline hover:text-rust">Shelf</Link>
             {questionsEnabled && <Link href="/questions" className="underline hover:text-rust">Questions</Link>}
+            {modStatusEnabled && <Link href="/mod-status" className="underline hover:text-rust">Mod Status</Link>}
             {!isMod && <Link href="/setup" className="underline hover:text-rust">Settings</Link>}
             {isAdmin && <Link href="/admin" className="underline hover:text-rust">Admin</Link>}
           </>

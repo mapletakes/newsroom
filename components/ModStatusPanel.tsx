@@ -27,6 +27,7 @@ export type ModStatusRow = {
   status: ModStatusValue;
   note: string | null;
   updatedAt: string | null;
+  viaMobile: boolean;
   isSelf: boolean;
 };
 
@@ -81,6 +82,17 @@ function RosterRow({ m }: { m: ModStatusRow }) {
           <span className="font-mono text-sm">{m.login}</span>
           {m.isSelf && (
             <span className="font-mono text-[9px] uppercase tracking-widest text-ink/40">you</span>
+          )}
+          {m.status && m.viaMobile && (
+            // Reflects how the CURRENT status was set, not "has a phone" —
+            // switching back to the drawer and saving again replaces it.
+            <span
+              className="inline-flex items-center gap-0.5 font-mono text-[9px] uppercase tracking-widest text-ink/40"
+              title="Checked in from the mobile status page"
+            >
+              <Icon name="mobile" className="text-[10px]" />
+              mobile
+            </span>
           )}
           <span
             className={cn(
@@ -245,11 +257,11 @@ function useModStatus(streamId: string, enabled: boolean) {
   const [justSaved, setJustSaved] = useState(false);
 
   const mutation = useMutation({
-    mutationFn: async (vars: { status: ModStatusValue; note: string }) => {
+    mutationFn: async (vars: { status: ModStatusValue; note: string; viaMobile: boolean }) => {
       const r = await fetch('/api/mod-status', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: vars.status, note: vars.note }),
+        body: JSON.stringify({ status: vars.status, note: vars.note, viaMobile: vars.viaMobile }),
       });
       if (!r.ok) {
         // Surfaced verbatim, not a generic "failed" — a save that errors
@@ -304,6 +316,14 @@ function useModStatus(streamId: string, enabled: boolean) {
  *            header doesn't fit: at 375px the wordmark has no shrink-0, so
  *            the extra control squeezes "The Broadside" onto two lines and
  *            the header grows from 62px to 82px.
+ *   'page' — the whole thing, inline, no Sheet/trigger — for /mod-status, a
+ *            standalone page with nothing else on it. Exists because the
+ *            drawer is genuinely awkward to reach on a phone that isn't
+ *            already sitting on the deck or mod view (open the app, find the
+ *            rail tab, then the drawer) when the actual task is a 5-second
+ *            check-in. Saves made from here are tagged viaMobile so the
+ *            roster can show how someone checked in without guessing from
+ *            user-agent.
  */
 export function ModStatusPanel({
   streamId,
@@ -314,7 +334,7 @@ export function ModStatusPanel({
 }: {
   streamId: string;
   enabled: boolean;
-  variant: 'tab' | 'menu';
+  variant: 'tab' | 'menu' | 'page';
   /** Only for variant='menu' — the caller owns the open state. */
   open?: boolean;
   onOpenChange?: (v: boolean) => void;
@@ -323,7 +343,8 @@ export function ModStatusPanel({
 
   if (!enabled) return null;
 
-  const save = (status: ModStatusValue, note: string) => mutation.mutate({ status, note });
+  const save = (status: ModStatusValue, note: string) =>
+    mutation.mutate({ status, note, viaMobile: variant === 'page' });
   // Only counts a status someone actually stands behind right now — a stale
   // green would otherwise inflate the "attentive" figure on the rail badge,
   // which is exactly the lie this feature is designed not to tell.
@@ -348,6 +369,10 @@ export function ModStatusPanel({
     </>
   );
 
+  if (variant === 'page') {
+    return <div className="flex-1 flex flex-col min-h-0 border border-ink/20">{body}</div>;
+  }
+
   return (
     <Sheet
       {...(variant === 'menu' ? { open: !!open, onOpenChange } : {})}
@@ -361,8 +386,17 @@ export function ModStatusPanel({
         <div className="flex items-center gap-2 border-b-2 border-ink px-4 py-3">
           <Icon name="radioChecked" className="text-ink" />
           <SheetTitle>Mod availability</SheetTitle>
+          {/* A bookmarkable, chrome-free equivalent for a quick phone
+              check-in — surfaced here since the drawer is the place people
+              already discover this feature. */}
+          <a
+            href="/mod-status"
+            className="ml-auto font-mono text-[10px] uppercase tracking-widest text-ink/40 hover:text-ink underline"
+          >
+            Open as page →
+          </a>
           <SheetClose asChild>
-            <button className="ml-auto text-ink/50 hover:text-rust" aria-label="Close">
+            <button className="text-ink/50 hover:text-rust" aria-label="Close">
               <Icon name="close" />
             </button>
           </SheetClose>

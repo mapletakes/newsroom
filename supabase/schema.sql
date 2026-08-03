@@ -80,6 +80,12 @@ create table if not exists public.moderators (
   status text,
   status_note text,
   status_updated_at timestamptz,
+  -- Set from the stripped-down /mod-status page (a quick mobile check-in
+  -- surface, no roster chrome), so the board can show a small mobile badge
+  -- next to the name instead of guessing from user-agent. Reflects how the
+  -- CURRENT status was set, not "has ever used mobile" — every save
+  -- overwrites it, same as status_updated_at.
+  status_via_mobile boolean default false,
   primary key (stream_id, twitch_user_id)
 );
 -- For databases created before can_set_now_playing existed.
@@ -88,6 +94,7 @@ alter table public.moderators add column if not exists can_set_now_playing boole
 alter table public.moderators add column if not exists status text;
 alter table public.moderators add column if not exists status_note text;
 alter table public.moderators add column if not exists status_updated_at timestamptz;
+alter table public.moderators add column if not exists status_via_mobile boolean default false;
 
 -- Segments: named, ordered groups for organising the streamer deck "up next"
 create table if not exists public.segments (

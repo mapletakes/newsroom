@@ -26,7 +26,7 @@ export async function GET() {
   const sb = supabaseAdmin();
   const { data, error } = await sb
     .from('moderators')
-    .select('twitch_user_id, twitch_login, status, status_note, status_updated_at')
+    .select('twitch_user_id, twitch_login, status, status_note, status_updated_at, status_via_mobile')
     .eq('stream_id', session.streamId)
     .order('twitch_login', { ascending: true });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -38,6 +38,7 @@ export async function GET() {
       status: m.status ?? null,
       note: m.status_note ?? null,
       updatedAt: m.status_updated_at ?? null,
+      viaMobile: m.status_via_mobile === true,
       // Lets the client mark one row editable without having to be told the
       // viewer's id separately (and without trusting it if it were).
       isSelf: m.twitch_user_id === session.twitchUserId,
@@ -61,6 +62,7 @@ export async function PATCH(req: Request) {
   const body = await req.json().catch(() => ({}));
   const status = sanitizeModStatus(body.status);
   const note = sanitizeStatusNote(body.note);
+  const viaMobile = body.viaMobile === true;
 
   const sb = supabaseAdmin();
   const { data, error } = await sb
@@ -72,6 +74,7 @@ export async function PATCH(req: Request) {
       // a status is the only thing keeping it honest, so it can't be
       // something the poster gets to choose.
       status_updated_at: new Date().toISOString(),
+      status_via_mobile: viaMobile,
     })
     .eq('stream_id', session.streamId)
     .eq('twitch_user_id', session.twitchUserId)
