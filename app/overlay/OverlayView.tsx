@@ -19,7 +19,45 @@ export type NowPlaying = {
   triggerWarning: string | null;
 };
 
+/** An audience question taking the card over. `asker` is null when the
+ *  submitter had no resolvable login; `askerTag` is at most one badge. */
+export type OverlayQuestion = {
+  text: string;
+  asker: string | null;
+  askerTag: string | null;
+};
+
 export type OverlayVariant = 'default' | 'minimal' | 'ticker';
+
+// A question arrives anywhere between six words and the 300-char cap
+// (MAX_QUESTION_CHARS), and unlike a headline it can't be truncated to fit —
+// half a question read out on air is worse than none. So the type steps down
+// as the text grows, trading presence for the words actually fitting.
+//
+// Fixed steps rather than measuring and scaling continuously: the overlay
+// renders inside OBS with no layout pass we can observe, so anything that
+// needs the box's real height to settle risks a visible reflow on air.
+//
+// Sizes were measured in the real card (639px of text box, 84px row), not
+// guessed: prose renders fully up to ~280 characters at the smallest step,
+// which covers all but the top sliver of the 300-char cap
+// (MAX_QUESTION_CHARS). Past that the clamp drops the tail — a genuine
+// limitation, kept deliberately. Four lines would fit 300 but needs 87px in
+// an 84px row, and shrinking further trades a readable question for a
+// complete one nobody can read.
+//
+// Class names are written out literally because Tailwind's JIT scans source
+// for them; a computed `text-[${n}px]` would silently produce no rule.
+const QUESTION_SIZES = [
+  { max: 70, text: 'text-[26px]', clamp: 'line-clamp-2' },
+  { max: 160, text: 'text-[18px]', clamp: 'line-clamp-3' },
+  { max: 250, text: 'text-[15px]', clamp: 'line-clamp-3' },
+  { max: Infinity, text: 'text-[13px]', clamp: 'line-clamp-3' },
+] as const;
+
+function questionSize(text: string) {
+  return QUESTION_SIZES.find((s) => text.length <= s.max) ?? QUESTION_SIZES[QUESTION_SIZES.length - 1];
+}
 
 const metaLine = (item: NowPlaying) =>
   [item.publisher, item.kind.replace('_', ' '), item.durationSeconds ? formatDuration(item.durationSeconds) : null]
@@ -76,6 +114,60 @@ function TriggerWarning({ text }: { text: string }) {
   );
 }
 
+/**
+ * The question takeover: the same card shell and the same 84px row the
+ * default variant already uses, so a browser source sized to the documented
+ * 800×100 needs no changes to show one.
+ *
+ * It replaces the now-playing card rather than stacking with it — two
+ * "currently" claims on screen at once is the one thing an on-air graphic
+ * can't do. That's also why `minimal` grows to this height for a takeover
+ * instead of staying a 40px chip: a question is the thing being read out, and
+ * there's no smaller honest way to put 300 characters on screen. The trigger
+ * warning bar already set that precedent for minimal.
+ */
+function QuestionCard({
+  question,
+  showBrand,
+}: {
+  question: OverlayQuestion;
+  showBrand: boolean;
+}) {
+  const size = questionSize(question.text);
+  return (
+    <div data-ov="question" className="h-[84px] flex items-center gap-4 px-4">
+      <div className="shrink-0 flex flex-col items-center gap-1">
+        <span
+          className="ov-mono flex items-center gap-1.5 text-[11px] uppercase tracking-widest font-bold"
+          style={{ color: 'var(--ov-accent)' }}
+        >
+          <span className="inline-block w-2 h-2 rounded-full live-dot" style={{ background: 'var(--ov-accent)' }} />
+          Question
+        </span>
+        {showBrand && (
+          <span className="ov-mono text-[8px] uppercase tracking-widest opacity-40">The Broadside</span>
+        )}
+      </div>
+      <div
+        className="shrink-0 w-px self-stretch my-3"
+        style={{ background: 'rgb(var(--ov-border-rgb) / 0.2)' }}
+      />
+      <div className="min-w-0 flex-1">
+        <div className={`ov-display ${size.text} ${size.clamp} font-bold leading-tight`}>
+          {question.text}
+        </div>
+        {/* Attribution is the point of putting a question up rather than just
+            saying it — the asker sees their own name on stream. Kept on one
+            truncating line so a long username can't push the text box taller. */}
+        <div className="ov-mono text-[12px] uppercase tracking-widest truncate mt-1 opacity-60">
+          {question.asker ? `— ${question.asker}` : '— anonymous'}
+          {question.askerTag && <span className="ml-1.5 opacity-80">({question.askerTag})</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // The on-air lower third: a broadsheet card (paper, ink border, hard shadow)
 // styled after the mod view's "On air" bar, sized to work as an OBS browser
 // source. Disappears entirely between items.
@@ -107,6 +199,7 @@ export function OverlayView({
   const [streamId, setStreamId] = useState<string | null>(null);
   const [nowPlaying, setNowPlaying] = useState<NowPlaying | null>(null);
   const [next, setNext] = useState<NowPlaying | null>(null);
+  const [question, setQuestion] = useState<OverlayQuestion | null>(null);
   const [theme, setTheme] = useState<OverlayTheme | null>(null);
   const [invalid, setInvalid] = useState(false);
 
@@ -123,6 +216,7 @@ export function OverlayView({
         setInvalid(true);
         setNowPlaying(null);
         setNext(null);
+        setQuestion(null);
         return;
       }
       if (!r.ok) return; // transient server error — keep showing what we have
@@ -132,6 +226,7 @@ export function OverlayView({
       setTheme(data.theme || null);
       setNowPlaying(data.nowPlaying || null);
       setNext(data.next || null);
+      setQuestion(data.question || null);
     } catch {
       // network blip — keep the current card rather than flickering it away
     }
@@ -164,6 +259,7 @@ export function OverlayView({
       showBrand={showBrand}
       nowPlaying={nowPlaying}
       next={next}
+      question={question}
       invalid={invalid}
     />
   );
@@ -183,6 +279,7 @@ export function OverlayCard({
   showBrand,
   nowPlaying,
   next,
+  question = null,
   invalid = false,
 }: {
   theme: OverlayTheme;
@@ -190,6 +287,8 @@ export function OverlayCard({
   showBrand: boolean;
   nowPlaying: NowPlaying | null;
   next: NowPlaying | null;
+  /** When set, takes the card over from `nowPlaying` entirely. */
+  question?: OverlayQuestion | null;
   invalid?: boolean;
 }) {
   const vars = overlayCssVars(resolved) as React.CSSProperties;
@@ -212,9 +311,32 @@ export function OverlayCard({
     );
   }
 
-  if (!nowPlaying) return null;
-
   const shadow = (px: number) => (resolved.flat ? undefined : `${px}px ${px}px 0 var(--ov-border)`);
+
+  // Checked before now-playing, and before the null guard below, on purpose:
+  // a takeover is at its most useful precisely when nothing is on air — a
+  // streamer between items reading a question out is the ordinary case, not
+  // an edge one. Gating this on nowPlaying would make the feature vanish
+  // exactly when it's wanted. It also ignores `variant`, since every variant
+  // reduces to the same thing here: one question, taking the whole card.
+  if (question) {
+    return (
+      <div
+        style={{
+          ...vars,
+          background: 'var(--ov-cardBg)',
+          color: 'var(--ov-cardText)',
+          borderColor: 'var(--ov-border)',
+          boxShadow: shadow(4),
+        }}
+        className="m-2 flex flex-col border-2 overflow-hidden"
+      >
+        <QuestionCard question={question} showBrand={showBrand} />
+      </div>
+    );
+  }
+
+  if (!nowPlaying) return null;
 
   if (variant === 'minimal') {
     return (

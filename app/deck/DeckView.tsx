@@ -1348,12 +1348,15 @@ export function DeckView({
     <>
     {confirmDialog}
     {isMobile ? (
-      // No canSetNowPlaying prop here: mobile's tap-to-select still routes
-      // through this component's own onSelect={activateItem} below, which
-      // drives the same activeId state the now-playing effect above already
-      // gates on canSetNowPlaying — the permission is enforced once, centrally,
-      // regardless of which surface triggered the change.
+      // canSetNowPlaying is passed for the questions panel's overlay takeover
+      // and nothing else. Mobile's tap-to-select still routes through this
+      // component's own onSelect={activateItem} below, which drives the same
+      // activeId state the now-playing effect above already gates on — that
+      // permission stays enforced once, centrally, whichever surface triggered
+      // it. The takeover is the exception because it posts to its own endpoint
+      // directly from the panel rather than passing through that state.
       <DeckMobile
+        canSetNowPlaying={canSetNowPlaying}
         active={active}
         orderedQueue={orderedQueue}
         totalRemainingSeconds={totalRemainingSeconds}
@@ -1379,7 +1382,13 @@ export function DeckView({
     <div className="min-h-screen flex flex-col">
       <DeckRail headerHeight={headerHeight}>
         {!curateOnly && <QuickLinksDrawer />}
-        <QuestionsPanel streamId={streamId} enabled={questionsEnabled} open={questionsOpen} variant="tab" />
+        <QuestionsPanel
+          streamId={streamId}
+          enabled={questionsEnabled}
+          open={questionsOpen}
+          variant="tab"
+          canSetNowPlaying={canSetNowPlaying}
+        />
         <ModStatusPanel streamId={streamId} enabled={modStatusEnabled} variant="tab" />
       </DeckRail>
       <ShortcutsModal open={shortcutsOpen} onOpenChange={setShortcutsOpen} curateOnly={curateOnly} />

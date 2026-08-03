@@ -220,6 +220,7 @@ export function DeckMobile({
   questionsEnabled,
   questionsOpen,
   modStatusEnabled,
+  canSetNowPlaying = false,
   onSelect,
   onPlayed,
   onSkip,
@@ -238,6 +239,9 @@ export function DeckMobile({
   displayName: string;
   isAdmin: boolean;
   streamId: string;
+  /** Only reaches the questions panel's overlay takeover — see the call site
+   *  in DeckView for why now-playing itself isn't gated here. */
+  canSetNowPlaying?: boolean;
   questionsEnabled: boolean;
   questionsOpen: boolean;
   modStatusEnabled: boolean;
@@ -279,7 +283,13 @@ export function DeckMobile({
           {orderedQueue.length} up
         </span>
         <span className="ml-auto flex items-center gap-1">
-          <QuestionsPanel streamId={streamId} enabled={questionsEnabled} open={questionsOpen} variant="icon" />
+          <QuestionsPanel
+            streamId={streamId}
+            enabled={questionsEnabled}
+            open={questionsOpen}
+            variant="icon"
+            canSetNowPlaying={canSetNowPlaying}
+          />
           <DarkModeToggle />
           <DropdownMenu>
             <DropdownMenuTrigger

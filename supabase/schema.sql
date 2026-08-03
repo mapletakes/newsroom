@@ -362,6 +362,28 @@ create table if not exists public.questions (
 create index if not exists questions_stream_status_idx on public.questions(stream_id, status, position);
 create index if not exists questions_stream_created_idx on public.questions(stream_id, created_at desc);
 
+-- The question currently taking over the on-air overlay, if any. Null is the
+-- normal state: the overlay shows now_playing_id as it always has, and
+-- setting this swaps the card for the question until it's cleared again.
+--
+-- Lives on the stream rather than as a flag on the question row, for the same
+-- reason now_playing_id does: "what is on screen right now" is a property of
+-- the broadcast, and exactly one thing can hold it. A boolean per question
+-- would let two rows both claim to be live and need reconciling on every
+-- write.
+--
+-- Declared down here rather than beside the other streams columns purely
+-- because the FK needs public.questions to exist first; on a fresh database
+-- the statements run in file order.
+--
+-- `on delete set null` matters more than it looks: a question deleted out
+-- from under a live overlay would otherwise leave the stream pointing at a
+-- row that no longer exists, and the overlay is the one surface nobody has
+-- open in a tab to notice when it breaks.
+alter table public.streams
+  add column if not exists overlay_question_id uuid
+  references public.questions(id) on delete set null;
+
 -- ============================================================
 -- Row Level Security
 -- ============================================================

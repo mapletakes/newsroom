@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
   const sb = supabaseAdmin();
   const { data: stream } = await sb
     .from('streams')
-    .select('id, now_playing_id, ungrouped_position, overlay_theme')
+    .select('id, now_playing_id, ungrouped_position, overlay_theme, overlay_question_id')
     .eq('add_token', token)
     .maybeSingle();
   if (!stream) {
@@ -62,10 +62,38 @@ export async function GET(req: NextRequest) {
   // one takes over; until then the URL still says what it always said.
   const theme = stream.overlay_theme ? sanitizeOverlayTheme(stream.overlay_theme) : null;
 
+  // An audience question taking over the card. Fetched before the
+  // now-playing early-return below, because a takeover is perfectly valid
+  // with nothing on air at all — a streamer between items reading out a
+  // question is the ordinary case, not an edge one.
+  //
+  // Re-checks status rather than trusting the stored id on its own: the
+  // column is cleared whenever a question leaves 'approved', but a write that
+  // failed partway (or a row edited directly in the database) shouldn't be
+  // able to leave a rejected question on the broadcast.
+  let question: { text: string; asker: string | null; askerTag: string | null } | null = null;
+  if (stream.overlay_question_id) {
+    const { data: q } = await sb
+      .from('questions')
+      .select('text, asker_login, asker_is_sub, asker_is_mod, asker_is_vip, status')
+      .eq('id', stream.overlay_question_id)
+      .eq('stream_id', stream.id)
+      .maybeSingle();
+    if (q && q.status === 'approved') {
+      question = {
+        text: q.text,
+        asker: q.asker_login || null,
+        // One tag, highest standing first — the overlay has room for a badge,
+        // not a row of them.
+        askerTag: q.asker_is_mod ? 'mod' : q.asker_is_vip ? 'vip' : q.asker_is_sub ? 'sub' : null,
+      };
+    }
+  }
+
   // streamId is returned so the overlay can subscribe to this stream's
   // realtime "changed" pings (they carry no data, just a refetch signal).
   if (!stream.now_playing_id) {
-    return json({ ok: true, streamId: stream.id, theme, nowPlaying: null, next: null });
+    return json({ ok: true, streamId: stream.id, theme, question, nowPlaying: null, next: null });
   }
 
   // Full approved list + segments, ordered the same way the deck itself
@@ -101,6 +129,7 @@ export async function GET(req: NextRequest) {
     ok: true,
     streamId: stream.id,
     theme,
+    question,
     nowPlaying: np ? toPayload(np) : null,
     next: nextItem ? toPayload(nextItem) : null,
   });

@@ -6,20 +6,23 @@ import { Sheet, SheetClose, SheetContent, SheetTrigger, SheetTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { RailTab } from '@/components/DeckRail';
+import { cn } from '@/lib/utils';
 import { queryKeys } from '@/lib/query-keys';
 import { useQuestionsRealtime } from '@/lib/use-questions-realtime';
 import { relativeTime } from '@/lib/url';
 import type { Question } from '@/app/questions/QuestionsView';
 
+type ApprovedData = { questions: Question[]; overlayQuestionId: string | null };
+
 // No streamId param: /api/questions reads it from the session cookie, same
 // as every other deck endpoint. The query KEY below still includes it, so
 // the cache stays namespaced per stream even though the request itself
 // doesn't need the id.
-async function fetchApproved(): Promise<Question[]> {
+async function fetchApproved(): Promise<ApprovedData> {
   const r = await fetch('/api/questions?status=approved');
-  if (!r.ok) return [];
+  if (!r.ok) return { questions: [], overlayQuestionId: null };
   const d = await r.json();
-  return d.questions || [];
+  return { questions: d.questions || [], overlayQuestionId: d.overlayQuestionId ?? null };
 }
 
 /**
@@ -40,6 +43,7 @@ export function QuestionsPanel({
   enabled,
   open = true,
   variant,
+  canSetNowPlaying = false,
 }: {
   streamId: string;
   enabled: boolean;
@@ -49,6 +53,12 @@ export function QuestionsPanel({
    *  note explaining why nothing new is arriving. */
   open?: boolean;
   variant: 'tab' | 'icon';
+  /** Gates the overlay takeover only. Reading and answering questions stays
+   *  open to every mod who can reach the deck; putting one on the broadcast
+   *  is the same class of action as setting what's on air, so it needs the
+   *  same grant. The server enforces this too — see
+   *  app/api/deck/overlay-question/route.ts. */
+  canSetNowPlaying?: boolean;
 }) {
   const queryClient = useQueryClient();
   const key = queryKeys.questions(streamId, 'approved');
@@ -60,7 +70,8 @@ export function QuestionsPanel({
     placeholderData: keepPreviousData,
     refetchInterval: 60000,
   });
-  const questions = data ?? [];
+  const questions = data?.questions ?? [];
+  const liveId = data?.overlayQuestionId ?? null;
 
   useQuestionsRealtime(enabled ? streamId : null, () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.questions(streamId) });
@@ -77,8 +88,44 @@ export function QuestionsPanel({
     },
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: key });
-      const previous = queryClient.getQueryData<Question[]>(key);
-      queryClient.setQueryData<Question[]>(key, (prev = []) => prev.filter((q) => q.id !== id));
+      const previous = queryClient.getQueryData<ApprovedData>(key);
+      queryClient.setQueryData<ApprovedData>(key, (prev) => ({
+        questions: (prev?.questions ?? []).filter((q) => q.id !== id),
+        // The server drops an answered question off the overlay (see the
+        // PATCH handler); mirroring that here stops the badge outliving the
+        // card it belongs to for the length of a round trip.
+        overlayQuestionId: prev?.overlayQuestionId === id ? null : prev?.overlayQuestionId ?? null,
+      }));
+      return { previous };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previous) queryClient.setQueryData(key, context.previous);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.questions(streamId) }),
+  });
+
+  const overlayMutation = useMutation({
+    mutationFn: async (id: string | null) => {
+      const r = await fetch('/api/deck/overlay-question', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      if (!r.ok) {
+        // Surfaced rather than swallowed: this control's whole job is putting
+        // something on the broadcast, so "did that work?" can't be left to
+        // inference from a card that didn't change.
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e.detail || e.error || `failed (${r.status})`);
+      }
+    },
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<ApprovedData>(key);
+      queryClient.setQueryData<ApprovedData>(key, (prev) => ({
+        questions: prev?.questions ?? [],
+        overlayQuestionId: id,
+      }));
       return { previous };
     },
     onError: (_err, _id, context) => {
@@ -129,6 +176,12 @@ export function QuestionsPanel({
           </div>
         )}
 
+        {overlayMutation.isError && (
+          <div className="px-4 py-2 bg-rust/10 border-b border-rust/30 font-mono text-[11px] text-rust">
+            ⚠ {overlayMutation.error.message}
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto p-3 space-y-2">
           {questions.length === 0 ? (
             <p className="font-mono text-[11px] text-ink/40 px-2 py-6 text-center leading-relaxed">
@@ -136,22 +189,53 @@ export function QuestionsPanel({
               command.
             </p>
           ) : (
-            questions.map((q) => (
-              <div key={q.id} className="card-paper p-3">
-                <div className="font-mono text-[10px] text-ink/50 mb-1">
-                  {q.asker_login || 'anon'} · {relativeTime(q.created_at)}
-                </div>
-                <p className="text-sm leading-snug mb-2">{q.text}</p>
-                <Button
-                  variant="moss"
-                  size="xs"
-                  onClick={() => answerMutation.mutate(q.id)}
-                  disabled={answerMutation.isPending}
+            questions.map((q) => {
+              const isLive = liveId === q.id;
+              return (
+                <div
+                  key={q.id}
+                  className={cn('card-paper p-3', isLive && 'border-rust ring-1 ring-rust')}
                 >
-                  ✓ Answered
-                </Button>
-              </div>
-            ))
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-mono text-[10px] text-ink/50">
+                      {q.asker_login || 'anon'} · {relativeTime(q.created_at)}
+                    </span>
+                    {isLive && (
+                      <span className="ml-auto shrink-0 inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-widest text-rust font-bold">
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-rust animate-pulse" />
+                        On stream
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm leading-snug mb-2">{q.text}</p>
+                  <div className="flex gap-2 flex-wrap">
+                    <Button
+                      variant="moss"
+                      size="xs"
+                      onClick={() => answerMutation.mutate(q.id)}
+                      disabled={answerMutation.isPending}
+                    >
+                      ✓ Answered
+                    </Button>
+                    {canSetNowPlaying && (
+                      <Button
+                        variant={isLive ? 'outlineDestructive' : 'outline'}
+                        size="xs"
+                        onClick={() => overlayMutation.mutate(isLive ? null : q.id)}
+                        disabled={overlayMutation.isPending}
+                        title={
+                          isLive
+                            ? 'Take this question off the on-air overlay'
+                            : 'Put this question on the on-air overlay, with who asked it'
+                        }
+                      >
+                        {isLive ? 'Take down' : 'Show on stream'}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
 

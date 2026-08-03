@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSession, getApprovedSession } from '@/lib/session';
-import { broadcastQuestionsChange } from '@/lib/realtime';
+import { broadcastQueueChange, broadcastQuestionsChange } from '@/lib/realtime';
 
 // No POST here — ingestion is chat-only, via the !question-style command in
 // app/api/twitch/eventsub/route.ts (see lib/submit-question.ts). There's no
@@ -55,8 +55,20 @@ export async function GET(req: NextRequest) {
     }),
   );
 
+  // Which question (if any) is currently taking over the overlay. Ships with
+  // the list rather than from its own endpoint so the panel's existing poll
+  // and realtime invalidation keep the "live" marker in step with the rows it
+  // decorates — two separate fetches could disagree for a beat and show the
+  // badge on a question that had already come down.
+  const { data: streamRow } = await sb
+    .from('streams')
+    .select('overlay_question_id')
+    .eq('id', session.streamId)
+    .maybeSingle();
+
   return NextResponse.json({
     questions: data || [],
+    overlayQuestionId: streamRow?.overlay_question_id ?? null,
     counts: {
       pending: pending.count ?? 0,
       approved: approved.count ?? 0,
@@ -115,6 +127,31 @@ export async function PATCH(req: NextRequest) {
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  // A question that's just been answered or rejected can't stay on the
+  // broadcast. Only 'approved' is airable (see /api/deck/overlay-question), so
+  // any move off it has to take the overlay down with it — otherwise the one
+  // click a streamer makes the instant they're done with a question is exactly
+  // the one that leaves it stuck on screen.
+  //
+  // Scoped by id as well as stream, so this only ever clears the overlay when
+  // it was showing THIS question; another question being triaged mid-answer
+  // must not knock the live one off.
+  let overlayCleared = false;
+  if (typeof patch.status === 'string' && patch.status !== 'approved') {
+    const { data: cleared } = await sb
+      .from('streams')
+      .update({ overlay_question_id: null })
+      .eq('id', session.streamId)
+      .eq('overlay_question_id', id)
+      .select('id')
+      .maybeSingle();
+    overlayCleared = !!cleared;
+  }
+
   broadcastQuestionsChange(session.streamId);
-  return NextResponse.json({ question: data });
+  // The overlay listens on the queue channel, not the questions one, so a
+  // takeover ending needs its own ping to come down without waiting on the
+  // 30s backstop poll.
+  if (overlayCleared) broadcastQueueChange(session.streamId);
+  return NextResponse.json({ question: data, overlayCleared });
 }
