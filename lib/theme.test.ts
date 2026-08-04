@@ -10,6 +10,7 @@ import {
   contrastRatio,
   DEFAULT_FONTS,
   DEFAULT_PRESET,
+  FONT_CHOICES,
   googleFontsHref,
   hexToTriplet,
   normalizeHex,
@@ -18,6 +19,7 @@ import {
   PALETTES,
   paletteToOverlayColors,
   resolveOverlayColors,
+  SELF_HOSTED_FONTS,
   sanitizeAppTheme,
   sanitizeFontFamily,
   sanitizeOverlayTheme,
@@ -145,6 +147,52 @@ describe('googleFontsHref', () => {
     expect(googleFontsHref(["Evil'; }"])).toBeNull();
     expect(googleFontsHref([])).toBeNull();
     expect(googleFontsHref(['Inter', "Evil'; }"])).toBe(googleFontsHref(['Inter']));
+  });
+
+  // The real bug this guards: Google 400s a css2 request that names a family
+  // it doesn't host at all, not just one with an unsupported weight — and a
+  // combined request means that ONE bad family can take the whole request
+  // down, including every real Google font asked for alongside it.
+  describe('self-hosted fonts (OpenDyslexic)', () => {
+    it('never appears in the built URL on its own', () => {
+      expect(googleFontsHref(['OpenDyslexic'])).toBeNull();
+    });
+
+    it('is dropped from a combined request without breaking the other, real families', () => {
+      const withIt = googleFontsHref(['Inter', 'OpenDyslexic', 'Fraunces']);
+      const withoutIt = googleFontsHref(['Inter', 'Fraunces']);
+      expect(withIt).toBe(withoutIt);
+      expect(withIt).toContain('family=Inter');
+      expect(withIt).toContain('family=Fraunces');
+      expect(withIt).not.toContain('OpenDyslexic');
+    });
+
+    it('covers every family SELF_HOSTED_FONTS actually lists, not just the one known today', () => {
+      for (const f of SELF_HOSTED_FONTS) {
+        expect(googleFontsHref([f])).toBeNull();
+      }
+    });
+  });
+});
+
+describe('FONT_CHOICES', () => {
+  it('offers OpenDyslexic in every role — this is an accessibility choice, not a display-only flourish', () => {
+    for (const role of Object.keys(FONT_CHOICES) as (keyof typeof FONT_CHOICES)[]) {
+      expect(FONT_CHOICES[role]).toContain('OpenDyslexic');
+    }
+  });
+
+  it('never offers a self-hosted font that googleFontsHref would still try to fetch', () => {
+    // The invariant that actually matters: whatever's self-hosted per
+    // SELF_HOSTED_FONTS must be excluded by googleFontsHref, so nothing in
+    // FONT_CHOICES can silently regress into a broken combined request.
+    for (const role of Object.keys(FONT_CHOICES) as (keyof typeof FONT_CHOICES)[]) {
+      for (const f of FONT_CHOICES[role]) {
+        if (SELF_HOSTED_FONTS.includes(f)) {
+          expect(googleFontsHref([f, 'Inter'])).toBe(googleFontsHref(['Inter']));
+        }
+      }
+    }
   });
 });
 

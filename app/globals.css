@@ -1,5 +1,48 @@
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,900&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
+/* OpenDyslexic isn't on Google Fonts, so it can't go through the same
+   runtime-fetch path everything else in FONT_CHOICES uses (see
+   lib/use-google-fonts.ts) — it's declared here instead, always available
+   the same way the three defaults above are. Self-hosting the binaries in
+   this repo would mean tracking font-file updates by hand; Fontsource's
+   jsdelivr distribution is the maintained, versioned equivalent of the
+   Google Fonts CDN this file already depends on, so it's the same trust
+   model, not a new one. Pinned to a specific version rather than @latest —
+   an unannounced file-layout change on someone else's CDN shouldn't be able
+   to silently break every stream that's picked this font.
+   lib/theme.ts's googleFontsHref MUST keep excluding 'OpenDyslexic' from the
+   families it asks Google for — Google 400s a css2 request that names a
+   family it doesn't host, which without that guard would take down every
+   OTHER font requested alongside it in the same call. */
+@font-face {
+  font-family: 'OpenDyslexic';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/fontsource/fonts/opendyslexic@5.3.0/latin-400-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'OpenDyslexic';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/fontsource/fonts/opendyslexic@5.3.0/latin-700-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'OpenDyslexic';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/fontsource/fonts/opendyslexic@5.3.0/latin-400-italic.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'OpenDyslexic';
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/fontsource/fonts/opendyslexic@5.3.0/latin-700-italic.woff2') format('woff2');
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

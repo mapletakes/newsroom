@@ -137,6 +137,10 @@ function FontField({
           <option key={f} value={f}>
             {f}
             {f === DEFAULT_FONTS[role] ? ' (default)' : ''}
+            {/* Called out rather than left to blend in with the curated,
+                purely-decorative pairings around it — picking this one is an
+                accessibility need, not a look, and the label should say so. */}
+            {f === 'OpenDyslexic' ? ' — dyslexia-friendly' : ''}
           </option>
         ))}
         <option value="__custom">Any Google Font…</option>

@@ -112,9 +112,22 @@ export const DEFAULT_FONTS: Record<FontRole, string> = {
   mono: 'JetBrains Mono',
 };
 
+/** Not on Google Fonts, so it can't go through the runtime-fetch path every
+ *  other choice here does — see the @font-face block in app/globals.css,
+ *  where it's self-hosted and always available instead. googleFontsHref
+ *  below excludes anything in this list for exactly that reason: Google
+ *  400s a css2 request that names a family it doesn't host, which would
+ *  otherwise take down every OTHER font requested in the same call. */
+export const SELF_HOSTED_FONTS: readonly string[] = ['OpenDyslexic'];
+
 /** Curated pairings that suit the broadsheet look. Not a hard limit — the
  *  settings UI also takes a free-text Google family name — but these are the
- *  ones known to carry the design, so they're what's offered first. */
+ *  ones known to carry the design, so they're what's offered first.
+ *
+ *  OpenDyslexic is listed in all three roles rather than just `sans`: it's
+ *  an accessibility choice, not a stylistic one, and someone picking it is
+ *  almost always trying to make everything they read easier, not just body
+ *  copy while headlines and labels stay in whatever was already there. */
 export const FONT_CHOICES: Record<FontRole, string[]> = {
   display: [
     'Fraunces',
@@ -127,6 +140,7 @@ export const FONT_CHOICES: Record<FontRole, string[]> = {
     'Anton',
     'Archivo Black',
     'Space Grotesk',
+    'OpenDyslexic',
   ],
   sans: [
     'IBM Plex Sans',
@@ -137,6 +151,7 @@ export const FONT_CHOICES: Record<FontRole, string[]> = {
     'Archivo',
     'Public Sans',
     'Manrope',
+    'OpenDyslexic',
   ],
   mono: [
     'JetBrains Mono',
@@ -145,6 +160,7 @@ export const FONT_CHOICES: Record<FontRole, string[]> = {
     'Roboto Mono',
     'Source Code Pro',
     'DM Mono',
+    'OpenDyslexic',
   ],
 };
 
@@ -176,10 +192,18 @@ export function fontStack(family: string, role: FontRole): string {
  * Weights are requested as a range where the family supports it; asking for
  * weights a family doesn't have makes Google 400 the whole request, so this
  * asks only for the safe common set and lets the browser synthesise the rest.
+ * SELF_HOSTED_FONTS is filtered out for the identical reason — a family
+ * Google doesn't host at all fails the same way a bad weight does, and a
+ * theme that pairs OpenDyslexic with a real Google font for another role
+ * must not have that real font break too.
  */
 export function googleFontsHref(families: string[]): string | null {
   const clean = Array.from(
-    new Set(families.map((f) => sanitizeFontFamily(f)).filter((f): f is string => !!f)),
+    new Set(
+      families
+        .map((f) => sanitizeFontFamily(f))
+        .filter((f): f is string => !!f && !SELF_HOSTED_FONTS.includes(f)),
+    ),
   ).sort();
   if (clean.length === 0) return null;
   const params = clean.map((f) => `family=${encodeURIComponent(f).replace(/%20/g, '+')}:wght@400;700`);
