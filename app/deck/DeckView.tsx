@@ -12,6 +12,7 @@ import { QuickLinksDrawer } from './QuickLinksDrawer';
 import { QuestionsPanel } from '@/components/QuestionsPanel';
 import { DeckRail } from '@/components/DeckRail';
 import { ModStatusPanel } from '@/components/ModStatusPanel';
+import { RafflePanel } from '@/components/RafflePanel';
 import { useElementHeight } from '@/lib/use-element-height';
 import { DeckMobile } from './DeckMobile';
 import { useMediaQuery, MOBILE_QUERY } from '@/lib/use-media-query';
@@ -366,6 +367,7 @@ export function DeckView({
   questionsEnabled = false,
   questionsOpen = true,
   modStatusEnabled = false,
+  raffleEnabled = false,
 }: {
   displayName: string;
   streamId: string;
@@ -378,6 +380,7 @@ export function DeckView({
   questionsEnabled?: boolean;
   questionsOpen?: boolean;
   modStatusEnabled?: boolean;
+  raffleEnabled?: boolean;
 }) {
   const queryClient = useQueryClient();
   const queueKey = queryKeys.queue(streamId, 'approved');
@@ -1369,6 +1372,7 @@ export function DeckView({
         questionsEnabled={questionsEnabled}
         questionsOpen={questionsOpen}
         modStatusEnabled={modStatusEnabled}
+        raffleEnabled={raffleEnabled}
         onSelect={activateItem}
         onPlayed={markPlayed}
         onSkip={skip}
@@ -1390,6 +1394,7 @@ export function DeckView({
           canSetNowPlaying={canSetNowPlaying}
         />
         <ModStatusPanel streamId={streamId} enabled={modStatusEnabled} variant="tab" />
+        <RafflePanel streamId={streamId} enabled={raffleEnabled} variant="tab" />
       </DeckRail>
       <ShortcutsModal open={shortcutsOpen} onOpenChange={setShortcutsOpen} curateOnly={curateOnly} />
       <AppHeader

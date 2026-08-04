@@ -9,6 +9,7 @@ import { SaveToListMenu } from '@/components/SaveToListMenu';
 import { TriggerWarningEditor } from '@/components/TriggerWarning';
 import { AppHeader } from '@/components/AppHeader';
 import { ModStatusPanel } from '@/components/ModStatusPanel';
+import { RafflePanel } from '@/components/RafflePanel';
 import { DeckRail } from '@/components/DeckRail';
 import { useElementHeight } from '@/lib/use-element-height';
 import { useInvalidateOnChange } from '@/lib/use-invalidate-on-change';
@@ -54,6 +55,7 @@ export function ModView({
   canCurate = false,
   questionsEnabled = false,
   modStatusEnabled = false,
+  raffleEnabled = false,
 }: {
   channel: string;
   displayName: string;
@@ -65,6 +67,7 @@ export function ModView({
   canCurate?: boolean;
   questionsEnabled?: boolean;
   modStatusEnabled?: boolean;
+  raffleEnabled?: boolean;
 }) {
   const queryClient = useQueryClient();
   const headerRef = useRef<HTMLElement>(null);
@@ -220,9 +223,10 @@ export function ModView({
   return (
     <div className="min-h-screen flex flex-col">
       {confirmDialog}
-      {modStatusEnabled && (
+      {(modStatusEnabled || raffleEnabled) && (
         <DeckRail headerHeight={headerHeight}>
-          <ModStatusPanel streamId={streamId} enabled={modStatusEnabled} variant="tab" />
+          {modStatusEnabled && <ModStatusPanel streamId={streamId} enabled={modStatusEnabled} variant="tab" />}
+          {raffleEnabled && <RafflePanel streamId={streamId} enabled={raffleEnabled} variant="tab" />}
         </DeckRail>
       )}
       {/* Bar */}

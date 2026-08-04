@@ -26,6 +26,7 @@ const GLYPHS = {
   themeContrast: '◧',
   help: '?',
   mobile: '☏',
+  raffle: '⚄',
 } as const;
 
 export type IconName = keyof typeof GLYPHS;

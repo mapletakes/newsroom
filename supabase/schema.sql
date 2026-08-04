@@ -407,6 +407,67 @@ create table if not exists public.user_prefs (
   updated_at timestamptz default now()
 );
 
+-- Chat raffles. Super-admin gated (raffle_enabled) for the same reason
+-- questions is: it's a live audience-facing mechanic, opt-in per account
+-- rather than on for everyone by default.
+--
+-- No settings-tab configuration at all, unlike question_command/
+-- submit_command — the entry command, duration, and winner count are all set
+-- at the moment a raffle is started (see command below) and only mean
+-- anything for that one raffle's lifetime, so there is nothing durable to
+-- store a default for.
+--
+-- One raffle "current" per stream is enforced in the API (reject starting a
+-- second one while another is 'open'), not by a DB constraint — same
+-- judgment call as questions' status flow: the row shape doesn't prevent it,
+-- the write path does.
+create table if not exists public.raffles (
+  id uuid primary key default gen_random_uuid(),
+  stream_id uuid references public.streams(id) on delete cascade,
+  -- Snapshot of the command chat had to type, not a reference to any
+  -- settings value — there isn't one. Kept on the row (rather than only
+  -- ever living in memory) so a raffle started, then revisited after a
+  -- refresh, still knows what it's listening for.
+  command text not null,
+  winner_count int not null default 1,
+  status text not null default 'open', -- 'open' | 'closed'
+  opened_at timestamptz default now(),
+  -- Required, not nullable: a raffle is always started with a duration (the
+  -- form doesn't offer "no timer"). closes_at is what the lazy-close check
+  -- (see lib/raffle.ts) compares against — there is no scheduled job ending
+  -- a raffle on the tick; whichever request touches it first after this
+  -- time closes it, same pattern as the 12h mod-status reset.
+  closes_at timestamptz not null,
+  closed_at timestamptz,
+  -- Separate from closed_at rather than inferred from it: closing (which can
+  -- happen automatically, unattended) and announcing the winners to chat
+  -- (always a deliberate click) are different moments the operator may want
+  -- apart — reading names out loud before posting them, say.
+  winners_announced_at timestamptz,
+  started_by_login text,
+  primary key (id)
+);
+create index if not exists raffles_stream_status_idx on public.raffles(stream_id, status);
+
+create table if not exists public.raffle_entries (
+  id uuid primary key default gen_random_uuid(),
+  raffle_id uuid references public.raffles(id) on delete cascade,
+  -- Denormalized alongside raffle_id rather than joined through it: every
+  -- query here is already scoped to "this stream's session", and this keeps
+  -- that scoping direct instead of routing through raffles on every read.
+  stream_id uuid references public.streams(id) on delete cascade,
+  chatter_login text not null,
+  entered_at timestamptz default now(),
+  is_winner boolean not null default false,
+  -- THE mechanism behind "a unique list of chatters" — a second !enter from
+  -- the same login is a no-op insert (ON CONFLICT DO NOTHING), not something
+  -- the application code has to notice and reject.
+  unique (raffle_id, chatter_login)
+);
+create index if not exists raffle_entries_raffle_idx on public.raffle_entries(raffle_id);
+
+alter table public.streams add column if not exists raffle_enabled boolean default false;
+
 -- ============================================================
 -- Row Level Security
 -- ============================================================
@@ -426,6 +487,8 @@ alter table public.lists enable row level security;
 alter table public.list_items enable row level security;
 alter table public.list_segments enable row level security;
 alter table public.questions enable row level security;
+alter table public.raffles enable row level security;
+alter table public.raffle_entries enable row level security;
 
 -- Public read of streams (for the deck/mod views via service-role queries)
 -- We do NOT grant anon any access; the API routes use the service role.

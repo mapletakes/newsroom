@@ -68,3 +68,11 @@ export function broadcastQuestionsChange(streamId: string): Promise<void> {
 export function broadcastModStatusChange(streamId: string): Promise<void> {
   return broadcastChange(`mod-status:${streamId}`, streamId);
 }
+
+/** Pings `raffle:${streamId}` — the deck's raffle panel refetches. Its own
+ *  topic for the same reason as questions and mod-status: entries arriving
+ *  during a live raffle would otherwise trigger a refetch of the whole
+ *  submissions queue on every single !enter. */
+export function broadcastRaffleChange(streamId: string): Promise<void> {
+  return broadcastChange(`raffle:${streamId}`, streamId);
+}

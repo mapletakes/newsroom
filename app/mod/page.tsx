@@ -39,6 +39,7 @@ export default async function ModPage() {
         canCurate={canCurate}
         questionsEnabled={stream?.questions_enabled === true}
         modStatusEnabled={stream?.mod_status_enabled === true}
+        raffleEnabled={stream?.raffle_enabled === true}
       />
     </>
   );

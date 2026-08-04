@@ -13,6 +13,7 @@ import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { TriggerWarningBanner, TriggerWarningEditor } from '@/components/TriggerWarning';
 import { QuestionsPanel } from '@/components/QuestionsPanel';
 import { ModStatusPanel } from '@/components/ModStatusPanel';
+import { RafflePanel } from '@/components/RafflePanel';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -220,6 +221,7 @@ export function DeckMobile({
   questionsEnabled,
   questionsOpen,
   modStatusEnabled,
+  raffleEnabled = false,
   canSetNowPlaying = false,
   onSelect,
   onPlayed,
@@ -245,6 +247,7 @@ export function DeckMobile({
   questionsEnabled: boolean;
   questionsOpen: boolean;
   modStatusEnabled: boolean;
+  raffleEnabled?: boolean;
   onSelect: (id: string) => void;
   onPlayed: () => void;
   onSkip: () => void;
@@ -256,6 +259,7 @@ export function DeckMobile({
 }) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [modStatusOpen, setModStatusOpen] = useState(false);
+  const [raffleOpen, setRaffleOpen] = useState(false);
   const [showWarningEditor, setShowWarningEditor] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [addUrl, setAddUrl] = useState('');
@@ -310,6 +314,16 @@ export function DeckMobile({
                   }}
                 >
                   Mod availability
+                </DropdownMenuItem>
+              )}
+              {raffleEnabled && (
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    setTimeout(() => setRaffleOpen(true), 0);
+                  }}
+                >
+                  Raffle
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem asChild><Link href="/mod">Mod View</Link></DropdownMenuItem>
@@ -499,6 +513,14 @@ export function DeckMobile({
         variant="menu"
         open={modStatusOpen}
         onOpenChange={setModStatusOpen}
+      />
+
+      <RafflePanel
+        streamId={streamId}
+        enabled={raffleEnabled}
+        variant="menu"
+        open={raffleOpen}
+        onOpenChange={setRaffleOpen}
       />
 
       <QueueSheet

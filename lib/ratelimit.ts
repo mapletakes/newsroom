@@ -35,12 +35,13 @@ export function hashKey(raw: string): string {
   return crypto.createHash('sha256').update(raw).digest('hex').slice(0, 32);
 }
 
-type Kind = 'write' | 'read' | 'poll' | 'question';
+type Kind = 'write' | 'read' | 'poll' | 'question' | 'raffle';
 
 let writeLimiter: Ratelimit | undefined;
 let readLimiter: Ratelimit | undefined;
 let pollLimiter: Ratelimit | undefined;
 let questionLimiter: Ratelimit | undefined;
+let raffleLimiter: Ratelimit | undefined;
 
 function limiterFor(kind: Kind): Ratelimit | null {
   const r = getRedis();
@@ -73,6 +74,19 @@ function limiterFor(kind: Kind): Ratelimit | null {
       redis: r,
       limiter: Ratelimit.slidingWindow(10, '10 s'),
       prefix: 'rl:poll',
+    }));
+  }
+  if (kind === 'raffle') {
+    // !enter: entries are already deduped by the DB's unique(raffle_id,
+    // chatter_login) — a repeat !enter from the same person is a harmless
+    // no-op insert, not a queue someone can flood. This is defense-in-depth
+    // against a bot hammering the command anyway, keyed per-chatter same as
+    // question so it can't blunt a genuine burst of DIFFERENT people
+    // entering at once.
+    return (raffleLimiter ??= new Ratelimit({
+      redis: r,
+      limiter: Ratelimit.slidingWindow(3, '20 s'),
+      prefix: 'rl:raffle',
     }));
   }
   // !question command: keyed per-asker (not per-channel, unlike video_command

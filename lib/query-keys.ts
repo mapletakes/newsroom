@@ -7,6 +7,7 @@ export const queryKeys = {
   questions: (streamId: string | null, status?: string) =>
     status ? (['questions', streamId, status] as const) : (['questions', streamId] as const),
   modStatus: (streamId: string | null) => ['mod-status', streamId] as const,
+  raffle: (streamId: string | null) => ['raffle', streamId] as const,
   segments: (streamId: string | null) => ['segments', streamId] as const,
   quickLinks: () => ['quick-links'] as const,
   shelves: () => ['shelves'] as const,

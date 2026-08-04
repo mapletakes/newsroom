@@ -14,6 +14,7 @@ export type ChannelRow = {
   approved: boolean;
   questionsEnabled: boolean;
   modStatusEnabled: boolean;
+  raffleEnabled: boolean;
   chatEnabled: boolean;
   eventsub: string;
   total: number;
@@ -150,6 +151,22 @@ export function AdminChannels({ initial }: { initial: ChannelRow[] }) {
     }
   };
 
+  const toggleRaffle = async (row: ChannelRow) => {
+    const enabled = !row.raffleEnabled;
+    setBusy(row.id + ':raffle');
+    const r = await fetch('/api/admin/raffle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ streamId: row.id, enabled }),
+    });
+    setBusy(null);
+    if (r.ok) {
+      setRows((rs) => rs.map((x) => (x.id === row.id ? { ...x, raffleEnabled: enabled } : x)));
+    } else {
+      setRowNote(row.id, 'failed');
+    }
+  };
+
   const resubscribe = async (row: ChannelRow) => {
     setBusy(row.id + ':sub');
     const r = await fetch('/api/admin/resubscribe', {
@@ -203,6 +220,7 @@ export function AdminChannels({ initial }: { initial: ChannelRow[] }) {
             <th className="py-2 pr-4">Access</th>
             <th className="py-2 pr-4" title="Chat Q&A — the !question-style command">Questions</th>
             <th className="py-2 pr-4" title="Mod availability board (green/yellow/red)">Mod status</th>
+            <th className="py-2 pr-4" title="Chat raffles — !enter, timed, random draw">Raffle</th>
             <th className="py-2">Actions</th>
           </tr>
         </thead>
@@ -273,6 +291,19 @@ export function AdminChannels({ initial }: { initial: ChannelRow[] }) {
                   }
                 />
               </td>
+              <td className="py-2 pr-4">
+                <ToggleBadge
+                  on={row.raffleEnabled}
+                  onLabel="On"
+                  offLabel="Off"
+                  onClick={() => toggleRaffle(row)}
+                  busy={busy === row.id + ':raffle'}
+                  title={
+                    (row.raffleEnabled ? 'Click to disable' : 'Click to enable') +
+                    ' — chat raffles'
+                  }
+                />
+              </td>
               <td className="py-2">
                 <div className="flex items-center gap-2 flex-wrap">
                   <Button
@@ -291,7 +322,7 @@ export function AdminChannels({ initial }: { initial: ChannelRow[] }) {
           ))}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={13} className="py-8 text-center text-ink/50 font-mono text-sm">
+              <td colSpan={14} className="py-8 text-center text-ink/50 font-mono text-sm">
                 No channels yet.
               </td>
             </tr>

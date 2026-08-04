@@ -13,6 +13,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { extractUrlsFromMessage } from '@/lib/url';
 import { submitUrlToQueue } from '@/lib/submit-url';
 import { matchQuestionCommand, submitQuestionToQueue } from '@/lib/submit-question';
+import { handleRaffleEntry } from '@/lib/raffle';
 import { announceSubmission } from '@/lib/announce';
 import { checkRateLimit, hashKey } from '@/lib/ratelimit';
 
@@ -132,7 +133,7 @@ export async function POST(req: NextRequest) {
   // Look up stream
   const { data: stream } = await sb
     .from('streams')
-    .select('id, twitch_user_id, submit_command, allow_anyone, ignored_users, approved, video_command, now_playing_id, video_command_last_sent_at, questions_enabled, question_command, questions_open')
+    .select('id, twitch_user_id, submit_command, allow_anyone, ignored_users, approved, video_command, now_playing_id, video_command_last_sent_at, questions_enabled, question_command, questions_open, raffle_enabled')
     .eq('twitch_user_id', broadcasterUserId)
     .single();
   if (!stream) return new NextResponse(null, { status: 204 });
@@ -184,6 +185,23 @@ export async function POST(req: NextRequest) {
     messageText,
     stream.questions_enabled && stream.questions_open ? stream.question_command : null,
   );
+  // !enter (or whatever the currently-open raffle's command is) — its own
+  // branch, not folded into the question block above, because there is no
+  // stream.raffle_command to check up front: the command lives on the
+  // raffle row itself and is only known once one's fetched, which
+  // handleRaffleEntry does. Deliberately does NOT return early after this —
+  // unlike a matched question, a raffle entry doesn't preclude the same
+  // message also being a link submission (submit_command and a raffle
+  // command are never expected to collide), so link handling below still
+  // runs regardless.
+  if (stream.raffle_enabled) {
+    waitUntil(
+      handleRaffleEntry(stream.id, messageText, chatterName).catch((err) =>
+        console.error('background handleRaffleEntry failed:', err),
+      ),
+    );
+  }
+
   if (questionText !== null) {
     // Per-asker, not per-channel like video_command's cooldown: one person
     // shouldn't be able to flood the mod queue during exactly the moment
