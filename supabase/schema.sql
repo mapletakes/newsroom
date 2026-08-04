@@ -444,8 +444,7 @@ create table if not exists public.raffles (
   -- (always a deliberate click) are different moments the operator may want
   -- apart — reading names out loud before posting them, say.
   winners_announced_at timestamptz,
-  started_by_login text,
-  primary key (id)
+  started_by_login text
 );
 create index if not exists raffles_stream_status_idx on public.raffles(stream_id, status);
 
