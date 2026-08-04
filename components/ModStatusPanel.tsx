@@ -84,11 +84,15 @@ function RosterRow({ m }: { m: ModStatusRow }) {
             <span className="font-mono text-[9px] uppercase tracking-widest text-ink/40">you</span>
           )}
           {m.status && m.viaMobile && (
-            // Reflects how the CURRENT status was set, not "has a phone" —
-            // switching back to the drawer and saving again replaces it.
+            // Self-reported, same as the status itself — the mod ticks a box
+            // when they set their status, not inferred from which page they
+            // used. That inference (page === on a phone) held right up until
+            // mods started keeping /mod-status open in a desktop split-screen
+            // alongside the stream, at which point it was just wrong as
+            // often as it was right.
             <span
               className="inline-flex items-center gap-0.5 font-mono text-[9px] uppercase tracking-widest text-ink/40"
-              title="Checked in from the mobile status page"
+              title="Marked themselves as on mobile"
             >
               <Icon name="mobile" className="text-[10px]" />
               mobile
@@ -129,7 +133,7 @@ function SelfControl({
   justSaved,
 }: {
   me: ModStatusRow;
-  onSave: (status: ModStatusValue, note: string) => void;
+  onSave: (status: ModStatusValue, note: string, viaMobile: boolean) => void;
   saving: boolean;
   /** The server's own error message, not a generic fallback — a save that
    *  fails is otherwise indistinguishable from one that silently succeeded,
@@ -148,6 +152,19 @@ function SelfControl({
     if (!focused) setNote(me.note ?? '');
   }, [me.note, focused]);
 
+  // Self-reported, like everything else here — ticked by the mod, not
+  // inferred from which surface they're using (see the roster badge's
+  // comment for why that inference stopped being trustworthy). Defaults to
+  // their last-saved value and then stops following the server the moment
+  // they touch it, same reasoning as `focused` above: once they've expressed
+  // a preference this session, a background poll shouldn't silently flip it
+  // back before their next save goes through.
+  const [mobile, setMobile] = useState(me.viaMobile);
+  const [mobileTouched, setMobileTouched] = useState(false);
+  useEffect(() => {
+    if (!mobileTouched) setMobile(me.viaMobile);
+  }, [me.viaMobile, mobileTouched]);
+
   return (
     <div className="border-t border-ink/20 p-3">
       <span className="block font-mono text-[10px] uppercase tracking-widest text-ink/60 mb-2">
@@ -159,7 +176,7 @@ function SelfControl({
             key={s}
             type="button"
             disabled={saving}
-            onClick={() => onSave(s, note)}
+            onClick={() => onSave(s, note, mobile)}
             className={cn(
               'flex-1 flex items-center justify-center gap-1.5 border px-2 py-2 font-mono text-[10px] uppercase tracking-widest transition-colors disabled:opacity-40',
               me.status === s ? 'border-ink bg-ink text-paper' : 'border-ink/30 hover:border-ink',
@@ -187,12 +204,12 @@ function SelfControl({
             // typed) while nothing reached the server, which is exactly why
             // the note never showed up for anyone else. Saving on blur closes
             // that gap without requiring the extra click.
-            if (note !== (me.note ?? '')) onSave(me.status, note);
+            if (note !== (me.note ?? '')) onSave(me.status, note, mobile);
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault();
-              onSave(me.status, note);
+              onSave(me.status, note, mobile);
             }
           }}
           placeholder="Optional — e.g. back in 20"
@@ -205,11 +222,32 @@ function SelfControl({
           variant="outline"
           className="shrink-0"
           disabled={saving}
-          onClick={() => onSave(me.status, note)}
+          onClick={() => onSave(me.status, note, mobile)}
         >
           {saving ? '…' : 'Save'}
         </Button>
       </div>
+      <label className="flex items-center gap-1.5 mt-2 font-mono text-[10px] uppercase tracking-widest text-ink/60 cursor-pointer w-fit">
+        <input
+          type="checkbox"
+          checked={mobile}
+          disabled={saving}
+          onChange={(e) => {
+            // Saves immediately, same as clicking a status color — a
+            // checkbox is a discrete, complete action, not something typed
+            // over time like the note, so there's no reason to make it wait
+            // on a separate Save click. Leaving it bundled-only would
+            // reopen exactly the "looked saved, wasn't" gap the note field's
+            // onBlur save above exists to close.
+            setMobileTouched(true);
+            setMobile(e.target.checked);
+            onSave(me.status, note, e.target.checked);
+          }}
+          className="accent-ink"
+        />
+        <Icon name="mobile" className="text-[11px]" />
+        I&apos;m on mobile
+      </label>
       {/* Every save ends in one of these two, never silence. */}
       {error && <p className="mt-1.5 font-mono text-[10px] text-rust">⚠ {error}</p>}
       {!error && justSaved && <p className="mt-1.5 font-mono text-[10px] text-moss">Saved ✓</p>}
@@ -217,7 +255,7 @@ function SelfControl({
         <button
           type="button"
           disabled={saving}
-          onClick={() => { setNote(''); onSave(null, ''); }}
+          onClick={() => { setNote(''); onSave(null, '', mobile); }}
           className="mt-2 font-mono text-[10px] uppercase tracking-widest text-ink/40 hover:text-ink"
         >
           Clear my status
@@ -321,9 +359,16 @@ function useModStatus(streamId: string, enabled: boolean) {
  *            drawer is genuinely awkward to reach on a phone that isn't
  *            already sitting on the deck or mod view (open the app, find the
  *            rail tab, then the drawer) when the actual task is a 5-second
- *            check-in. Saves made from here are tagged viaMobile so the
- *            roster can show how someone checked in without guessing from
- *            user-agent.
+ *            check-in.
+ *
+ * The roster's "mobile" badge (SelfControl's checkbox) is deliberately NOT
+ * tied to `variant`. An earlier version tagged every save made through
+ * 'page' as viaMobile automatically, on the assumption that reaching this
+ * standalone URL meant a phone — true right up until mods started leaving
+ * /mod-status open in a desktop split-screen next to the stream, at which
+ * point "which surface" stopped meaning "which device." It's a checkbox the
+ * mod ticks themselves now, same self-reported principle as the status
+ * itself.
  */
 export function ModStatusPanel({
   streamId,
@@ -343,8 +388,8 @@ export function ModStatusPanel({
 
   if (!enabled) return null;
 
-  const save = (status: ModStatusValue, note: string) =>
-    mutation.mutate({ status, note, viaMobile: variant === 'page' });
+  const save = (status: ModStatusValue, note: string, viaMobile: boolean) =>
+    mutation.mutate({ status, note, viaMobile });
   // Only counts a status someone actually stands behind right now — a stale
   // green would otherwise inflate the "attentive" figure on the rail badge,
   // which is exactly the lie this feature is designed not to tell.

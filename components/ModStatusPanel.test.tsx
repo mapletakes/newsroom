@@ -85,22 +85,70 @@ describe('ModStatusPanel — note save-on-blur', () => {
 });
 
 describe('ModStatusPanel — variant="page" (the /mod-status check-in surface)', () => {
-  it('tags saves made from the page as viaMobile', async () => {
+  it('renders inline with no drawer trigger', () => {
+    mockApi();
+    renderPanel('page');
+    expect(screen.queryByRole('button', { name: /open mods/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('ModStatusPanel — "I\'m on mobile" checkbox', () => {
+  // The thing this replaced: viaMobile used to be inferred from variant
+  // === 'page', on the assumption that reaching the standalone URL meant a
+  // phone. Mods started leaving that page open in a desktop split-screen,
+  // which made the inference wrong as often as right — so it's a checkbox
+  // the mod ticks themselves now, and it has to behave identically
+  // regardless of which surface (drawer or page) they're using.
+  it('defaults to unchecked, and a status save carries viaMobile: false untouched', async () => {
     const patchCalls = mockApi();
     const user = userEvent.setup();
     renderPanel('page');
 
-    await user.click(await screen.findByTitle('Here and attentive'));
+    expect(await screen.findByLabelText(/i'm on mobile/i)).not.toBeChecked();
+
+    await user.click(screen.getByTitle('Here and attentive'));
+
+    await waitFor(() => {
+      expect(patchCalls).toContainEqual({ status: 'green', note: '', viaMobile: false });
+    });
+  });
+
+  it('carries the checked box into the very next status save', async () => {
+    const patchCalls = mockApi();
+    const user = userEvent.setup();
+    renderPanel('page');
+
+    // Checking it saves on its own (see the checkbox's own comment on why —
+    // it shouldn't need a second click to take effect).
+    await user.click(await screen.findByLabelText(/i'm on mobile/i));
+    await waitFor(() => {
+      expect(patchCalls).toContainEqual({ status: 'green', note: '', viaMobile: true });
+    });
+
+    await user.click(screen.getByTitle('Not available'));
+    await waitFor(() => {
+      expect(patchCalls).toContainEqual({ status: 'red', note: '', viaMobile: true });
+    });
+  });
+
+  it('behaves the same in the drawer as on the standalone page', async () => {
+    const patchCalls = mockApi();
+    const user = userEvent.setup();
+    renderPanel('tab');
+
+    await user.click(screen.getByRole('button', { name: /open mods/i }));
+    await user.click(await screen.findByLabelText(/i'm on mobile/i));
 
     await waitFor(() => {
       expect(patchCalls).toContainEqual({ status: 'green', note: '', viaMobile: true });
     });
   });
 
-  it('renders inline with no drawer trigger', () => {
-    mockApi();
+  it('starts checked when the mod\'s last-saved status was viaMobile', async () => {
+    mockApi([{ ...ME, viaMobile: true }]);
     renderPanel('page');
-    expect(screen.queryByRole('button', { name: /open mods/i })).not.toBeInTheDocument();
+
+    expect(await screen.findByLabelText(/i'm on mobile/i)).toBeChecked();
   });
 });
 
