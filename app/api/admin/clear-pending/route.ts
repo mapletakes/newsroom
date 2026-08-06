@@ -6,7 +6,10 @@ import { logAdminAction } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
 
-// Block/unblock a channel (toggle streams.approved).
+// Bulk-reject a channel's entire pending queue. Sets status to 'rejected'
+// rather than deleting: deleting would silently distort this channel's own
+// lifetime totals and the admin dashboard's cost estimate, and there'd be no
+// way to tell "never used" from "an admin cleared it". Super-admin only.
 export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session || !isAdmin(session.twitchUserId)) {
@@ -15,12 +18,18 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}));
   const streamId = String(body.streamId || '');
-  const approved = !!body.approved;
   if (!streamId) return NextResponse.json({ error: 'missing streamId' }, { status: 400 });
 
   const sb = supabaseAdmin();
-  const { error } = await sb.from('streams').update({ approved }).eq('id', streamId);
+  const { data, error } = await sb
+    .from('submissions')
+    .update({ status: 'rejected' })
+    .eq('stream_id', streamId)
+    .eq('status', 'pending')
+    .select('id');
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await logAdminAction(sb, session, 'access', streamId, { approved });
-  return NextResponse.json({ ok: true, approved });
+
+  const count = data?.length ?? 0;
+  await logAdminAction(sb, session, 'clear_pending', streamId, { count });
+  return NextResponse.json({ ok: true, count });
 }

@@ -5,7 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { isAdmin, estimateCost, CHANNEL_MODULES, type ChannelModuleKey } from '@/lib/admin';
 import { listSubscriptions } from '@/lib/twitch-eventsub';
 import { AppHeader } from '@/components/AppHeader';
-import { AdminChannelDetail, type ChannelDetail } from './AdminChannelDetail';
+import { AdminChannelDetail, type ChannelDetail, type ActivityEntry } from './AdminChannelDetail';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,13 +21,14 @@ export default async function AdminChannelPage({ params }: { params: { login: st
   const { data: stream } = await sb.from('streams').select('*').eq('twitch_login', login).maybeSingle();
   if (!stream) notFound();
 
-  const [total, pending, last, summaries, searches, recent] = await Promise.all([
+  const [total, pending, last, summaries, searches, recent, actions] = await Promise.all([
     sb.from('submissions').select('*', { count: 'exact', head: true }).eq('stream_id', stream.id),
     sb.from('submissions').select('*', { count: 'exact', head: true }).eq('stream_id', stream.id).eq('status', 'pending'),
     sb.from('submissions').select('created_at').eq('stream_id', stream.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
     sb.from('submissions').select('*', { count: 'exact', head: true }).eq('stream_id', stream.id).not('summary', 'is', null),
     sb.from('submissions').select('*', { count: 'exact', head: true }).eq('stream_id', stream.id).not('related_coverage', 'is', null),
     sb.from('submissions').select('id, url, title, status, created_at').eq('stream_id', stream.id).order('created_at', { ascending: false }).limit(15),
+    sb.from('admin_actions').select('id, actor_login, action, payload, created_at').eq('stream_id', stream.id).order('created_at', { ascending: false }).limit(10),
   ]);
 
   // Single-channel lookup, not the list page's fan-out concern — one row, so
@@ -47,6 +48,14 @@ export default async function AdminChannelPage({ params }: { params: { login: st
 
   const summaryCount = summaries.count ?? 0;
   const searchCount = searches.count ?? 0;
+
+  const activity: ActivityEntry[] = (actions.data ?? []).map((a) => ({
+    id: a.id,
+    actorLogin: a.actor_login,
+    action: a.action,
+    payload: a.payload,
+    createdAt: a.created_at,
+  }));
 
   const initial: ChannelDetail = {
     id: stream.id,
@@ -76,7 +85,7 @@ export default async function AdminChannelPage({ params }: { params: { login: st
           </Link>
         }
       />
-      <AdminChannelDetail initial={initial} recent={recent.data ?? []} />
+      <AdminChannelDetail initial={initial} recent={recent.data ?? []} activity={activity} />
     </div>
   );
 }

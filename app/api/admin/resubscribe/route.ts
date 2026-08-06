@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getSession } from '@/lib/session';
 import { isAdmin } from '@/lib/admin';
 import { createChatSubscription } from '@/lib/twitch-eventsub';
+import { logAdminAction } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +28,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const id = await createChatSubscription(stream.twitch_user_id);
+    await logAdminAction(sb, session, 'resubscribe', streamId, { subscriptionId: id });
     return NextResponse.json({ ok: !!id, subscriptionId: id });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

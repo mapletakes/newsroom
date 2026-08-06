@@ -498,6 +498,29 @@ create index if not exists raffle_entries_raffle_idx on public.raffle_entries(ra
 
 alter table public.streams add column if not exists raffle_enabled boolean default false;
 
+-- Audit trail for super-admin actions (flag toggles, access changes,
+-- re-subscribes, bulk pending-clears). ADMIN_TWITCH_IDS is already plural,
+-- and the first bulk-destructive admin action (clearing a channel's pending
+-- queue) needs somewhere to leave a trace before it's built, not after.
+--
+-- actor_login is denormalized from the session at write time rather than
+-- joined from streams via actor_twitch_user_id: an admin's own display name
+-- can change, and this should read as "who did this at the time", not drift
+-- with their current profile.
+--
+-- `on delete set null` on stream_id: a deleted channel shouldn't take its
+-- own audit history down with it.
+create table if not exists public.admin_actions (
+  id uuid primary key default gen_random_uuid(),
+  actor_twitch_user_id text not null,
+  actor_login text not null,
+  action text not null,
+  stream_id uuid references public.streams(id) on delete set null,
+  payload jsonb,
+  created_at timestamptz default now()
+);
+create index if not exists admin_actions_stream_idx on public.admin_actions(stream_id, created_at desc);
+
 -- ============================================================
 -- Row Level Security
 -- ============================================================
@@ -519,6 +542,7 @@ alter table public.list_segments enable row level security;
 alter table public.questions enable row level security;
 alter table public.raffles enable row level security;
 alter table public.raffle_entries enable row level security;
+alter table public.admin_actions enable row level security;
 
 -- Public read of streams (for the deck/mod views via service-role queries)
 -- We do NOT grant anon any access; the API routes use the service role.
