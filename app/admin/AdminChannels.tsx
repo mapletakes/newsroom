@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { formatDateTime, relativeTime } from '@/lib/url';
+import { CHANNEL_MODULES, type ChannelModuleKey } from '@/lib/admin';
 
 export type ChannelRow = {
   id: string;
@@ -12,9 +13,7 @@ export type ChannelRow = {
   displayName: string | null;
   createdAt: string;
   approved: boolean;
-  questionsEnabled: boolean;
-  modStatusEnabled: boolean;
-  raffleEnabled: boolean;
+  modules: Record<ChannelModuleKey, boolean>;
   chatEnabled: boolean;
   eventsub: string;
   total: number;
@@ -119,49 +118,17 @@ export function AdminChannels({ initial }: { initial: ChannelRow[] }) {
     }
   };
 
-  const toggleQuestions = async (row: ChannelRow) => {
-    const enabled = !row.questionsEnabled;
-    setBusy(row.id + ':questions');
-    const r = await fetch('/api/admin/questions', {
+  const toggleModule = async (row: ChannelRow, flag: ChannelModuleKey) => {
+    const enabled = !row.modules[flag];
+    setBusy(row.id + ':' + flag);
+    const r = await fetch('/api/admin/flags', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ streamId: row.id, enabled }),
+      body: JSON.stringify({ streamId: row.id, flag, enabled }),
     });
     setBusy(null);
     if (r.ok) {
-      setRows((rs) => rs.map((x) => (x.id === row.id ? { ...x, questionsEnabled: enabled } : x)));
-    } else {
-      setRowNote(row.id, 'failed');
-    }
-  };
-
-  const toggleModStatus = async (row: ChannelRow) => {
-    const enabled = !row.modStatusEnabled;
-    setBusy(row.id + ':modstatus');
-    const r = await fetch('/api/admin/mod-status', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ streamId: row.id, enabled }),
-    });
-    setBusy(null);
-    if (r.ok) {
-      setRows((rs) => rs.map((x) => (x.id === row.id ? { ...x, modStatusEnabled: enabled } : x)));
-    } else {
-      setRowNote(row.id, 'failed');
-    }
-  };
-
-  const toggleRaffle = async (row: ChannelRow) => {
-    const enabled = !row.raffleEnabled;
-    setBusy(row.id + ':raffle');
-    const r = await fetch('/api/admin/raffle', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ streamId: row.id, enabled }),
-    });
-    setBusy(null);
-    if (r.ok) {
-      setRows((rs) => rs.map((x) => (x.id === row.id ? { ...x, raffleEnabled: enabled } : x)));
+      setRows((rs) => rs.map((x) => (x.id === row.id ? { ...x, modules: { ...x.modules, [flag]: enabled } } : x)));
     } else {
       setRowNote(row.id, 'failed');
     }
@@ -218,9 +185,9 @@ export function AdminChannels({ initial }: { initial: ChannelRow[] }) {
             <th className="py-2 pr-4">Chat</th>
             <th className="py-2 pr-4">EventSub</th>
             <th className="py-2 pr-4">Access</th>
-            <th className="py-2 pr-4" title="Chat Q&A — the !question-style command">Questions</th>
-            <th className="py-2 pr-4" title="Mod availability board (green/yellow/red)">Mod status</th>
-            <th className="py-2 pr-4" title="Chat raffles — !enter, timed, random draw">Raffle</th>
+            {CHANNEL_MODULES.map((m) => (
+              <th key={m.key} className="py-2 pr-4" title={m.blurb}>{m.label}</th>
+            ))}
             <th className="py-2">Actions</th>
           </tr>
         </thead>
@@ -265,45 +232,18 @@ export function AdminChannels({ initial }: { initial: ChannelRow[] }) {
                   title={row.approved ? 'Click to block' : 'Click to approve'}
                 />
               </td>
-              <td className="py-2 pr-4">
-                <ToggleBadge
-                  on={row.questionsEnabled}
-                  onLabel="On"
-                  offLabel="Off"
-                  onClick={() => toggleQuestions(row)}
-                  busy={busy === row.id + ':questions'}
-                  title={
-                    (row.questionsEnabled ? 'Click to disable' : 'Click to enable') +
-                    ' — chat Q&A (the !question-style command)'
-                  }
-                />
-              </td>
-              <td className="py-2 pr-4">
-                <ToggleBadge
-                  on={row.modStatusEnabled}
-                  onLabel="On"
-                  offLabel="Off"
-                  onClick={() => toggleModStatus(row)}
-                  busy={busy === row.id + ':modstatus'}
-                  title={
-                    (row.modStatusEnabled ? 'Click to disable' : 'Click to enable') +
-                    ' — mod availability board'
-                  }
-                />
-              </td>
-              <td className="py-2 pr-4">
-                <ToggleBadge
-                  on={row.raffleEnabled}
-                  onLabel="On"
-                  offLabel="Off"
-                  onClick={() => toggleRaffle(row)}
-                  busy={busy === row.id + ':raffle'}
-                  title={
-                    (row.raffleEnabled ? 'Click to disable' : 'Click to enable') +
-                    ' — chat raffles'
-                  }
-                />
-              </td>
+              {CHANNEL_MODULES.map((m) => (
+                <td key={m.key} className="py-2 pr-4">
+                  <ToggleBadge
+                    on={row.modules[m.key]}
+                    onLabel="On"
+                    offLabel="Off"
+                    onClick={() => toggleModule(row, m.key)}
+                    busy={busy === row.id + ':' + m.key}
+                    title={(row.modules[m.key] ? 'Click to disable' : 'Click to enable') + ' — ' + m.blurb}
+                  />
+                </td>
+              ))}
               <td className="py-2">
                 <div className="flex items-center gap-2 flex-wrap">
                   <Button
@@ -322,7 +262,7 @@ export function AdminChannels({ initial }: { initial: ChannelRow[] }) {
           ))}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={14} className="py-8 text-center text-ink/50 font-mono text-sm">
+              <td colSpan={11 + CHANNEL_MODULES.length} className="py-8 text-center text-ink/50 font-mono text-sm">
                 No channels yet.
               </td>
             </tr>

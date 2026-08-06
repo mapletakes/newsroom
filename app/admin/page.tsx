@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase';
-import { isAdmin, estimateCost } from '@/lib/admin';
+import { isAdmin, estimateCost, CHANNEL_MODULES } from '@/lib/admin';
 import { listSubscriptions } from '@/lib/twitch-eventsub';
 import { AppHeader } from '@/components/AppHeader';
 import { AdminChannels, type ChannelRow } from './AdminChannels';
@@ -21,10 +21,15 @@ export default async function AdminPage({
   const win = searchParams.window === '30d' ? '30d' : 'all';
   const since = win === '30d' ? new Date(Date.now() - 30 * 86_400_000).toISOString() : null;
 
+  // select('*') rather than an explicit column list: supabase-js parses a
+  // select string at the type level, which can't handle one built from
+  // CHANNEL_MODULES at runtime — and '*' means a new module column needs no
+  // change here either. The raw rows stay server-side; only the fields
+  // picked out below ever reach the client.
   const sb = supabaseAdmin();
   const { data: streams } = await sb
     .from('streams')
-    .select('id, twitch_user_id, twitch_login, display_name, created_at, approved, access_token, questions_enabled, mod_status_enabled, raffle_enabled')
+    .select('*')
     .order('created_at', { ascending: true });
 
   // EventSub status for every channel in one Twitch call.
@@ -57,9 +62,7 @@ export default async function AdminPage({
       displayName: st.display_name,
       createdAt: st.created_at,
       approved: st.approved !== false,
-      questionsEnabled: st.questions_enabled === true,
-      modStatusEnabled: st.mod_status_enabled === true,
-      raffleEnabled: st.raffle_enabled === true,
+      modules: Object.fromEntries(CHANNEL_MODULES.map((m) => [m.key, st[m.key] === true])) as ChannelRow['modules'],
       chatEnabled: !!st.access_token,
       eventsub: subStatus.get(st.twitch_user_id) || 'none',
       total: s?.total ?? 0,
