@@ -40,44 +40,36 @@ export default async function AdminPage({
     /* leave statuses unknown */
   }
 
-  const rows: ChannelRow[] = await Promise.all(
-    (streams || []).map(async (st): Promise<ChannelRow> => {
-      // Usage counts respect the selected window; channel stats stay all-time.
-      let sumQ = sb.from('submissions').select('*', { count: 'exact', head: true }).eq('stream_id', st.id).not('summary', 'is', null);
-      let srchQ = sb.from('submissions').select('*', { count: 'exact', head: true }).eq('stream_id', st.id).not('related_coverage', 'is', null);
-      if (since) {
-        sumQ = sumQ.gte('created_at', since);
-        srchQ = srchQ.gte('created_at', since);
-      }
-      const [total, pending, last, summaries, searches] = await Promise.all([
-        sb.from('submissions').select('*', { count: 'exact', head: true }).eq('stream_id', st.id),
-        sb.from('submissions').select('*', { count: 'exact', head: true }).eq('stream_id', st.id).eq('status', 'pending'),
-        sb.from('submissions').select('created_at').eq('stream_id', st.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-        sumQ,
-        srchQ,
-      ]);
-      const summaryCount = summaries.count ?? 0;
-      const searchCount = searches.count ?? 0;
-      return {
-        id: st.id,
-        login: st.twitch_login,
-        displayName: st.display_name,
-        createdAt: st.created_at,
-        approved: st.approved !== false,
-        questionsEnabled: st.questions_enabled === true,
-        modStatusEnabled: st.mod_status_enabled === true,
-        raffleEnabled: st.raffle_enabled === true,
-        chatEnabled: !!st.access_token,
-        eventsub: subStatus.get(st.twitch_user_id) || 'none',
-        total: total.count ?? 0,
-        pending: pending.count ?? 0,
-        lastAt: last.data?.created_at ?? null,
-        summaries: summaryCount,
-        searches: searchCount,
-        estCost: estimateCost(summaryCount, searchCount),
-      };
-    }),
-  );
+  // One grouped query for every channel's counts, instead of 5 queries per
+  // channel — see admin_submission_stats in schema.sql for why total/pending
+  // stay all-time while summaries/searches respect the window.
+  const { data: stats } = await sb.rpc('admin_submission_stats', { since_ts: since });
+  type StatsRow = { stream_id: string; total: number; pending: number; last_at: string | null; summaries: number; searches: number };
+  const statsByStream = new Map((stats as StatsRow[] | null || []).map((s) => [s.stream_id, s]));
+
+  const rows: ChannelRow[] = (streams || []).map((st): ChannelRow => {
+    const s = statsByStream.get(st.id);
+    const summaryCount = s?.summaries ?? 0;
+    const searchCount = s?.searches ?? 0;
+    return {
+      id: st.id,
+      login: st.twitch_login,
+      displayName: st.display_name,
+      createdAt: st.created_at,
+      approved: st.approved !== false,
+      questionsEnabled: st.questions_enabled === true,
+      modStatusEnabled: st.mod_status_enabled === true,
+      raffleEnabled: st.raffle_enabled === true,
+      chatEnabled: !!st.access_token,
+      eventsub: subStatus.get(st.twitch_user_id) || 'none',
+      total: s?.total ?? 0,
+      pending: s?.pending ?? 0,
+      lastAt: s?.last_at ?? null,
+      summaries: summaryCount,
+      searches: searchCount,
+      estCost: estimateCost(summaryCount, searchCount),
+    };
+  });
 
   const activeChannels = rows.filter((r) => r.eventsub === 'enabled').length;
   const totalCost = rows.reduce((sum, r) => sum + r.estCost, 0);

@@ -186,6 +186,37 @@ alter table public.submissions add column if not exists content_warning text;
 -- For databases created before trigger_warning existed.
 alter table public.submissions add column if not exists trigger_warning text;
 
+-- Per-channel submission counts for the admin dashboard, computed in one
+-- grouped pass instead of the 5-queries-per-channel fan-out it replaces.
+-- total/pending/last_at are always all-time — an admin scanning for a stuck
+-- channel needs the real backlog, not one clipped to the usage window —
+-- while summaries/searches (both cost drivers) respect since_ts so the
+-- window picker on that page actually changes the estimate it's next to.
+create or replace function public.admin_submission_stats(since_ts timestamptz default null)
+returns table (
+  stream_id uuid,
+  total bigint,
+  pending bigint,
+  last_at timestamptz,
+  summaries bigint,
+  searches bigint
+)
+language sql
+stable
+as $$
+  select
+    stream_id,
+    count(*) as total,
+    count(*) filter (where status = 'pending') as pending,
+    max(created_at) as last_at,
+    count(*) filter (where summary is not null and (since_ts is null or created_at >= since_ts)) as summaries,
+    count(*) filter (where related_coverage is not null and (since_ts is null or created_at >= since_ts)) as searches
+  from public.submissions
+  group by stream_id
+$$;
+
+grant execute on function public.admin_submission_stats(timestamptz) to service_role;
+
 -- Show notes: persisted artifacts of what was reacted to
 create table if not exists public.show_notes (
   id uuid primary key default gen_random_uuid(),
