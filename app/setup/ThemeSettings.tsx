@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { AppHeader } from '@/components/AppHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -374,16 +375,36 @@ export function AppThemeSettings({
       {/* Scoped to this box alone via inline custom properties, not the page's
           real theme — the whole point is judging a change before committing
           to it, so picking a bad palette here can't actually apply it. Real
-          SubmissionCard, real sample data, same reasoning as the overlay
-          preview below reusing OverlayCard: a lookalike mockup drifts from
-          what the deck actually renders the first time either one changes. */}
+          AppHeader and SubmissionCard, real sample data, same reasoning as
+          the overlay preview below reusing OverlayCard: a lookalike mockup
+          drifts from what the deck actually renders the first time either
+          one changes. The header earns its place here specifically — a
+          palette reads differently in a thin nav bar than it does on a full
+          card, and "what does my masthead look like" was the one thing a
+          card alone could never answer. */}
       <div
-        className="bg-paper text-ink font-sans p-3 border border-ink/20 pointer-events-none select-none"
+        className="border border-ink/20 pointer-events-none select-none overflow-hidden"
         style={appThemeCssVars(app) as React.CSSProperties}
       >
-        <SubmissionCard
-          s={previewNow ? { ...SAMPLE_SUBMISSION, created_at: previewNow, published_at: previewNow } : SAMPLE_SUBMISSION}
+        <AppHeader
+          className="bg-paper text-ink border-b-2 border-ink px-4 py-3 gap-4"
+          section="deck"
+          right={
+            <>
+              <span className="uppercase tracking-widest text-ink/60">#yourchannel</span>
+              {/* Styled to match the real header's nav links, but a plain
+                  span rather than a Link — nothing in a preview should be
+                  navigable, and pointer-events-none only stops clicks, not
+                  Next's own prefetch-on-visible behaviour for a real Link. */}
+              <span className="underline">Shelf</span>
+            </>
+          }
         />
+        <div className="bg-paper text-ink font-sans p-3">
+          <SubmissionCard
+            s={previewNow ? { ...SAMPLE_SUBMISSION, created_at: previewNow, published_at: previewNow } : SAMPLE_SUBMISSION}
+          />
+        </div>
       </div>
 
       <SaveRow
