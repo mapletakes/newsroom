@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { OverlayCard, type OverlayVariant } from '@/app/overlay/OverlayView';
+import { SubmissionCard, type Submission } from '@/components/SubmissionCard';
 import {
+  appThemeCssVars,
   contrastRatio,
   DEFAULT_APP_THEME,
   DEFAULT_FONTS,
@@ -59,6 +61,51 @@ const SAMPLE = {
   triggerWarning: null as string | null,
 };
 const SAMPLE_NEXT = { ...SAMPLE, title: 'The clip everyone is arguing about' };
+
+// Fixed rather than `new Date()`: this is a module-level constant, so a
+// live timestamp would be computed once during the server render and again,
+// a moment later, during client hydration — two different instants React
+// then has to paper over as a hydration mismatch. AppThemeSettings swaps in
+// the real "now" itself, client-side only, after mount (see `previewNow`
+// below), which sidesteps that entirely rather than just hiding it.
+const PREVIEW_FALLBACK_DATE = '2026-01-01T12:00:00.000Z';
+
+// Deliberately touches all three accent colours at once — dmca-medium
+// (ochre) on the risk badge, a trigger warning (rust), archive_url set so
+// ArchiveButton renders its already-archived state (moss) — plus all three
+// font roles (headline/body/mono), so one card is enough to judge a whole
+// palette-and-type pairing rather than needing several partial ones.
+const SAMPLE_SUBMISSION: Submission = {
+  id: 'preview',
+  url: 'https://example.com/preview',
+  kind: 'article',
+  status: 'approved',
+  title: 'Senate passes surprise budget bill in 3am vote',
+  thumbnail_url: null,
+  publisher: 'Reuters',
+  author: null,
+  duration_seconds: 347,
+  published_at: PREVIEW_FALLBACK_DATE,
+  description: null,
+  summary:
+    'A short standfirst summarising the piece, set in the body typeface — this is the paragraph text a mod actually reads while triaging.',
+  credibility_tag: 'Mixed',
+  topics: ['congress', 'budget'],
+  dmca_risk: 'medium',
+  content_warning: null,
+  related_coverage: null,
+  archive_url: '#preview',
+  mod_notes: null,
+  prep_note: null,
+  trigger_warning: 'brief description of graphic content',
+  segment_id: null,
+  position: 0,
+  submitter_login: 'a_viewer',
+  submitter_is_sub: true,
+  submitter_is_mod: false,
+  submitter_is_vip: false,
+  created_at: PREVIEW_FALLBACK_DATE,
+};
 
 // ── Small field components ────────────────────────────────────
 
@@ -258,6 +305,14 @@ export function AppThemeSettings({
 }) {
   const [app, setApp] = useState<AppTheme>(initial);
   const { save, saving, saved, error } = useThemeSave(endpoint);
+
+  // The preview's timestamps start at PREVIEW_FALLBACK_DATE (matching what
+  // the server rendered) and only become "now" after mount — a plain
+  // `new Date()` in render would compute two different instants for the
+  // server pass and the client hydration pass, which is exactly what a
+  // hydration-mismatch warning is for.
+  const [previewNow, setPreviewNow] = useState<string | null>(null);
+  useEffect(() => setPreviewNow(new Date().toISOString()), []);
   const palette = resolveAppPalette(app);
 
   return (
@@ -313,6 +368,22 @@ export function AppThemeSettings({
             onChange={(family) => setApp({ ...app, fonts: { ...app.fonts, [role]: family } })}
           />
         ))}
+      </div>
+
+      <h3 className="font-mono text-xs uppercase tracking-widest text-ink/60 mb-2 mt-6">Preview</h3>
+      {/* Scoped to this box alone via inline custom properties, not the page's
+          real theme — the whole point is judging a change before committing
+          to it, so picking a bad palette here can't actually apply it. Real
+          SubmissionCard, real sample data, same reasoning as the overlay
+          preview below reusing OverlayCard: a lookalike mockup drifts from
+          what the deck actually renders the first time either one changes. */}
+      <div
+        className="bg-paper text-ink font-sans p-3 border border-ink/20 pointer-events-none select-none"
+        style={appThemeCssVars(app) as React.CSSProperties}
+      >
+        <SubmissionCard
+          s={previewNow ? { ...SAMPLE_SUBMISSION, created_at: previewNow, published_at: previewNow } : SAMPLE_SUBMISSION}
+        />
       </div>
 
       <SaveRow

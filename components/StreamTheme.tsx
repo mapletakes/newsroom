@@ -1,19 +1,23 @@
 import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase';
 import {
+  appThemeCssVars,
   appThemeIsCustomised,
-  fontStack,
   googleFontsHref,
-  hexToTriplet,
-  PALETTE_TOKENS,
-  resolveAppPalette,
   resolveFonts,
   sanitizeAppTheme,
 } from '@/lib/theme';
 import { BrandThemeDefault } from './BrandThemeDefault';
 
-function paletteVars(palette: ReturnType<typeof resolveAppPalette>) {
-  return PALETTE_TOKENS.map((t) => `--${t}:${hexToTriplet(palette[t])}`).join(';');
+/** `appThemeCssVars`'s object as a `key:value;key:value` string, for the
+ *  server-rendered <style> block below. The settings preview wants the same
+ *  object shape (React accepts custom properties directly in a style prop),
+ *  which is the whole reason that function returns a plain object rather
+ *  than a string in the first place. */
+function cssVarsToString(vars: Record<string, string>): string {
+  return Object.entries(vars)
+    .map(([k, v]) => `${k}:${v}`)
+    .join(';');
 }
 
 /**
@@ -75,30 +79,27 @@ export async function StreamTheme() {
   const families: string[] = [];
 
   if (brand && brandActive) {
-    const palette = resolveAppPalette(brand);
-    const fonts = resolveFonts(brand.fonts);
-    families.push(fonts.display, fonts.sans, fonts.mono);
+    const vars = appThemeCssVars(brand);
+    // Split, not because the values differ from the combined object below —
+    // they don't — but because of WHERE each half has to land. Palette stays
+    // scoped to html.brand (only active when that theme class is), while the
+    // fonts go on :root unconditionally, per this function's own doc comment
+    // above: a mod who switches to High Contrast for legibility keeps the
+    // stream's typefaces even though they've just opted out of its palette.
+    const { '--font-display': fontDisplay, '--font-sans': fontSans, '--font-mono': fontMono, ...paletteOnly } = vars;
+    families.push(...Object.values(resolveFonts(brand.fonts)));
     blocks.push(
-      `html.brand{${paletteVars(palette)}}` +
-        `:root{` +
-        `--font-display:${fontStack(fonts.display, 'display')};` +
-        `--font-sans:${fontStack(fonts.sans, 'sans')};` +
-        `--font-mono:${fontStack(fonts.mono, 'mono')}` +
-        `}`,
+      `html.brand{${cssVarsToString(paletteOnly)}}` +
+        `:root{${cssVarsToString({ '--font-display': fontDisplay, '--font-sans': fontSans, '--font-mono': fontMono })}}`,
     );
   }
 
   if (personal && personalActive) {
-    const palette = resolveAppPalette(personal);
-    const fonts = resolveFonts(personal.fonts);
-    families.push(fonts.display, fonts.sans, fonts.mono);
-    blocks.push(
-      `html.mine{${paletteVars(palette)};` +
-        `--font-display:${fontStack(fonts.display, 'display')};` +
-        `--font-sans:${fontStack(fonts.sans, 'sans')};` +
-        `--font-mono:${fontStack(fonts.mono, 'mono')}` +
-        `}`,
-    );
+    // No split here — a personal theme's fonts are scoped to html.mine right
+    // along with its palette, the one deliberate exception the doc comment
+    // above calls out.
+    families.push(...Object.values(resolveFonts(personal.fonts)));
+    blocks.push(`html.mine{${cssVarsToString(appThemeCssVars(personal))}}`);
   }
 
   const href = googleFontsHref(families);

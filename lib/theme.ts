@@ -245,6 +245,29 @@ export function resolveFonts(fonts: Partial<Record<FontRole, string>>): Record<F
   };
 }
 
+/**
+ * The app theme's palette and fonts as inline custom properties — the
+ * `--ink`/`--paper`/etc. triplets tailwind.config's colour scale reads via
+ * `rgb(var(--ink) / <alpha-value>)`, plus the three `--font-*` stacks.
+ *
+ * Pulled out of components/StreamTheme.tsx (which used to build this same
+ * object inline, string-by-string) so there's exactly one place that knows
+ * how an AppTheme becomes CSS — the settings page's live preview (see
+ * AppThemeSettings) needs the identical mapping, scoped to a wrapper div
+ * instead of written into a server-rendered <style> tag, and a second
+ * hand-rolled copy is exactly how the two would eventually drift.
+ */
+export function appThemeCssVars(t: AppTheme): Record<string, string> {
+  const palette = resolveAppPalette(t);
+  const fonts = resolveFonts(t.fonts);
+  const vars: Record<string, string> = {};
+  for (const token of PALETTE_TOKENS) vars[`--${token}`] = hexToTriplet(palette[token]);
+  vars['--font-display'] = fontStack(fonts.display, 'display');
+  vars['--font-sans'] = fontStack(fonts.sans, 'sans');
+  vars['--font-mono'] = fontStack(fonts.mono, 'mono');
+  return vars;
+}
+
 // ── Overlay theme ─────────────────────────────────────────────
 
 /** Every colour the overlay paints, as its own decision. */

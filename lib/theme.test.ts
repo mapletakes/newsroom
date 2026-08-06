@@ -6,6 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  appThemeCssVars,
   blend,
   contrastRatio,
   DEFAULT_FONTS,
@@ -16,6 +17,7 @@ import {
   normalizeHex,
   OVERLAY_SLOTS,
   overlayCssVars,
+  PALETTE_TOKENS,
   PALETTES,
   paletteToOverlayColors,
   resolveOverlayColors,
@@ -276,6 +278,54 @@ describe('overlayCssVars', () => {
     const vars = overlayCssVars(
       sanitizeOverlayTheme({
         colors: { warnBg: '#fff;}html{display:none' },
+        fonts: { display: "Evil', x; }" },
+      }),
+    );
+    for (const v of Object.values(vars)) {
+      expect(v).not.toMatch(/[{}]/);
+      expect(v.replace(/'/g, '')).not.toContain(';');
+    }
+  });
+});
+
+describe('appThemeCssVars', () => {
+  it('emits a triplet per palette token plus the three font stacks', () => {
+    const vars = appThemeCssVars(sanitizeAppTheme({ preset: 'light' }));
+    for (const token of PALETTE_TOKENS) expect(vars[`--${token}`]).toMatch(/^\d+ \d+ \d+$/);
+    expect(vars['--ink']).toBe('13 13 14');
+    expect(vars['--font-display']).toContain(DEFAULT_FONTS.display);
+    expect(vars['--font-sans']).toContain(DEFAULT_FONTS.sans);
+    expect(vars['--font-mono']).toContain(DEFAULT_FONTS.mono);
+  });
+
+  it('quotes a chosen family so a multi-word name stays one family', () => {
+    const vars = appThemeCssVars(sanitizeAppTheme({ fonts: { sans: 'Source Sans 3' } }));
+    expect(vars['--font-sans']).toBe("'Source Sans 3', system-ui, sans-serif");
+  });
+
+  it('reflects a custom colour override, not just the preset', () => {
+    const vars = appThemeCssVars(sanitizeAppTheme({ preset: 'custom', colors: { ink: '#ff0000' } }));
+    expect(vars['--ink']).toBe('255 0 0');
+  });
+
+  // StreamTheme.tsx splits this object's keys apart (palette -> html.brand,
+  // fonts -> :root) by destructuring the three font keys out by name — if
+  // this function ever emitted the font vars under different keys, that
+  // split would silently start leaking a font var into the palette-only
+  // block instead of raising a type error.
+  it('exposes exactly the font keys StreamTheme.tsx destructures by name, and nothing else besides the six palette tokens', () => {
+    const vars = appThemeCssVars(sanitizeAppTheme({ preset: 'light' }));
+    const fontKeys = ['--font-display', '--font-sans', '--font-mono'];
+    const paletteKeys = PALETTE_TOKENS.map((t) => `--${t}`);
+    expect(Object.keys(vars).sort()).toEqual([...fontKeys, ...paletteKeys].sort());
+  });
+
+  // Same contract as overlayCssVars — this also lands in a style attribute.
+  it('never emits a value containing a brace, semicolon or quote-escape', () => {
+    const vars = appThemeCssVars(
+      sanitizeAppTheme({
+        preset: 'custom',
+        colors: { ink: '#fff;}html{display:none' },
         fonts: { display: "Evil', x; }" },
       }),
     );
