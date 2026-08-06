@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 import { formatDateTime, relativeTime } from '@/lib/url';
 import { CHANNEL_MODULES, type ChannelModuleKey } from '@/lib/admin';
+import { ToggleBadge, eventsubBadge } from './admin-ui';
 
 export type ChannelRow = {
   id: string;
@@ -24,58 +25,6 @@ export type ChannelRow = {
   estCost: number;
 };
 
-function eventsubBadge(status: string) {
-  const map: Record<string, { label: string; cls: string }> = {
-    enabled: { label: 'listening', cls: 'text-moss' },
-    webhook_callback_verification_pending: { label: 'verifying', cls: 'text-ochre' },
-    none: { label: 'none', cls: 'text-ink/40' },
-  };
-  const m = map[status] || { label: status.replace(/_/g, ' '), cls: 'text-rust' };
-  return <span className={`font-mono text-[11px] uppercase tracking-widest whitespace-nowrap ${m.cls}`}>{m.label}</span>;
-}
-
-/**
- * A per-channel flag that's both its own status display and the control that
- * flips it — one cell, not a read-only badge in one column plus a same-named
- * button in Actions. That pairing is what was crowding Actions: three flags
- * (access, questions, mod status) each carried a redundant copy of
- * themselves over there, and every new admin-gated feature this session
- * added another pair. Collapsing them here is the actual fix, not just
- * cosmetic — Actions goes back to holding only genuine one-off actions
- * (Re-sub), which is why it no longer needs to wrap.
- */
-function ToggleBadge({
-  on,
-  onLabel,
-  offLabel,
-  onClick,
-  busy,
-  title,
-}: {
-  on: boolean;
-  onLabel: string;
-  offLabel: string;
-  onClick: () => void;
-  busy: boolean;
-  title?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={busy}
-      title={title}
-      className={cn(
-        'font-mono text-[11px] uppercase tracking-widest whitespace-nowrap px-2 py-1 border transition-colors disabled:opacity-40',
-        on
-          ? 'border-moss/50 text-moss hover:bg-moss hover:text-paper hover:border-moss'
-          : 'border-ink/25 text-ink/40 hover:border-ink hover:text-ink',
-      )}
-    >
-      {busy ? '…' : on ? onLabel : offLabel}
-    </button>
-  );
-}
 
 export function AdminChannels({ initial }: { initial: ChannelRow[] }) {
   const [rows, setRows] = useState(initial);
@@ -195,7 +144,9 @@ export function AdminChannels({ initial }: { initial: ChannelRow[] }) {
           {rows.map((row) => (
             <tr key={row.id} className="border-b border-ink/15 align-middle">
               <td className="py-2 pr-4">
-                <div className="font-bold">{row.displayName || row.login}</div>
+                <Link href={`/admin/${row.login}`} className="font-bold hover:underline">
+                  {row.displayName || row.login}
+                </Link>
                 <div className="font-mono text-[11px] text-ink/50">#{row.login}</div>
               </td>
               <td className="py-2 pr-4 font-mono text-[11px] text-ink/60 whitespace-nowrap">
