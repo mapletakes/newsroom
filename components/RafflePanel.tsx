@@ -154,6 +154,21 @@ export function RafflePanel({
     onSuccess: () => queryClient.invalidateQueries({ queryKey: key }),
   });
 
+  const rerollMutation = useMutation({
+    mutationFn: async (winnerLogin: string) => {
+      const r = await fetch('/api/raffle/reroll', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ winnerLogin }),
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        throw new Error(e.detail || e.error || `failed (${r.status})`);
+      }
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: key }),
+  });
+
   if (!enabled) return null;
 
   const showForm = !raffle || raffle.status === 'closed' ? startFormOpen || !raffle : false;
@@ -197,12 +212,31 @@ export function RafflePanel({
           ) : (
             <ul className="mb-4 space-y-1">
               {raffle.winners.map((w) => (
-                <li key={w} className="flex items-center gap-1.5 font-mono text-sm font-bold">
-                  <Icon name="raffle" className="text-ink/50" />
-                  {w}
+                <li key={w} className="flex items-center gap-1.5 justify-between font-mono text-sm font-bold">
+                  <span className="flex items-center gap-1.5">
+                    <Icon name="raffle" className="text-ink/50" />
+                    {w}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    className="text-[11px] font-mono normal-case"
+                    onClick={() => rerollMutation.mutate(w)}
+                    disabled={rerollMutation.isPending || raffle.entryCount <= raffle.winners.length}
+                    title={
+                      raffle.entryCount <= raffle.winners.length
+                        ? 'No other entrants left to draw'
+                        : 'Draw a new winner in place of this one'
+                    }
+                  >
+                    {rerollMutation.isPending && rerollMutation.variables === w ? '…' : 'Reroll'}
+                  </Button>
                 </li>
               ))}
             </ul>
+          )}
+          {rerollMutation.isError && (
+            <p className="font-mono text-[10px] text-rust mb-2">⚠ {rerollMutation.error.message}</p>
           )}
           {announceMutation.isError && (
             <p className="font-mono text-[10px] text-rust mb-2">⚠ {announceMutation.error.message}</p>

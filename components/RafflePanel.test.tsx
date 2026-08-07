@@ -187,4 +187,45 @@ describe('RafflePanel — closed (winners drawn)', () => {
 
     expect(await screen.findByText(/nobody entered/i)).toBeInTheDocument();
   });
+
+  it('rerolls a specific winner without reopening entries', async () => {
+    const posts = mockApi(CLOSED);
+    const user = await openPanel();
+
+    await screen.findByText('bob');
+    const rerollButtons = screen.getAllByRole('button', { name: /reroll/i });
+    await user.click(rerollButtons[0]);
+
+    await waitFor(() => {
+      expect(posts).toContainEqual({ url: '/api/raffle/reroll', body: { winnerLogin: 'bob' } });
+    });
+  });
+
+  it('disables reroll once no entrant remains who could replace a winner', async () => {
+    mockApi({ ...CLOSED, entryCount: 2 }); // 2 entrants, both already winners
+    await openPanel();
+
+    const rerollButtons = await screen.findAllByRole('button', { name: /reroll/i });
+    for (const btn of rerollButtons) expect(btn).toBeDisabled();
+  });
+
+  it('surfaces a failed reroll rather than silently doing nothing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === 'POST') {
+          return Promise.resolve(
+            new Response(JSON.stringify({ error: 'no eligible entrants left to draw' }), { status: 409 }),
+          );
+        }
+        return Promise.resolve(new Response(JSON.stringify({ raffle: CLOSED }), { status: 200 }));
+      }),
+    );
+    const user = await openPanel();
+
+    await screen.findByText('bob');
+    await user.click(screen.getAllByRole('button', { name: /reroll/i })[0]);
+
+    expect(await screen.findByText(/no eligible entrants/i)).toBeInTheDocument();
+  });
 });

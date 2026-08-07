@@ -10,6 +10,7 @@ import {
   MAX_WINNER_COUNT,
   MIN_DURATION_SECONDS,
   matchRaffleCommand,
+  rerollWinner,
   sanitizeDurationSeconds,
   sanitizeRaffleCommand,
   sanitizeWinnerCount,
@@ -143,6 +144,34 @@ describe('drawWinners', () => {
       if (seen.size === entrants.length) break;
     }
     expect(seen.size).toBe(entrants.length);
+  });
+});
+
+describe('rerollWinner', () => {
+  it('returns null if the target is not a current winner', () => {
+    expect(rerollWinner(['a', 'b', 'c'], ['b'], 'a')).toBeNull();
+  });
+
+  it('returns null when every entrant already won', () => {
+    expect(rerollWinner(['a', 'b'], ['a', 'b'], 'a')).toBeNull();
+  });
+
+  it('draws a replacement from entrants who are not a current winner', () => {
+    const replacement = rerollWinner(['a', 'b', 'c'], ['a'], 'a');
+    expect(replacement).not.toBeNull();
+    expect(['b', 'c']).toContain(replacement);
+  });
+
+  it('never redraws another current winner in a multi-winner raffle', () => {
+    const entrants = ['a', 'b', 'c', 'd'];
+    for (let i = 0; i < 50; i++) {
+      const replacement = rerollWinner(entrants, ['a', 'b'], 'a');
+      expect(replacement).not.toBe('b');
+    }
+  });
+
+  it('matches the target case-insensitively', () => {
+    expect(rerollWinner(['a', 'b'], ['A'], 'a')).not.toBeNull();
   });
 });
 

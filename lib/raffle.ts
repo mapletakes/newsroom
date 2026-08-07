@@ -76,6 +76,29 @@ export function drawWinners(entrants: string[], count: number): string[] {
   return pool.slice(0, Math.min(count, pool.length));
 }
 
+/**
+ * Swaps out one drawn winner for a newly-drawn one — for when a winner
+ * already has the prize, declines it, or doesn't respond, without reopening
+ * entries and asking chat to enter again. Draws uniformly from entrants who
+ * aren't a CURRENT winner, so a reroll's odds match the original draw's
+ * (nobody can win twice in the same raffle, but a name that already lost
+ * once is exactly as eligible as anyone else who hasn't won).
+ *
+ * Returns null if there's nobody left to draw — either target isn't
+ * (anymore) a winner (a stale client, or a second click after someone else's
+ * reroll already replaced them), or every entrant already won.
+ */
+export function rerollWinner(entrants: string[], currentWinners: string[], target: string): string | null {
+  const targetLower = target.toLowerCase();
+  if (!currentWinners.some((w) => w.toLowerCase() === targetLower)) return null;
+
+  const winnerSet = new Set(currentWinners.map((w) => w.toLowerCase()));
+  const pool = entrants.filter((e) => !winnerSet.has(e.toLowerCase()));
+  if (pool.length === 0) return null;
+
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 export function buildStartMessage(command: string, durationSeconds: number, winnerCount: number): string {
   const mins = Math.round(durationSeconds / 60);
   const when = durationSeconds < 60 ? `${durationSeconds}s` : `${mins} minute${mins === 1 ? '' : 's'}`;
