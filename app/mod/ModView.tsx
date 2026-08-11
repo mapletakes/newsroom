@@ -1,7 +1,8 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { SubmissionCard, type Submission } from '@/components/SubmissionCard';
 import { SwipeRow } from '@/components/SwipeRow';
@@ -11,6 +12,7 @@ import { AppHeader } from '@/components/AppHeader';
 import { ModStatusPanel } from '@/components/ModStatusPanel';
 import { RafflePanel } from '@/components/RafflePanel';
 import { DeckRail } from '@/components/DeckRail';
+import { ModShortcutsModal } from './ModShortcutsModal';
 import { useElementHeight } from '@/lib/use-element-height';
 import { useInvalidateOnChange } from '@/lib/use-invalidate-on-change';
 import { queryKeys } from '@/lib/query-keys';
@@ -103,6 +105,8 @@ export function ModView({
   // row right now" instead of splitting it across the row and its actions.
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+  const [focusedIndex, setFocusedIndex] = useState(0);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   const statusMutation = useMutation({
     mutationFn: async ({ id, patch }: { id: string; patch: Record<string, unknown> }) => {
@@ -188,6 +192,36 @@ export function ModView({
     return { ok: true };
   };
 
+  // Approve/reject are the two actions a triage mod fires off fastest — a
+  // swipe, a keypress, a misclick on a busy queue — so both get an Undo
+  // toast. Unlike the deck's version (which delays the real write behind a
+  // timer so it can silently cancel), this fires the write immediately: mod
+  // triage is shared and realtime-synced across everyone working the queue,
+  // so pretending an action didn't happen yet would let two mods act on the
+  // same item based on stale state. Undo here is a second, equally real
+  // write back to pending, not a cancellation.
+  const approveItem = async (id: string, note: string) => {
+    const result = await mutate(id, { status: 'approved', mod_notes: note || null });
+    if (result.ok) {
+      toast('Approved', {
+        duration: 5000,
+        action: { label: 'Undo', onClick: () => mutate(id, { status: 'pending' }) },
+      });
+    }
+    return result;
+  };
+
+  const rejectItem = async (id: string) => {
+    const result = await mutate(id, { status: 'rejected' });
+    if (result.ok) {
+      toast('Rejected', {
+        duration: 5000,
+        action: { label: 'Undo', onClick: () => mutate(id, { status: 'pending' }) },
+      });
+    }
+    return result;
+  };
+
   const tabCount = (k: 'pending' | 'approved' | 'played' | 'rejected') => counts[k];
 
   const { confirm, confirmDialog } = useConfirm();
@@ -220,9 +254,64 @@ export function ModView({
     clearMutation.mutate(status);
   };
 
+  // Keeps the keyboard-nav highlight in range as the pending list shrinks
+  // (an approve/reject removes the focused item, shifting the next one into
+  // its place) and resets it whenever the visible tab changes.
+  useEffect(() => {
+    setFocusedIndex((i) => Math.min(i, Math.max(0, submissions.length - 1)));
+  }, [submissions.length]);
+  useEffect(() => {
+    setFocusedIndex(0);
+  }, [filter]);
+
+  // Held in a ref so the single listener always sees the latest state —
+  // same pattern as the deck's keyboard handler (app/deck/DeckView.tsx).
+  const keyHandlerRef = useRef<(e: KeyboardEvent) => void>(() => {});
+  keyHandlerRef.current = (e: KeyboardEvent) => {
+    // Don't hijack typing in inputs / textareas / contenteditable fields
+    // (e.g. the per-item note).
+    const el = e.target as HTMLElement | null;
+    const tag = el?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return;
+
+    if (e.key === '?') {
+      e.preventDefault();
+      setShortcutsOpen(true);
+      return;
+    }
+
+    // Navigate/approve/reject only mean something on the pending tab —
+    // that's the only tab these shortcuts' target buttons render on.
+    if (filter !== 'pending' || submissions.length === 0) return;
+
+    const target = submissions[focusedIndex];
+    if (e.key === 'j' || e.key === 'J' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      setFocusedIndex((i) => Math.min(i + 1, submissions.length - 1));
+    } else if (e.key === 'k' || e.key === 'K' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      setFocusedIndex((i) => Math.max(i - 1, 0));
+    } else if ((e.key === 'a' || e.key === 'A') && target && !pendingIds.has(target.id)) {
+      e.preventDefault();
+      approveItem(target.id, '');
+    } else if ((e.key === 'r' || e.key === 'R') && target && !pendingIds.has(target.id)) {
+      e.preventDefault();
+      rejectItem(target.id);
+    } else if (e.key === 'Enter' && target) {
+      e.preventDefault();
+      window.open(target.url, '_blank', 'noopener,noreferrer');
+    }
+  };
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => keyHandlerRef.current(e);
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, []);
+
   return (
     <div className="min-h-screen flex flex-col">
       {confirmDialog}
+      <ModShortcutsModal open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
       {(modStatusEnabled || raffleEnabled) && (
         <DeckRail headerHeight={headerHeight}>
           {modStatusEnabled && <ModStatusPanel streamId={streamId} enabled={modStatusEnabled} variant="tab" />}
@@ -341,6 +430,18 @@ export function ModView({
         )}
         <span className="hidden sm:inline ml-auto text-ink/60">
           {displayName} · {submitCommand ? `command: ${submitCommand}` : 'any URL'}
+          {filter === 'pending' && submissions.length > 0 && (
+            <>
+              {' '}·{' '}
+              <button
+                type="button"
+                onClick={() => setShortcutsOpen(true)}
+                className="underline hover:text-rust"
+              >
+                ? for shortcuts
+              </button>
+            </>
+          )}
         </span>
       </div>
 
@@ -384,19 +485,20 @@ export function ModView({
           </p>
         )}
         <div className="space-y-3">
-          {submissions.map((s) => {
+          {submissions.map((s, idx) => {
             const card = (
             <SubmissionCard
               key={s.id}
               s={s}
               pending={pendingIds.has(s.id)}
+              focused={filter === 'pending' && idx === focusedIndex}
               actions={
                 <>
                   {rowErrors[s.id] && (
                     <div className="font-mono text-xs text-rust w-full">⚠ {rowErrors[s.id]}</div>
                   )}
                   {s.status === 'pending' && (
-                    <ModActions id={s.id} mutate={mutate} pending={pendingIds.has(s.id)} />
+                    <ModActions id={s.id} onApprove={approveItem} onReject={rejectItem} pending={pendingIds.has(s.id)} />
                   )}
                   {s.status === 'approved' && (
                     <div className="flex flex-col gap-1 w-full">
@@ -476,8 +578,8 @@ export function ModView({
               <SwipeRow
                 key={s.id}
                 disabled={pendingIds.has(s.id)}
-                onApprove={() => mutate(s.id, { status: 'approved' })}
-                onReject={() => mutate(s.id, { status: 'rejected' })}
+                onApprove={() => approveItem(s.id, '')}
+                onReject={() => rejectItem(s.id)}
               >
                 {card}
               </SwipeRow>
@@ -555,11 +657,13 @@ function CopyButton({ value }: { value: string }) {
 
 function ModActions({
   id,
-  mutate,
+  onApprove,
+  onReject,
   pending,
 }: {
   id: string;
-  mutate: (id: string, patch: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>;
+  onApprove: (id: string, note: string) => void;
+  onReject: (id: string) => void;
   pending: boolean;
 }) {
   const [note, setNote] = useState('');
@@ -572,7 +676,7 @@ function ModActions({
           variant="moss"
           size="sm"
           className="flex-1 sm:flex-none px-4 py-2.5 text-sm sm:px-3 sm:py-1.5 sm:text-xs"
-          onClick={() => mutate(id, { status: 'approved', mod_notes: note || null })}
+          onClick={() => onApprove(id, note)}
           disabled={pending}
         >
           {pending ? 'Working…' : 'Approve'}
@@ -581,7 +685,7 @@ function ModActions({
           variant="outline"
           size="sm"
           className="flex-1 sm:flex-none px-4 py-2.5 text-sm sm:px-3 sm:py-1.5 sm:text-xs"
-          onClick={() => mutate(id, { status: 'rejected' })}
+          onClick={() => onReject(id)}
           disabled={pending}
         >
           Reject

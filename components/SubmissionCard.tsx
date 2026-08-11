@@ -70,6 +70,7 @@ export function SubmissionCard({
   compact = false,
   actions,
   pending = false,
+  focused = false,
 }: {
   s: Submission;
   compact?: boolean;
@@ -77,6 +78,10 @@ export function SubmissionCard({
   /** A mutation on this card is in flight — dim it and block interaction
    *  rather than letting the card disappear before the outcome is known. */
   pending?: boolean;
+  /** Keyboard-navigation target — same ring treatment as the deck's active
+   *  queue item (see SortableQueueItem), so "the highlighted card" reads the
+   *  same way on both surfaces. */
+  focused?: boolean;
 }) {
   const host = (() => {
     try { return new URL(s.url).hostname.replace(/^www\./, ''); } catch { return ''; }
@@ -90,6 +95,7 @@ export function SubmissionCard({
         compact ? 'p-3' : 'p-4',
         'flex gap-4',
         pending && 'opacity-50 pointer-events-none transition-opacity',
+        focused && 'ring-2 ring-rust ring-inset',
       )}
     >
       <article aria-busy={pending}>

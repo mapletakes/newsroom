@@ -2,7 +2,7 @@
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
-function Key({ children }: { children: React.ReactNode }) {
+export function Key({ children }: { children: React.ReactNode }) {
   return (
     <kbd className="inline-flex items-center justify-center min-w-[1.75rem] px-1.5 py-0.5 border border-ink/30 bg-ink/5 rounded-sm font-mono text-[11px] leading-none">
       {children}
@@ -10,7 +10,7 @@ function Key({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Row({ keys, children }: { keys: React.ReactNode; children: React.ReactNode }) {
+export function Row({ keys, children }: { keys: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-3 py-1.5 border-b border-ink/10 last:border-0">
       <div className="shrink-0 w-32 flex items-center gap-1 flex-wrap">{keys}</div>
