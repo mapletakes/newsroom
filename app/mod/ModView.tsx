@@ -9,6 +9,7 @@ import { SwipeRow } from '@/components/SwipeRow';
 import { SaveToListMenu } from '@/components/SaveToListMenu';
 import { TriggerWarningEditor } from '@/components/TriggerWarning';
 import { AppHeader } from '@/components/AppHeader';
+import { QuestionsPanel } from '@/components/QuestionsPanel';
 import { ModStatusPanel } from '@/components/ModStatusPanel';
 import { RafflePanel } from '@/components/RafflePanel';
 import { DeckRail } from '@/components/DeckRail';
@@ -56,6 +57,7 @@ export function ModView({
   isAdmin = false,
   canCurate = false,
   questionsEnabled = false,
+  questionsOpen = true,
   modStatusEnabled = false,
   raffleEnabled = false,
 }: {
@@ -68,6 +70,7 @@ export function ModView({
   isAdmin?: boolean;
   canCurate?: boolean;
   questionsEnabled?: boolean;
+  questionsOpen?: boolean;
   modStatusEnabled?: boolean;
   raffleEnabled?: boolean;
 }) {
@@ -312,8 +315,22 @@ export function ModView({
     <div className="min-h-screen flex flex-col">
       {confirmDialog}
       <ModShortcutsModal open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
-      {(modStatusEnabled || raffleEnabled) && (
+      {/* Same rail, same module order, as the deck (app/deck/DeckView.tsx) —
+          a mod who learns where a module lives on one screen shouldn't have
+          to relearn it as a header link on the other. Quick links has no
+          entry here: it's the streamer's own go-live reference, not
+          triage-relevant. */}
+      {(questionsEnabled || modStatusEnabled || raffleEnabled) && (
         <DeckRail headerHeight={headerHeight}>
+          {questionsEnabled && (
+            <QuestionsPanel
+              streamId={streamId}
+              enabled={questionsEnabled}
+              open={questionsOpen}
+              variant="tab"
+              canSetNowPlaying={canCurate}
+            />
+          )}
           {modStatusEnabled && <ModStatusPanel streamId={streamId} enabled={modStatusEnabled} variant="tab" />}
           {raffleEnabled && <RafflePanel streamId={streamId} enabled={raffleEnabled} variant="tab" />}
         </DeckRail>
@@ -330,8 +347,8 @@ export function ModView({
             {!isMod && <Link href="/deck" className="underline hover:text-rust">Streamer Deck →</Link>}
             {isMod && canCurate && <Link href="/deck" className="underline hover:text-rust">Curate Deck →</Link>}
             <Link href="/shelf" className="underline hover:text-rust">Shelf</Link>
-            {questionsEnabled && <Link href="/questions" className="underline hover:text-rust">Questions</Link>}
-            {modStatusEnabled && <Link href="/mod-status" className="underline hover:text-rust">Mod Status</Link>}
+            {/* Questions and Mod status are reached via the rail above, not a
+                header link — see the DeckRail block's comment. */}
             {/* Two different pages, deliberately: /setup is the channel and is
                 the streamer's, /preferences is just how this person wants the
                 app to look. */}
