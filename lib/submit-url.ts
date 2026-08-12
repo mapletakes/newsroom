@@ -2,7 +2,7 @@
 // the EventSub webhook handler (server-to-server).
 
 import { supabaseAdmin } from './supabase';
-import { detectKind, normalizeUrl } from './url';
+import { detectKind, normalizeUrl, stripYouTubePlaylistContext } from './url';
 import { runExtraction } from './extract';
 import { broadcastQueueChange } from './realtime';
 
@@ -36,7 +36,10 @@ export async function submitUrlToQueue(params: SubmitUrlParams): Promise<SubmitU
     message,
   } = params;
 
-  const url = rawUrl.trim();
+  // See stripYouTubePlaylistContext's doc comment — a video linked (or
+  // clicked) from inside a playlist shouldn't carry that playlist into the
+  // stored link or the youtube_playlist-expansion check below.
+  const url = stripYouTubePlaylistContext(rawUrl.trim());
   if (!url) return { submission: null };
 
   const normalized = normalizeUrl(url);

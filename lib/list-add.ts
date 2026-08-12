@@ -3,7 +3,7 @@
 // addToDeck, but targeting list_items instead of submissions.
 
 import { supabaseAdmin } from './supabase';
-import { detectKind, normalizeUrl } from './url';
+import { detectKind, normalizeUrl, stripYouTubePlaylistContext } from './url';
 import { runListItemExtraction } from './list-extract';
 
 export type AddToListResult = {
@@ -21,7 +21,10 @@ export async function addUrlToList(
   addedBy: string,
   segmentId?: string | null,
 ): Promise<AddToListResult> {
-  const url = rawUrl.trim();
+  // See stripYouTubePlaylistContext's doc comment (lib/url.ts) — a video
+  // added while it's part of a playlist shouldn't carry that playlist into
+  // the stored link.
+  const url = stripYouTubePlaylistContext(rawUrl.trim());
   if (!url) return { ok: false, added: 0, skipped: 0, error: 'missing url' };
 
   const sb = supabaseAdmin();

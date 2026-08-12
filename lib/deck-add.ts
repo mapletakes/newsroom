@@ -2,7 +2,7 @@
 // both the in-app session route and the token-authed quick-add route.
 
 import { supabaseAdmin } from './supabase';
-import { detectKind, normalizeUrl } from './url';
+import { detectKind, normalizeUrl, stripYouTubePlaylistContext } from './url';
 import { runExtraction } from './extract';
 import { expandPlaylistWithMeta } from './extract-youtube';
 import { broadcastQueueChange } from './realtime';
@@ -21,7 +21,12 @@ export async function addToDeck(
   submitterLogin: string,
   segmentId?: string | null,
 ): Promise<AddToDeckResult> {
-  const url = rawUrl.trim();
+  // Strip playlist context (list/index/…) before anything else sees this URL —
+  // see stripYouTubePlaylistContext's doc comment. A video someone adds while
+  // watching it as part of a playlist should land on the deck as just that
+  // video, not carry the playlist along (into the stored link, or into the
+  // youtube_playlist expansion below).
+  const url = stripYouTubePlaylistContext(rawUrl.trim());
   if (!url) return { ok: false, expanded: false, count: 0, error: 'missing url' };
 
   const kind = detectKind(url);

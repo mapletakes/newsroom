@@ -183,6 +183,35 @@ export function formatDate(input: string | null | undefined): string {
   });
 }
 
+// Strips playlist context (list, index, start_radio, pp) from a URL that
+// points at one specific YouTube video — called at ingestion (extension
+// quick-add, chat submission, in-app add-by-URL), before the URL is ever
+// stored or classified. Two problems, one fix: a stored URL carrying
+// `list=` opens on YouTube's own site with the playlist sidebar showing (an
+// unrelated/unlisted playlist gets exposed to whoever opens the link), and
+// upstream code paths that treat a bare "list, no v" URL as a playlist to
+// expand (see expandPlaylistWithMeta) have historically been the thing that
+// misfires on one of these — stripping here removes the ambiguity instead
+// of trying to keep every downstream check in sync.
+//
+// Deliberately narrow: only strips when the URL resolves to a specific
+// video (extractYouTubeId finds one). A bare playlist URL — /playlist?list=…
+// or /watch?list=… with no v — is left untouched, since `list` there isn't
+// context to strip, it's the whole point of the link.
+export function stripYouTubePlaylistContext(raw: string): string {
+  try {
+    const u = new URL(raw.trim());
+    const h = u.hostname.replace(/^www\./, '');
+    const isYouTube = h === 'youtube.com' || h === 'm.youtube.com' || h === 'music.youtube.com' || h === 'youtu.be';
+    if (!isYouTube) return raw;
+    if (!extractYouTubeId(raw)) return raw;
+    for (const p of ['list', 'index', 'start_radio', 'pp']) u.searchParams.delete(p);
+    return u.toString();
+  } catch {
+    return raw;
+  }
+}
+
 export function extractYouTubeId(url: string): string | null {
   try {
     const u = new URL(url);

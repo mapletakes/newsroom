@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeUrl, sanitizeShareUrl, detectKind, extractUrlsFromMessage } from './url';
+import {
+  normalizeUrl,
+  sanitizeShareUrl,
+  detectKind,
+  extractUrlsFromMessage,
+  stripYouTubePlaylistContext,
+} from './url';
 
 describe('normalizeUrl', () => {
   it('strips known tracking params (case-insensitively)', () => {
@@ -45,6 +51,51 @@ describe('sanitizeShareUrl', () => {
 
   it('returns the raw string untrimmed for an unparseable URL (unlike normalizeUrl)', () => {
     expect(sanitizeShareUrl('  not a url  ')).toBe('  not a url  ');
+  });
+});
+
+describe('stripYouTubePlaylistContext', () => {
+  it('strips list/index/start_radio/pp from a video URL that also carries them', () => {
+    expect(
+      stripYouTubePlaylistContext('https://www.youtube.com/watch?v=abc&list=PLxyz&index=3&start_radio=1&pp=abc'),
+    ).toBe('https://www.youtube.com/watch?v=abc');
+  });
+
+  it('leaves a bare playlist URL (no specific video) untouched', () => {
+    expect(stripYouTubePlaylistContext('https://www.youtube.com/playlist?list=PLxyz')).toBe(
+      'https://www.youtube.com/playlist?list=PLxyz',
+    );
+    expect(stripYouTubePlaylistContext('https://www.youtube.com/watch?list=PLxyz')).toBe(
+      'https://www.youtube.com/watch?list=PLxyz',
+    );
+  });
+
+  it('strips from a youtu.be short link (video id in the path, not a v param)', () => {
+    expect(stripYouTubePlaylistContext('https://youtu.be/abc?list=PLxyz&t=30')).toBe(
+      'https://youtu.be/abc?t=30',
+    );
+  });
+
+  it('strips from a Shorts URL', () => {
+    expect(stripYouTubePlaylistContext('https://www.youtube.com/shorts/abc?list=PLxyz')).toBe(
+      'https://www.youtube.com/shorts/abc',
+    );
+  });
+
+  it('keeps a timestamp param alongside the stripped playlist params', () => {
+    expect(stripYouTubePlaylistContext('https://youtube.com/watch?v=abc&list=PLxyz&t=90s')).toBe(
+      'https://youtube.com/watch?v=abc&t=90s',
+    );
+  });
+
+  it('leaves non-YouTube URLs untouched', () => {
+    expect(stripYouTubePlaylistContext('https://example.com/a?list=1')).toBe(
+      'https://example.com/a?list=1',
+    );
+  });
+
+  it('returns the raw string untrimmed for an unparseable URL', () => {
+    expect(stripYouTubePlaylistContext('  not a url  ')).toBe('  not a url  ');
   });
 });
 
