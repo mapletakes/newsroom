@@ -40,6 +40,7 @@ export async function POST(req: NextRequest) {
   if (!subId) {
     return NextResponse.json({ error: 'nothing to announce' }, { status: 400 });
   }
+  const pin = !!body.pin;
 
   const { data: sub } = await sb
     .from('submissions')
@@ -49,7 +50,7 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
   if (!sub) return NextResponse.json({ error: 'submission not found' }, { status: 404 });
 
-  const result = await announceSubmission(sender.id, channel.twitch_user_id, session.twitchUserId, sub);
+  const result = await announceSubmission(sender.id, channel.twitch_user_id, session.twitchUserId, sub, pin);
   if (!result.ok) {
     if (result.error === 'reconnect') {
       return NextResponse.json(

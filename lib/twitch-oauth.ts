@@ -7,6 +7,11 @@ const SCOPES = [
   'user:write:chat', // post "now watching" messages to the streamer's own chat
   'user:bot',
   'user:read:moderated_channels',
+  // Pin a posted "now watching" message via Send Chat Message's `pin` flag
+  // (sendChatMessage below). Only takes effect for accounts that have
+  // reconnected since this scope was added — an already-stored token from
+  // before doesn't retroactively gain it.
+  'moderator:manage:chat_messages',
 ];
 
 export function buildAuthUrl(state: string): string {
@@ -94,12 +99,21 @@ export async function refreshAccessToken(refreshToken: string): Promise<{
  * Send a chat message to a broadcaster's channel as `senderId`.
  * For posting to your own channel, senderId === broadcasterId.
  * Requires a user access token with the `user:write:chat` scope.
+ *
+ * `pin`, when true, additionally requires `moderator:manage:chat_messages`
+ * and the sender to be the broadcaster or a moderator — Twitch pins it for a
+ * fixed 20 minutes, and only one message can be pinned at a time (this
+ * silently replaces whatever was already pinned). Per Twitch's documented
+ * contract, a pin failure fails the whole send: nothing is posted, not "sent
+ * but unpinned" — so there's no separate pin step to retry here, just the one
+ * request either succeeding or not.
  */
 export async function sendChatMessage(
   accessToken: string,
   broadcasterId: string,
   senderId: string,
   message: string,
+  pin = false,
 ): Promise<{ ok: boolean; error?: string }> {
   const clientId = process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID!;
   const r = await fetch('https://api.twitch.tv/helix/chat/messages', {
@@ -113,6 +127,7 @@ export async function sendChatMessage(
       broadcaster_id: broadcasterId,
       sender_id: senderId,
       message,
+      ...(pin ? { pin: true } : {}),
     }),
   });
 

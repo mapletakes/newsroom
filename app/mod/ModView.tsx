@@ -612,6 +612,8 @@ export function ModView({
 
 function AnnounceButton({ submissionId }: { submissionId: string }) {
   const [status, setStatus] = useState('');
+  // Opt-in per click, not sticky — see DeckView's pinOnAnnounce for why.
+  const [pin, setPin] = useState(false);
   const post = async () => {
     if (status === 'Posting…') return;
     setStatus('Posting…');
@@ -619,10 +621,10 @@ function AnnounceButton({ submissionId }: { submissionId: string }) {
       const r = await fetch('/api/deck/announce', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: submissionId }),
+        body: JSON.stringify({ id: submissionId, pin }),
       });
       if (r.ok) {
-        setStatus('Posted ✓');
+        setStatus(pin ? 'Posted & pinned ✓' : 'Posted ✓');
       } else {
         const e = await r.json().catch(() => ({}));
         setStatus(e.detail || e.error || 'Failed');
@@ -639,12 +641,19 @@ function AnnounceButton({ submissionId }: { submissionId: string }) {
         size="xs"
         onClick={post}
         className="text-xs"
-        title="Post 'Watching: …' to chat"
+        title={pin ? "Post 'Watching: …' to chat and pin it for 20 minutes" : "Post 'Watching: …' to chat"}
         aria-label="Post 'Watching: …' to chat"
       >
         <Icon name="announce" className="text-sm" />
         <span className="hidden sm:inline">Post to chat</span>
       </Button>
+      <label
+        className="hidden sm:flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-widest text-ink/60 cursor-pointer"
+        title="Pins the message for 20 minutes and replaces whatever's currently pinned. Needs your Twitch account reconnected since this was added — if it's not, the post fails outright rather than sending unpinned."
+      >
+        <input type="checkbox" checked={pin} onChange={(e) => setPin(e.target.checked)} />
+        Pin
+      </label>
       {status && <span className="font-mono text-xs text-ink/60">{status}</span>}
     </span>
   );

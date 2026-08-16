@@ -101,18 +101,24 @@ async function getValidAccessToken(senderStreamId: string): Promise<string | nul
  * stream row's OWN stored Twitch account. `senderStreamId` is whose stored
  * token to use; `senderTwitchUserId` is that same account's Twitch id,
  * needed separately for the Twitch API call itself.
+ *
+ * `pin`, passed through to sendChatMessage, requires the sender's stored
+ * token to carry `moderator:manage:chat_messages` — an account that hasn't
+ * reconnected since that scope was added won't have it, and the whole send
+ * fails rather than posting unpinned (see sendChatMessage's doc comment).
  */
 export async function announceSubmission(
   senderStreamId: string,
   broadcasterTwitchUserId: string,
   senderTwitchUserId: string,
   sub: { title: string | null; url: string; trigger_warning?: string | null },
+  pin = false,
 ): Promise<AnnounceResult> {
   const accessToken = await getValidAccessToken(senderStreamId);
   if (!accessToken) return { ok: false, error: 'reconnect' };
 
   const message = buildWatchingMessage(sub.title, sub.url, sub.trigger_warning);
-  const result = await sendChatMessage(accessToken, broadcasterTwitchUserId, senderTwitchUserId, message);
+  const result = await sendChatMessage(accessToken, broadcasterTwitchUserId, senderTwitchUserId, message, pin);
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true, message };
 }

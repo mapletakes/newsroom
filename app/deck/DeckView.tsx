@@ -456,6 +456,10 @@ export function DeckView({
   const [overContainer, setOverContainer] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  // Opt-in per click, not a sticky setting — a pin auto-replaces whatever's
+  // currently pinned in the streamer's chat, so defaulting it on would mean
+  // every "Post to chat" silently clobbers a pin someone set on purpose.
+  const [pinOnAnnounce, setPinOnAnnounce] = useState(false);
   const lastSelectedRef = useRef<string | null>(null);
   // The items the current drag is carrying (the whole selection, or just one).
   const movingIdsRef = useRef<string[]>([]);
@@ -922,10 +926,10 @@ export function DeckView({
       const r = await fetch('/api/deck/announce', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: active.id }),
+        body: JSON.stringify({ id: active.id, pin: pinOnAnnounce }),
       });
       if (r.ok) {
-        toast.success('Posted to chat', { id });
+        toast.success(pinOnAnnounce ? 'Posted and pinned' : 'Posted to chat', { id });
       } else {
         const e = await r.json().catch(() => ({}));
         toast.error(e.detail || e.error || 'Failed to post', { id });
@@ -1627,14 +1631,31 @@ export function DeckView({
                   Remove
                 </Button>
                 {!curateOnly && (
-                  <Button
-                    variant="outline"
-                    onClick={announce}
-                    title="Post 'Watching: …' to your chat so a mod can pin it"
-                  >
-                    <Icon name="announce" className="text-base" />
-                    Post to chat
-                  </Button>
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={announce}
+                      title={
+                        pinOnAnnounce
+                          ? "Post 'Watching: …' to your chat and pin it for 20 minutes"
+                          : "Post 'Watching: …' to your chat so a mod can pin it"
+                      }
+                    >
+                      <Icon name="announce" className="text-base" />
+                      Post to chat
+                    </Button>
+                    <label
+                      className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-widest text-ink/60 cursor-pointer self-center"
+                      title="Pins the message for 20 minutes and replaces whatever's currently pinned. Needs your Twitch account reconnected since this was added — if it's not, the post fails outright rather than sending unpinned."
+                    >
+                      <input
+                        type="checkbox"
+                        checked={pinOnAnnounce}
+                        onChange={(e) => setPinOnAnnounce(e.target.checked)}
+                      />
+                      Pin
+                    </label>
+                  </>
                 )}
                 <SaveToListMenu
                   trigger={
