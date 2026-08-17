@@ -9,7 +9,15 @@ export type TiktokMeta = {
   transcript: string | null;
 };
 
+const MAX_REDIRECTS = 5;
 
+const DEFAULT_HEADERS = {
+  'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+    '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Accept-Language': 'en-US,en;q=0.9',
+  Accept: 'text/html,application/xhtml+xml',
+};
 
 function cleanTitle(raw: string): string {
   if (!raw) return raw;
@@ -17,13 +25,120 @@ function cleanTitle(raw: string): string {
   // Remove hashtags
   let title = raw.replace(/#\S+/g, '');
 
-  // Clean up extra spaces that may remain after removing hashtags
+  // Clean up extra spaces
   title = title.replace(/\s+/g, ' ').trim();
 
-  // Optionally strip trailing punctuation artifacts like " | TikTok"
+  // Strip trailing " | TikTok"
   title = title.replace(/\s*\|\s*TikTok\s*$/i, '').trim();
 
   return title;
+}
+
+function isTikTokShortLink(url: string): boolean {
+  const lower = url.toLowerCase();
+  return (
+    /^https?:\/\/(www\.)?vm\.tiktok\.com\//i.test(lower) ||
+    /^https?:\/\/(www\.)?vt\.tiktok\.com\//i.test(lower)
+  );
+}
+
+function isTikTokUrl(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+
+    return (
+      hostname === 'tiktok.com' ||
+      hostname === 'www.tiktok.com' ||
+      hostname.endsWith('.tiktok.com')
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isTikTokCanonicalVideoUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+
+    return (
+      isTikTokUrl(url) &&
+      /^\/@[^/]+\/video\/\d+/.test(parsed.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function resolveTikTokUrl(
+  inputUrl: string,
+  maxRedirects = MAX_REDIRECTS,
+): Promise<string> {
+  let currentUrl = inputUrl;
+
+  for (let redirects = 0; redirects < maxRedirects; redirects++) {
+    const res = await fetch(currentUrl, {
+      method: 'GET',
+      redirect: 'manual',
+      headers: DEFAULT_HEADERS,
+    });
+
+    // 3xx redirect
+    if (res.status >= 300 && res.status < 400) {
+      const location = res.headers.get('location');
+
+      if (!location) {
+        throw new Error(
+          `Redirect response from ${currentUrl} did not contain a Location header`,
+        );
+      }
+
+      currentUrl = new URL(location, currentUrl).toString();
+
+      if (isTikTokCanonicalVideoUrl(currentUrl)) {
+        return currentUrl;
+      }
+
+      continue;
+    }
+
+    // We reached a non-redirect response.
+    // res.url may be useful if the runtime followed something internally.
+    const finalUrl = res.url || currentUrl;
+
+    if (isTikTokCanonicalVideoUrl(finalUrl)) {
+      return finalUrl;
+    }
+
+    // Sometimes the public/canonical URL is embedded in the page.
+    const html = await res.text();
+
+    const canonicalMatch =
+      html.match(
+        /<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i,
+      ) ??
+      html.match(
+        /<meta[^>]+property=["']og:url["'][^>]+content=["']([^"']+)["']/i,
+      );
+
+    if (canonicalMatch?.[1]) {
+      const canonicalUrl = new URL(
+        canonicalMatch[1],
+        finalUrl,
+      ).toString();
+
+      if (isTikTokCanonicalVideoUrl(canonicalUrl)) {
+        return canonicalUrl;
+      }
+
+      return canonicalUrl;
+    }
+
+    return finalUrl;
+  }
+
+  throw new Error(
+    `Too many redirects while resolving TikTok URL: ${inputUrl}`,
+  );
 }
 
 async function fetchText(url: string, accept = 'text/html'): Promise<string> {
@@ -180,7 +295,6 @@ function extractTitleAndDescription(
     title = desc;
   }
 
-  // Clean title: remove hashtags, normalize spaces, strip " | TikTok"
   const clean = cleanTitle(title);
 
   return { title: clean, description };
@@ -215,15 +329,23 @@ export async function extractTikTok(
 ): Promise<TiktokMeta> {
 
   const normalizedUrl = url.trim();
-  if (!/^https?:\/\/(www\.)?tiktok\.com\//i.test(normalizedUrl)) {
+  if (!/^https?:\/\/(www\.)?(tiktok\.com|vm\.tiktok\.com|vt\.tiktok\.com)\//i.test(normalizedUrl)) {
     throw new Error('Invalid TikTok URL');
   }
 
+ // Always resolve to the final/public URL
+  const finalUrl = await resolveTikTokUrl(normalizedUrl);
+
+  // Validate that the final URL is a standard TikTok video URL
+  if (!/^https?:\/\/(www\.)?tiktok\.com\/@[^/]+\/video\//i.test(finalUrl)) {
+    throw new Error('Resolved URL is not a valid TikTok video URL');
+  }
+
   // 1. Try oEmbed
-  const oembedData = await fetchOembed(normalizedUrl);
+  const oembedData = await fetchOembed(finalUrl);
 
   // 2. Fetch HTML
-  const html = await fetchText(normalizedUrl);
+  const html = await fetchText(finalUrl);
 
   // 3. Parse Open Graph
   const og = parseOpenGraph(html);
@@ -287,7 +409,7 @@ export async function extractTikTok(
     } else if (authorFromOembed) {
       author = authorFromOembed;
     } else {
-      const urlMatch = normalizedUrl.match(/tiktok\.com\/@([^/?]+)/i);
+      const urlMatch = finalUrl.match(/tiktok\.com\/@([^/?]+)/i);
       author = urlMatch ? `@${urlMatch[1]}` : '';
     }
 
