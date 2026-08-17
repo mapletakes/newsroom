@@ -2,6 +2,7 @@ import { supabaseAdmin } from './supabase';
 import { extractArticle } from './extract-article';
 import { fetchYouTubeMeta, expandPlaylist } from './extract-youtube';
 import { extractTwitter } from './extract-twitter';
+import { extractTikTok } from './extract-tiktok';
 import { enrichContent, hostDMCARisk } from './enrich';
 import { scanContentWarning } from './content-warning';
 import { recordUsage } from './usage';
@@ -60,6 +61,17 @@ export async function runExtraction(submissionId: string) {
       publisher = 'X / Twitter';
       author = meta.author;
       bodyText = meta.description;
+    } else if (sub.kind === 'tiktok') {
+      
+      const meta = await extractTikTok(sub.url);
+      title = meta.title;
+      description = meta.description;
+      thumbnail = meta.thumbnail;
+      publisher = meta.publisher;
+      author = meta.author;
+      publishedAt = meta.publishedAt;
+      duration = meta.durationSeconds;
+      bodyText = [meta.description, meta.transcript].filter(Boolean).join('\n\n');
     } else {
       const meta = await extractArticle(sub.url);
       title = meta.title;
