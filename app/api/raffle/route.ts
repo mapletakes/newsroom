@@ -39,7 +39,7 @@ export async function GET() {
   const sb = supabaseAdmin();
   const { data: raffle, error } = await sb
     .from('raffles')
-    .select('id, command, winner_count, status, opened_at, closes_at, closed_at, winners_announced_at, started_by_login')
+    .select('id, command, winner_count, status, opened_at, closes_at, closed_at, winners_announced_at, started_by_login, subs_vips_only')
     .eq('stream_id', session.streamId)
     .order('opened_at', { ascending: false })
     .limit(1)
@@ -76,6 +76,7 @@ export async function GET() {
       closedAt: raffle.closed_at,
       winnersAnnouncedAt: raffle.winners_announced_at,
       startedByLogin: raffle.started_by_login,
+      subsVipsOnly: raffle.subs_vips_only === true,
       entryCount: entryCount ?? 0,
       winners,
     },
@@ -117,6 +118,7 @@ export async function POST(req: NextRequest) {
   const command = sanitizeRaffleCommand(body.command);
   const durationSeconds = sanitizeDurationSeconds(body.durationSeconds);
   const winnerCount = sanitizeWinnerCount(body.winnerCount);
+  const subsVipsOnly = !!body.subsVipsOnly;
   const closesAt = new Date(Date.now() + durationSeconds * 1000).toISOString();
 
   const { data: raffle, error } = await sb
@@ -128,6 +130,7 @@ export async function POST(req: NextRequest) {
       status: 'open',
       closes_at: closesAt,
       started_by_login: session.twitchLogin,
+      subs_vips_only: subsVipsOnly,
     })
     .select('id')
     .single();
@@ -146,7 +149,7 @@ export async function POST(req: NextRequest) {
       stream.id,
       stream.twitch_user_id,
       stream.twitch_user_id,
-      buildStartMessage(command, durationSeconds, winnerCount),
+      buildStartMessage(command, durationSeconds, winnerCount, subsVipsOnly),
     ).catch((err) => console.error('raffle start announcement failed:', err));
   }
 

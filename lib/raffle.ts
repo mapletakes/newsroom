@@ -99,11 +99,20 @@ export function rerollWinner(entrants: string[], currentWinners: string[], targe
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-export function buildStartMessage(command: string, durationSeconds: number, winnerCount: number): string {
+// subsVipsOnly is announced up front rather than left for chatters to
+// discover by their !enter silently doing nothing — see handleRaffleEntry,
+// which gates entry the same way with no chat feedback either way.
+export function buildStartMessage(
+  command: string,
+  durationSeconds: number,
+  winnerCount: number,
+  subsVipsOnly = false,
+): string {
   const mins = Math.round(durationSeconds / 60);
   const when = durationSeconds < 60 ? `${durationSeconds}s` : `${mins} minute${mins === 1 ? '' : 's'}`;
   const who = winnerCount === 1 ? '1 winner' : `${winnerCount} winners`;
-  return `Raffle started! Type ${command} to enter — ${who} will be drawn in ${when}.`;
+  const restriction = subsVipsOnly ? ' (subs & VIPs only)' : '';
+  return `Raffle started! Type ${command} to enter${restriction} — ${who} will be drawn in ${when}.`;
 }
 
 export function buildClosedMessage(entrantCount: number): string {
@@ -189,16 +198,23 @@ export async function closeRaffleAndAnnounce(
  * truth, fetched fresh on every message rather than cached, since a raffle
  * lives minutes and the extra query is cheap next to everything else this
  * handler already does per message.
+ *
+ * `isSub`/`isVip` are the chat message's own badges (already parsed by the
+ * caller for other purposes), checked against at the moment of entry — see
+ * schema.sql on subs_vips_only for why that's a deliberate, not-revisited
+ * choice rather than re-checked at draw time.
  */
 export async function handleRaffleEntry(
   streamId: string,
   messageText: string,
   chatterLogin: string,
+  isSub: boolean,
+  isVip: boolean,
 ): Promise<void> {
   const sb = supabaseAdmin();
   const { data: open } = await sb
     .from('raffles')
-    .select('id, command, closes_at')
+    .select('id, command, closes_at, subs_vips_only')
     .eq('stream_id', streamId)
     .eq('status', 'open')
     .maybeSingle();
@@ -214,6 +230,11 @@ export async function handleRaffleEntry(
   }
 
   if (!matchRaffleCommand(messageText, open.command)) return;
+
+  // Silent, same as an ignored user's message — buildStartMessage already
+  // announced the restriction up front, so there's nothing new to tell a
+  // non-eligible chatter here.
+  if (open.subs_vips_only && !(isSub || isVip)) return;
 
   // Belt-and-suspenders on top of the unique constraint below — see the
   // 'raffle' kind in lib/ratelimit.ts for why this is defense-in-depth

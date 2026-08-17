@@ -479,6 +479,12 @@ create table if not exists public.raffles (
 );
 create index if not exists raffles_stream_status_idx on public.raffles(stream_id, status);
 
+-- Restricts entries to subs and VIPs, checked against that chat message's own
+-- badges at the moment of !enter (see handleRaffleEntry in lib/raffle.ts) —
+-- not re-verified at draw time, so someone who subbed to enter and later
+-- lapses still won fairly under the rules that were live when they entered.
+alter table public.raffles add column if not exists subs_vips_only boolean not null default false;
+
 create table if not exists public.raffle_entries (
   id uuid primary key default gen_random_uuid(),
   raffle_id uuid references public.raffles(id) on delete cascade,

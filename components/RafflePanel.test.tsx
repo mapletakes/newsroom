@@ -8,6 +8,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RafflePanel } from './RafflePanel';
+import { DEFAULT_RAFFLE_COMMAND } from '@/lib/raffle';
 
 type Posted = { url: string; body: unknown };
 
@@ -66,7 +67,28 @@ describe('RafflePanel — idle (no raffle running)', () => {
     await waitFor(() => {
       expect(posts).toContainEqual({
         url: '/api/raffle',
-        body: { command: '!giveaway', durationSeconds: 180, winnerCount: 2 },
+        body: { command: '!giveaway', durationSeconds: 180, winnerCount: 2, subsVipsOnly: false },
+      });
+    });
+  });
+
+  it('includes the subs/VIPs-only checkbox state when checked', async () => {
+    const posts = mockApi(null);
+    const user = await openPanel();
+
+    await screen.findByLabelText('Entry command');
+    await user.click(screen.getByRole('checkbox', { name: /subs.*vips only/i }));
+    await user.click(screen.getByRole('button', { name: /start raffle/i }));
+
+    await waitFor(() => {
+      expect(posts).toContainEqual({
+        url: '/api/raffle',
+        body: {
+          command: DEFAULT_RAFFLE_COMMAND,
+          durationSeconds: 120,
+          winnerCount: 1,
+          subsVipsOnly: true,
+        },
       });
     });
   });
@@ -126,6 +148,21 @@ describe('RafflePanel — open (collecting entries)', () => {
       expect(posts).toContainEqual({ url: '/api/raffle/end', body: undefined });
     });
   });
+
+  it('flags a subs/VIPs-only raffle while it is running', async () => {
+    mockApi({ ...OPEN, subsVipsOnly: true });
+    await openPanel();
+
+    expect(await screen.findByText(/subs & vips only/i)).toBeInTheDocument();
+  });
+
+  it('says nothing about a restriction for a normal raffle', async () => {
+    mockApi(OPEN);
+    await openPanel();
+
+    await screen.findByText('!enter');
+    expect(screen.queryByText(/subs & vips only/i)).not.toBeInTheDocument();
+  });
 });
 
 describe('RafflePanel — closed (winners drawn)', () => {
@@ -161,6 +198,13 @@ describe('RafflePanel — closed (winners drawn)', () => {
     await waitFor(() => {
       expect(posts).toContainEqual({ url: '/api/raffle/announce', body: undefined });
     });
+  });
+
+  it('flags a subs/VIPs-only raffle in the results too', async () => {
+    mockApi({ ...CLOSED, subsVipsOnly: true });
+    await openPanel();
+
+    expect(await screen.findByText(/subs & vips only/i)).toBeInTheDocument();
   });
 
   it('shows "Announced" instead of the button once winners_announced_at is set', async () => {

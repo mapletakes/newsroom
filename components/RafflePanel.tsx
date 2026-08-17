@@ -21,6 +21,7 @@ type RaffleData = {
   closedAt: string | null;
   winnersAnnouncedAt: string | null;
   startedByLogin: string | null;
+  subsVipsOnly: boolean;
   entryCount: number;
   winners: string[];
 };
@@ -109,6 +110,7 @@ export function RafflePanel({
   const [command, setCommand] = useState(DEFAULT_RAFFLE_COMMAND);
   const [minutes, setMinutes] = useState('2');
   const [winnerCount, setWinnerCount] = useState('1');
+  const [subsVipsOnly, setSubsVipsOnly] = useState(false);
 
   const startMutation = useMutation({
     mutationFn: async () => {
@@ -119,6 +121,7 @@ export function RafflePanel({
           command,
           durationSeconds: Math.round(parseFloat(minutes || '0') * 60),
           winnerCount: parseInt(winnerCount, 10),
+          subsVipsOnly,
         }),
       });
       if (!r.ok) {
@@ -187,6 +190,12 @@ export function RafflePanel({
             {raffle.entryCount} {raffle.entryCount === 1 ? 'entry' : 'entries'} ·{' '}
             {raffle.winnerCount} {raffle.winnerCount === 1 ? 'winner' : 'winners'} to draw
             {raffle.startedByLogin && <> · started by {raffle.startedByLogin}</>}
+            {raffle.subsVipsOnly && (
+              <>
+                {' '}
+                · <span className="text-ochre font-bold">subs &amp; VIPs only</span>
+              </>
+            )}
           </p>
           {endMutation.isError && (
             <p className="font-mono text-[10px] text-rust mb-2">⚠ {endMutation.error.message}</p>
@@ -206,6 +215,12 @@ export function RafflePanel({
         <div>
           <p className="font-mono text-[11px] text-ink/50 mb-2">
             {raffle.entryCount} {raffle.entryCount === 1 ? 'entry' : 'entries'} · closed
+            {raffle.subsVipsOnly && (
+              <>
+                {' '}
+                · <span className="text-ochre font-bold">subs &amp; VIPs only</span>
+              </>
+            )}
           </p>
           {raffle.winners.length === 0 ? (
             <p className="text-sm text-ink/60 mb-4">Nobody entered — no winners to draw.</p>
@@ -314,6 +329,14 @@ export function RafflePanel({
               />
             </div>
           </div>
+          <label className="flex items-center gap-1.5 mb-4 font-mono text-[10px] uppercase tracking-widest text-ink/60 cursor-pointer w-fit">
+            <input
+              type="checkbox"
+              checked={subsVipsOnly}
+              onChange={(e) => setSubsVipsOnly(e.target.checked)}
+            />
+            Subs &amp; VIPs only
+          </label>
           {startMutation.isError && (
             <p className="font-mono text-[10px] text-rust mb-2">⚠ {startMutation.error.message}</p>
           )}

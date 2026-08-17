@@ -196,7 +196,7 @@ export async function POST(req: NextRequest) {
   // runs regardless.
   if (stream.raffle_enabled) {
     waitUntil(
-      handleRaffleEntry(stream.id, messageText, chatterName).catch((err) =>
+      handleRaffleEntry(stream.id, messageText, chatterName, isSub, isVip).catch((err) =>
         console.error('background handleRaffleEntry failed:', err),
       ),
     );

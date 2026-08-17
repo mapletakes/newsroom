@@ -190,6 +190,14 @@ describe('chat message copy', () => {
     expect(msg).toContain('30s');
   });
 
+  it('announces a subs/VIPs-only restriction up front, not by default', () => {
+    expect(buildStartMessage('!enter', 90, 1)).not.toContain('subs');
+    const msg = buildStartMessage('!enter', 90, 1, true);
+    expect(msg).toContain('subs & VIPs only');
+    // Announced right after the command, not buried at the end.
+    expect(msg.indexOf('subs & VIPs only')).toBeLessThan(msg.indexOf('will be drawn'));
+  });
+
   it('reports a real entrant count on close', () => {
     expect(buildClosedMessage(5)).toContain('5 entries');
     expect(buildClosedMessage(1)).toContain('1 entry');
