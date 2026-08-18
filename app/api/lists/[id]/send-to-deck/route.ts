@@ -8,7 +8,7 @@ import { broadcastQueueChange } from '@/lib/realtime';
 // Non-destructive: items stay on the list (it's a durable reference, not a
 // staging queue) and can be sent again later, e.g. for a recurring segment.
 //
-// Two modes:
+// Three modes:
 //   { itemIds?: string[], segmentId?: string | null } — the original mode:
 //     send specific items (or the whole list, flat) into one existing deck
 //     segment (or ungrouped).
@@ -19,6 +19,12 @@ import { broadcastQueueChange } from '@/lib/realtime';
 //     ungrouped bucket goes to the deck's ungrouped area. The shelf's own
 //     structure is untouched — this is a copy, so the same rundown can be
 //     sent again later.
+//   { mode: 'segment', listSegmentId: string } — rundown's per-block
+//     behavior, scoped to just one shelf segment: always creates one FRESH
+//     deck segment named after it (never reused/merged by name, same
+//     reasoning as rundown) and copies that block's items into it in order.
+//     No target to choose — unlike the flat itemIds mode, this preserves the
+//     block as its own segment rather than flattening into an existing one.
 // Duplicates already on the deck are skipped either way, same rule as every
 // other add-to-deck path. Each item's curator note copies into the deck
 // submission's `prep_note` (distinct from `mod_notes`, which is mod
@@ -84,22 +90,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return !error;
   };
 
-  if (body.mode === 'rundown') {
-    const { data: listSegments } = await sb
-      .from('list_segments')
-      .select('id, name, position')
-      .eq('list_id', list.id)
-      .order('position', { ascending: true })
-      .order('created_at', { ascending: true });
-
-    const { data: items } = await sb
-      .from('list_items')
-      .select('*')
-      .eq('list_id', list.id)
-      .order('position', { ascending: true })
-      .order('created_at', { ascending: true });
-    const allItems = items || [];
-
+  if (body.mode === 'rundown' || body.mode === 'segment') {
     // Where new deck segments get appended: after every existing one.
     const { data: maxSeg } = await sb
       .from('segments')
@@ -114,6 +105,58 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .eq('id', session.streamId)
       .maybeSingle();
     let nextSegPosition = Math.max(maxSeg?.position ?? 0, stream?.ungrouped_position ?? 0) + 1;
+
+    if (body.mode === 'segment') {
+      const { data: listSeg } = await sb
+        .from('list_segments')
+        .select('id, name')
+        .eq('id', String(body.listSegmentId || ''))
+        .eq('list_id', list.id)
+        .maybeSingle();
+      if (!listSeg) return NextResponse.json({ error: 'not found' }, { status: 404 });
+
+      const { data: items } = await sb
+        .from('list_items')
+        .select('*')
+        .eq('list_id', list.id)
+        .eq('segment_id', listSeg.id)
+        .order('position', { ascending: true })
+        .order('created_at', { ascending: true });
+      const segItems = items || [];
+      if (segItems.length === 0) return NextResponse.json({ added: 0, skipped: 0, segmentsCreated: 0 });
+
+      const { data: newSeg, error: segErr } = await sb
+        .from('segments')
+        .insert({ stream_id: session.streamId, name: listSeg.name, position: nextSegPosition })
+        .select('id')
+        .single();
+      if (segErr || !newSeg) return NextResponse.json({ error: 'failed to create segment' }, { status: 500 });
+
+      let added = 0;
+      let skipped = 0;
+      let pos = 1;
+      for (const item of segItems) {
+        if (await insertItem(item, newSeg.id, pos)) { added++; pos++; } else { skipped++; }
+      }
+
+      if (added > 0) broadcastQueueChange(session.streamId);
+      return NextResponse.json({ added, skipped, segmentsCreated: 1 });
+    }
+
+    const { data: listSegments } = await sb
+      .from('list_segments')
+      .select('id, name, position')
+      .eq('list_id', list.id)
+      .order('position', { ascending: true })
+      .order('created_at', { ascending: true });
+
+    const { data: items } = await sb
+      .from('list_items')
+      .select('*')
+      .eq('list_id', list.id)
+      .order('position', { ascending: true })
+      .order('created_at', { ascending: true });
+    const allItems = items || [];
 
     let added = 0;
     let skipped = 0;

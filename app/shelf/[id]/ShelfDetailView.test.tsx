@@ -1,7 +1,9 @@
-// Covers the one thing this file adds: a per-segment "Send to deck" action,
-// distinct from the existing per-item and whole-shelf sends. Everything else
-// on ShelfDetailView (drag-and-drop, rename, share links) is exercised in the
-// browser rather than here — this is scoped to the new send path only.
+// Covers the two things this file adds: a per-segment "Send to deck" action
+// that turns a shelf segment into its own fresh deck segment (not a flat
+// dump into a chosen target), and the ungrouped block's flat send (which
+// still lets you pick a target, since there's no segment identity to
+// preserve there). Everything else on ShelfDetailView (drag-and-drop,
+// rename, share links) is exercised in the browser rather than here.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
@@ -59,7 +61,7 @@ function mockApi() {
       }
       if (method === 'POST') {
         posts.push({ url, body: init?.body ? JSON.parse(init.body as string) : undefined });
-        return Promise.resolve(new Response(JSON.stringify({ added: 2, skipped: 0 }), { status: 200 }));
+        return Promise.resolve(new Response(JSON.stringify({ added: 2, skipped: 0, segmentsCreated: 1 }), { status: 200 }));
       }
       return Promise.resolve(new Response(JSON.stringify({}), { status: 200 }));
     }),
@@ -84,7 +86,7 @@ afterEach(() => {
 });
 
 describe('ShelfDetailView — per-segment send to deck', () => {
-  it('sends only that segment\'s items, not the whole shelf', async () => {
+  it('sends the segment as its own fresh deck segment, with no target to pick', async () => {
     const posts = mockApi();
     const user = userEvent.setup();
     renderShelf();
@@ -92,31 +94,50 @@ describe('ShelfDetailView — per-segment send to deck', () => {
     // The segment title renders as an editable <input> (canCurate is on),
     // not plain text, so it needs findByDisplayValue rather than findByText.
     const segmentHeader = (await screen.findByDisplayValue('Cold open')).closest('div')!;
-    const sendButtons = within(segmentHeader).getAllByRole('button', { name: /send to deck/i });
-    await user.click(sendButtons[0]);
-    await user.click(await screen.findByText('Main block'));
+    const sendButton = within(segmentHeader).getByRole('button', { name: /send segment to deck/i });
+
+    // A plain click, not a dropdown — there's no existing deck segment to
+    // choose since sending a segment always creates a fresh one.
+    await user.click(sendButton);
 
     await waitFor(() => {
       expect(posts).toContainEqual({
         url: '/api/lists/shelf-1/send-to-deck',
-        body: { itemIds: ['item-a', 'item-b'], segmentId: 'deck-seg-1' },
+        body: { mode: 'segment', listSegmentId: 'seg-1' },
       });
     });
   });
 
-  it('offers "Ungrouped" as a target alongside existing deck segments', async () => {
+  it('does not offer a target-picking menu on a named segment', async () => {
     mockApi();
+    renderShelf();
+
+    const segmentHeader = (await screen.findByDisplayValue('Cold open')).closest('div')!;
+    expect(within(segmentHeader).queryByRole('button', { name: /^send to deck/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('ShelfDetailView — ungrouped send to deck', () => {
+  it('still offers a target to pick, since there is no segment identity to preserve', async () => {
+    const posts = mockApi();
     const user = userEvent.setup();
     renderShelf();
 
-    // The segment title renders as an editable <input> (canCurate is on),
-    // not plain text, so it needs findByDisplayValue rather than findByText.
-    const segmentHeader = (await screen.findByDisplayValue('Cold open')).closest('div')!;
-    const sendButtons = within(segmentHeader).getAllByRole('button', { name: /send to deck/i });
-    await user.click(sendButtons[0]);
+    const ungroupedHeader = (await screen.findByText('Ungrouped')).closest('div')!;
+    const sendButton = within(ungroupedHeader).getByRole('button', { name: /send to deck/i });
+    await user.click(sendButton);
 
     const menu = await screen.findByRole('menu');
     expect(within(menu).getByText('Ungrouped')).toBeInTheDocument();
     expect(within(menu).getByText('Main block')).toBeInTheDocument();
+
+    await user.click(within(menu).getByText('Main block'));
+
+    await waitFor(() => {
+      expect(posts).toContainEqual({
+        url: '/api/lists/shelf-1/send-to-deck',
+        body: { itemIds: ['item-c'], segmentId: 'deck-seg-1' },
+      });
+    });
   });
 });
