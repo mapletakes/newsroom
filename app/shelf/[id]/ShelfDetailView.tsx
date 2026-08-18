@@ -264,6 +264,7 @@ function ShelfSegmentBlock({
   sortable,
   onRemoveItem,
   onSendItem,
+  onSendBlock,
   onNoteCommit,
   onRenameLocal,
   onRenameCommit,
@@ -280,6 +281,7 @@ function ShelfSegmentBlock({
   sortable: boolean;
   onRemoveItem: (id: string) => void;
   onSendItem: (id: string, segmentId: string | null, label: string) => void;
+  onSendBlock: (segmentId: string | null, label: string) => void;
   onNoteCommit: (id: string, note: string) => void;
   onRenameLocal?: (name: string) => void;
   onRenameCommit?: () => void;
@@ -330,6 +332,9 @@ function ShelfSegmentBlock({
             </span>
           )}
           <span className="mr-auto shrink-0 font-mono text-xs font-semibold text-ink/60">({items.length})</span>
+          {canCurate && items.length > 0 && (
+            <SendToDeckMenu segments={deckSegments} onSend={onSendBlock} label="Send to deck" size="xs" />
+          )}
           {onDelete && canCurate && (
             <button onClick={onDelete} className="shrink-0 w-5 flex items-center justify-center text-ink/30 hover:text-rust" aria-label="Delete segment">
               <Icon name="remove" className="text-sm" />
@@ -992,6 +997,7 @@ export function ShelfDetailView({
                       sortable={hasSegments}
                       onRemoveItem={(id) => removeItemMutation.mutate(id)}
                       onSendItem={(id, seg, label) => sendToDeck([id], seg, label)}
+                      onSendBlock={(seg, label) => sendToDeck(blockItems.map((i) => i.id), seg, label)}
                       onNoteCommit={(id, note) => noteMutation.mutate({ id, note })}
                     />
                   );
@@ -1012,6 +1018,7 @@ export function ShelfDetailView({
                     sortable
                     onRemoveItem={(id) => removeItemMutation.mutate(id)}
                     onSendItem={(id, dsId, label) => sendToDeck([id], dsId, label)}
+                    onSendBlock={(dsId, label) => sendToDeck(blockItems.map((i) => i.id), dsId, label)}
                     onNoteCommit={(id, note) => noteMutation.mutate({ id, note })}
                     onRenameLocal={(v) => renameSegmentLocal(seg.id, v)}
                     onRenameCommit={() => commitSegmentRename(seg.id)}
