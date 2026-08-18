@@ -8,7 +8,8 @@ import { sessionCanCurate } from '@/lib/curate';
 // existing token if one's already set, so re-clicking "Share" in the UI
 // doesn't invalidate a link someone already sent out). Pass
 // { regenerate: true } to force a fresh token, revoking the old link.
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   if (!(await sessionCanCurate(session))) {
@@ -20,7 +21,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const { data: list } = await sb
     .from('lists')
     .select('id, share_token')
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('stream_id', session.streamId)
     .maybeSingle();
   if (!list) return NextResponse.json({ error: 'not found' }, { status: 404 });
@@ -37,7 +38,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 }
 
 // DELETE — revoke the share link.
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   if (!(await sessionCanCurate(session))) {
@@ -48,7 +50,7 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   const { error } = await sb
     .from('lists')
     .update({ share_token: null })
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('stream_id', session.streamId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

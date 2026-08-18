@@ -19,20 +19,21 @@ const VARIANTS = ['default', 'minimal', 'ticker'] as const;
 // mark on the card (shown by default). variant picks the layout: default is
 // the full title+meta lower third, minimal is a single-line title-only chip,
 // and ticker adds a slim "up next" line under the default card.
-export default function OverlayPage({
+export default async function OverlayPage({
   searchParams,
 }: {
-  searchParams: { token?: string; theme?: string; brand?: string; variant?: string };
+  searchParams: Promise<{ token?: string; theme?: string; brand?: string; variant?: string }>;
 }) {
+  const sp = await searchParams;
   // Legacy: colours now live on the stream row and reach the source through
   // the poll, so this only applies to a browser source added before that
   // existed and never reconfigured. Once a theme is saved in Settings it wins.
-  const fallbackPreset = (THEMES as readonly string[]).includes(searchParams.theme || '')
-    ? (searchParams.theme as OverlayTheme)
+  const fallbackPreset = (THEMES as readonly string[]).includes(sp.theme || '')
+    ? (sp.theme as OverlayTheme)
     : null;
-  const showBrand = searchParams.brand !== '0';
-  const variant: OverlayVariant = (VARIANTS as readonly string[]).includes(searchParams.variant || '')
-    ? (searchParams.variant as OverlayVariant)
+  const showBrand = sp.brand !== '0';
+  const variant: OverlayVariant = (VARIANTS as readonly string[]).includes(sp.variant || '')
+    ? (sp.variant as OverlayVariant)
     : 'default';
   return (
     <>
@@ -40,7 +41,7 @@ export default function OverlayPage({
           transparency so only the lower-third card shows over the stream. */}
       <style>{'html, body { background: transparent !important; }'}</style>
       <OverlayView
-        token={searchParams.token || ''}
+        token={sp.token || ''}
         fallbackPreset={fallbackPreset}
         showBrand={showBrand}
         variant={variant}

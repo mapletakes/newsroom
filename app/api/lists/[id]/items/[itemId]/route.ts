@@ -4,7 +4,8 @@ import { getApprovedSession } from '@/lib/session';
 import { sessionCanCurate } from '@/lib/curate';
 
 // PATCH — edit an item's curator note.
-export async function PATCH(req: NextRequest, { params }: { params: { id: string; itemId: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string; itemId: string }> }) {
+  const { id, itemId } = await params;
   const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   if (!(await sessionCanCurate(session))) {
@@ -20,7 +21,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const { data: list } = await sb
     .from('lists')
     .select('id')
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('stream_id', session.streamId)
     .maybeSingle();
   if (!list) return NextResponse.json({ error: 'not found' }, { status: 404 });
@@ -28,7 +29,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const { error } = await sb
     .from('list_items')
     .update({ note: body.note })
-    .eq('id', params.itemId)
+    .eq('id', itemId)
     .eq('list_id', list.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -36,7 +37,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 // DELETE — remove one item from a shelf.
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string; itemId: string } }) {
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string; itemId: string }> }) {
+  const { id, itemId } = await params;
   const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   if (!(await sessionCanCurate(session))) {
@@ -47,7 +49,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   const { data: list } = await sb
     .from('lists')
     .select('id')
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('stream_id', session.streamId)
     .maybeSingle();
   if (!list) return NextResponse.json({ error: 'not found' }, { status: 404 });
@@ -55,7 +57,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   const { error } = await sb
     .from('list_items')
     .delete()
-    .eq('id', params.itemId)
+    .eq('id', itemId)
     .eq('list_id', list.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

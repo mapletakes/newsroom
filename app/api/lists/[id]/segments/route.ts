@@ -7,7 +7,8 @@ export const dynamic = 'force-dynamic';
 
 // POST — create a list segment, appended above everything (including the
 // ungrouped block) — same convention as the deck's segments.
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   if (!(await sessionCanCurate(session))) {
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const { data: list } = await sb
     .from('lists')
     .select('id, ungrouped_position')
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('stream_id', session.streamId)
     .maybeSingle();
   if (!list) return NextResponse.json({ error: 'not found' }, { status: 404 });
@@ -48,7 +49,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 }
 
 // PATCH — rename or reposition a list segment.
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id: listId } = await params;
   const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   if (!(await sessionCanCurate(session))) {
@@ -68,7 +70,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const { data: list } = await sb
     .from('lists')
     .select('id')
-    .eq('id', params.id)
+    .eq('id', listId)
     .eq('stream_id', session.streamId)
     .maybeSingle();
   if (!list) return NextResponse.json({ error: 'not found' }, { status: 404 });
@@ -84,7 +86,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 // DELETE — remove a list segment. Its items fall back to ungrouped (FK SET NULL).
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id: listId } = await params;
   const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   if (!(await sessionCanCurate(session))) {
@@ -99,7 +102,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const { data: list } = await sb
     .from('lists')
     .select('id')
-    .eq('id', params.id)
+    .eq('id', listId)
     .eq('stream_id', session.streamId)
     .maybeSingle();
   if (!list) return NextResponse.json({ error: 'not found' }, { status: 404 });

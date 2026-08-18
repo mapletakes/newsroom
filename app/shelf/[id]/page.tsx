@@ -8,7 +8,8 @@ import { ShelfDetailView } from './ShelfDetailView';
 
 export const dynamic = 'force-dynamic';
 
-export default async function ShelfDetailPage({ params }: { params: { id: string } }) {
+export default async function ShelfDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await getSession();
   if (!session) redirect('/login');
 
@@ -19,7 +20,7 @@ export default async function ShelfDetailPage({ params }: { params: { id: string
   const { data: shelf } = await sb
     .from('lists')
     .select('id')
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('stream_id', session.streamId)
     .maybeSingle();
   if (!shelf) redirect('/shelf');
@@ -30,7 +31,7 @@ export default async function ShelfDetailPage({ params }: { params: { id: string
     <>
       <StreamTheme />
       <ShelfDetailView
-        shelfId={params.id}
+        shelfId={id}
         streamId={session.streamId}
         displayName={session.displayName}
         isAdmin={isAdmin(session.twitchUserId)}

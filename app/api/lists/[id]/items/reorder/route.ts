@@ -3,7 +3,8 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getApprovedSession } from '@/lib/session';
 import { sessionCanCurate } from '@/lib/curate';
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   if (!(await sessionCanCurate(session))) {
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const { data: list } = await sb
     .from('lists')
     .select('id')
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('stream_id', session.streamId)
     .maybeSingle();
   if (!list) return NextResponse.json({ error: 'not found' }, { status: 404 });

@@ -6,7 +6,8 @@ import { sessionCanCurate } from '@/lib/curate';
 export const dynamic = 'force-dynamic';
 
 // GET — one list plus its items, in display order.
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
 
@@ -14,7 +15,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const { data: list, error } = await sb
     .from('lists')
     .select('id, name, position, share_token, ungrouped_position, created_at, updated_at')
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('stream_id', session.streamId)
     .maybeSingle();
   if (error || !list) return NextResponse.json({ error: 'not found' }, { status: 404 });
@@ -37,7 +38,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 }
 
 // PATCH — rename a shelf.
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   if (!(await sessionCanCurate(session))) {
@@ -54,7 +56,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const { error } = await sb
     .from('lists')
     .update(patch)
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('stream_id', session.streamId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -62,7 +64,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 // DELETE — remove a shelf (items cascade).
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   if (!(await sessionCanCurate(session))) {
@@ -73,7 +76,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   const { error } = await sb
     .from('lists')
     .delete()
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('stream_id', session.streamId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

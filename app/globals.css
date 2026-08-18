@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,900&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,900&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap')
+layer(base);
 
 /* OpenDyslexic isn't on Google Fonts, so it can't go through the same
    runtime-fetch path everything else in FONT_CHOICES uses (see
@@ -14,38 +15,62 @@
    families it asks Google for — Google 400s a css2 request that names a
    family it doesn't host, which without that guard would take down every
    OTHER font requested alongside it in the same call. */
-@font-face {
-  font-family: 'OpenDyslexic';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('https://cdn.jsdelivr.net/fontsource/fonts/opendyslexic@5.3.0/latin-400-normal.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'OpenDyslexic';
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url('https://cdn.jsdelivr.net/fontsource/fonts/opendyslexic@5.3.0/latin-700-normal.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'OpenDyslexic';
-  font-style: italic;
-  font-weight: 400;
-  font-display: swap;
-  src: url('https://cdn.jsdelivr.net/fontsource/fonts/opendyslexic@5.3.0/latin-400-italic.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'OpenDyslexic';
-  font-style: italic;
-  font-weight: 700;
-  font-display: swap;
-  src: url('https://cdn.jsdelivr.net/fontsource/fonts/opendyslexic@5.3.0/latin-700-italic.woff2') format('woff2');
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/* Colors and fonts are defined as CSS custom properties further down (see
+   :root below) so a stream's theme/typeface choice can override them at
+   runtime without a rebuild. `@theme inline` maps Tailwind's utility classes
+   (bg-ink, font-display, etc.) onto those same runtime variables instead of
+   baking in static values — this replaces the old tailwind.config.mjs
+   theme.extend block. */
+@theme inline {
+  --color-ink: rgb(var(--ink));
+  --color-paper: rgb(var(--paper));
+  --color-rust: rgb(var(--rust));
+  --color-ochre: rgb(var(--ochre));
+  --color-moss: rgb(var(--moss));
+  --color-slate: rgb(var(--slate));
+
+  --font-display: var(--font-display);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
 }
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@layer base {
+  @font-face {
+    font-family: 'OpenDyslexic';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('https://cdn.jsdelivr.net/fontsource/fonts/opendyslexic@5.3.0/latin-400-normal.woff2')
+      format('woff2');
+  }
+  @font-face {
+    font-family: 'OpenDyslexic';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('https://cdn.jsdelivr.net/fontsource/fonts/opendyslexic@5.3.0/latin-700-normal.woff2')
+      format('woff2');
+  }
+  @font-face {
+    font-family: 'OpenDyslexic';
+    font-style: italic;
+    font-weight: 400;
+    font-display: swap;
+    src: url('https://cdn.jsdelivr.net/fontsource/fonts/opendyslexic@5.3.0/latin-400-italic.woff2')
+      format('woff2');
+  }
+  @font-face {
+    font-family: 'OpenDyslexic';
+    font-style: italic;
+    font-weight: 700;
+    font-display: swap;
+    src: url('https://cdn.jsdelivr.net/fontsource/fonts/opendyslexic@5.3.0/latin-700-italic.woff2')
+      format('woff2');
+  }
+}
 
 /* Each palette is also exposed as a `.theme-*` scope class so an isolated
    surface (the OBS overlay) can force a theme on itself via a wrapper div,

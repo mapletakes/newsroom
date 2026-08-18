@@ -278,7 +278,7 @@ export function DeckMobile({
     : '';
 
   return (
-    <div className="flex flex-col min-h-[100dvh]">
+    <div className="flex flex-col min-h-dvh">
       {/* Compact masthead — the desktop one wraps to 170px of nav on a phone,
           which is a fifth of the screen spent on links you rarely tap. */}
       <header className="sticky top-0 z-20 flex items-center gap-2 bg-paper border-b-2 border-ink px-3 py-2">

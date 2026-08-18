@@ -12,13 +12,14 @@ export const dynamic = 'force-dynamic';
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: { window?: string };
+  searchParams: Promise<{ window?: string }>;
 }) {
+  const { window: windowParam } = await searchParams;
   const session = await getSession();
   if (!session) redirect('/login');
   if (!isAdmin(session.twitchUserId)) redirect('/');
 
-  const win = searchParams.window === '30d' ? '30d' : 'all';
+  const win = windowParam === '30d' ? '30d' : 'all';
   const since = win === '30d' ? new Date(Date.now() - 30 * 86_400_000).toISOString() : null;
 
   // select('*') rather than an explicit column list: supabase-js parses a

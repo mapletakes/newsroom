@@ -51,7 +51,8 @@ export function parseSessionCookie(value: string | undefined): Session | null {
 }
 
 export async function getSession(): Promise<Session | null> {
-  return parseSessionCookie(cookies().get(COOKIE)?.value);
+  const cookieStore = await cookies();
+  return parseSessionCookie(cookieStore.get(COOKIE)?.value);
 }
 
 /**
@@ -105,5 +106,6 @@ export function verifyOAuthStateDetailed(state: string): {
 }
 
 export async function clearSession() {
-  cookies().delete(COOKIE);
+  const cookieStore = await cookies();
+  cookieStore.delete(COOKIE);
 }

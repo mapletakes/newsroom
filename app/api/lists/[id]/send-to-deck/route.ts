@@ -23,7 +23,8 @@ import { broadcastQueueChange } from '@/lib/realtime';
 // other add-to-deck path. Each item's curator note copies into the deck
 // submission's `prep_note` (distinct from `mod_notes`, which is mod
 // editorial/risk-flagging territory) — the deck's takeaway box seeds from it.
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   if (!(await sessionCanCurate(session))) {
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const { data: list } = await sb
     .from('lists')
     .select('id')
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('stream_id', session.streamId)
     .maybeSingle();
   if (!list) return NextResponse.json({ error: 'not found' }, { status: 404 });

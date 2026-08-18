@@ -9,14 +9,15 @@ import { AdminChannelDetail, type ChannelDetail, type ActivityEntry } from './Ad
 
 export const dynamic = 'force-dynamic';
 
-export default async function AdminChannelPage({ params }: { params: { login: string } }) {
+export default async function AdminChannelPage({ params }: { params: Promise<{ login: string }> }) {
+  const { login: rawLogin } = await params;
   const session = await getSession();
   if (!session) redirect('/login');
   if (!isAdmin(session.twitchUserId)) redirect('/');
 
   // Twitch logins are already lowercase at the source (app/api/twitch/callback),
   // but the URL is user-typed/pasted, so normalise before the lookup.
-  const login = params.login.toLowerCase();
+  const login = rawLogin.toLowerCase();
   const sb = supabaseAdmin();
   const { data: stream } = await sb.from('streams').select('*').eq('twitch_login', login).maybeSingle();
   if (!stream) notFound();

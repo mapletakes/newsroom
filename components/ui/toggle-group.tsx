@@ -32,7 +32,7 @@ const toggleGroupItemVariants = cva(
         // view's status filter). Reads as newspaper section tabs rather than
         // a filter toggle, on purpose: different action, different affordance.
         tab:
-          'px-3 py-1.5 border-b-2 -mb-[2px] border-transparent text-ink/50 hover:text-ink data-[state=on]:border-rust data-[state=on]:text-ink data-[state=on]:font-bold',
+          'px-3 py-1.5 border-b-2 mb-[-2px] border-transparent text-ink/50 hover:text-ink data-[state=on]:border-rust data-[state=on]:text-ink data-[state=on]:font-bold',
       },
     },
     defaultVariants: { variant: 'default' },

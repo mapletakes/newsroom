@@ -7,8 +7,8 @@ import { checkRateLimit, hashKey } from '@/lib/ratelimit';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(_req: Request, { params }: { params: { token: string } }) {
-  const token = params.token;
+export async function GET(_req: Request, { params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params;
   if (!token) return NextResponse.json({ error: 'missing token' }, { status: 400 });
 
   const limited = await checkRateLimit('read', hashKey(token));

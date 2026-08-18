@@ -12,12 +12,12 @@ export function Toaster() {
       toastOptions={{
         classNames: {
           toast:
-            'font-mono text-sm !gap-3 !rounded-none !border-2 !border-ink !bg-paper !text-ink !shadow-[4px_4px_0_rgb(var(--ink))]',
+            'font-mono text-sm !gap-3 rounded-none! border-2! !border-ink !bg-paper !text-ink shadow-[4px_4px_0_rgb(var(--ink))]!',
           title: '!font-display !font-bold !text-base',
           description: '!text-ink/70',
           actionButton:
-            '!rounded-none !bg-ink !text-paper !font-mono !text-xs !uppercase !tracking-widest',
-          cancelButton: '!rounded-none !bg-transparent !text-ink',
+            'rounded-none! !bg-ink !text-paper !font-mono !text-xs uppercase! !tracking-widest',
+          cancelButton: 'rounded-none! bg-transparent! !text-ink',
           error: '!border-rust',
           success: '!border-moss',
         },

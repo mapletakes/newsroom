@@ -10,18 +10,20 @@ import { ImportButton } from './ImportButton';
 
 export const dynamic = 'force-dynamic';
 
-export async function generateMetadata({ params }: { params: { token: string } }) {
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params;
   const sb = supabaseAdmin();
-  const { data: list } = await sb.from('lists').select('name').eq('share_token', params.token).maybeSingle();
+  const { data: list } = await sb.from('lists').select('name').eq('share_token', token).maybeSingle();
   return { title: list ? `${list.name} — The Broadside` : 'Shelf — The Broadside' };
 }
 
-export default async function SharedListPage({ params }: { params: { token: string } }) {
+export default async function SharedListPage({ params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params;
   const sb = supabaseAdmin();
   const { data: list } = await sb
     .from('lists')
     .select('id, name, updated_at, stream_id')
-    .eq('share_token', params.token)
+    .eq('share_token', token)
     .maybeSingle();
   if (!list) notFound();
 
@@ -57,7 +59,7 @@ export default async function SharedListPage({ params }: { params: { token: stri
       </p>
 
       <div className="mb-8">
-        <ImportButton token={params.token} loggedIn={!!session} />
+        <ImportButton token={token} loggedIn={!!session} />
       </div>
 
       <div className="rule-double mb-6" />

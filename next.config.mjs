@@ -19,11 +19,11 @@ const securityHeaders = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  images: {
-    remotePatterns: [
-      { protocol: 'https', hostname: '**' },
-    ],
-  },
+  // No remotePatterns: thumbnails come from arbitrary submitted/publisher
+  // URLs (OG-scraped) and are always rendered as plain <img>, never through
+  // next/image's <Image> component — so there's no legitimate use of the
+  // /_next/image optimizer route here, and leaving remotePatterns empty
+  // keeps that route from being usable as an open image-fetch proxy.
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];
   },

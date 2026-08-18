@@ -2,13 +2,18 @@ import Link from 'next/link';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-export default function Login({ searchParams }: { searchParams: { error?: string; detail?: string } }) {
+export default async function Login({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; detail?: string }>;
+}) {
+  const sp = await searchParams;
   const errorMap: Record<string, string> = {
     state: 'OAuth state mismatch — please try again.',
     oauth: 'Twitch sign-in failed.',
   };
-  const errMsg = searchParams.error && (errorMap[searchParams.error] || searchParams.error);
-  const detail = searchParams.detail;
+  const errMsg = sp.error && (errorMap[sp.error] || sp.error);
+  const detail = sp.detail;
 
   return (
     <main className="min-h-screen flex items-center justify-center px-6">
