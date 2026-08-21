@@ -155,18 +155,11 @@ function SortableItemRow({
 
   return (
     <div ref={setNodeRef} style={style}>
-      <Card className={cn(kindTint(item.kind), 'p-4 flex gap-3')}>
-        {canCurate && (
-          <button
-            {...attributes}
-            {...listeners}
-            className="shrink-0 w-5 flex items-center justify-center cursor-grab active:cursor-grabbing text-ink/30 hover:text-ink/60 select-none"
-            aria-label="Drag to reorder"
-            tabIndex={-1}
-          >
-            <Icon name="drag" />
-          </button>
-        )}
+      <Card
+        {...(canCurate ? attributes : {})}
+        {...(canCurate ? listeners : {})}
+        className={cn(kindTint(item.kind), 'p-4 flex gap-3', canCurate && 'cursor-grab active:cursor-grabbing')}
+      >
         {item.thumbnail_url && (
           <img
             src={item.thumbnail_url}
