@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Offline — The Broadside</title>
+<style>
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex; align-items: center; justify-content: center;
+    background: #f5f1e8; color: #0d0d0e;
+    font-family: Georgia, 'IBM Plex Sans', system-ui, sans-serif;
+    text-align: center; padding: 2rem;
+  }
+  .card { max-width: 26rem; }
+  h1 { font-size: 1.5rem; margin: 0 0 0.5rem; }
+  p { color: rgba(13, 13, 14, 0.7); line-height: 1.5; margin: 0 0 1.5rem; }
+  button {
+    font: inherit; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;
+    padding: 0.6rem 1.2rem; border: 1px solid #0d0d0e; background: #0d0d0e; color: #f5f1e8;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>You're offline</h1>
+    <p>The Broadside couldn't reach the network. This page is intentionally generic —
+       your channel, role, and theme all come from the server, so nothing here is
+       cached or guessed. Reconnect and try again.</p>
+    <button onclick="location.reload()">Retry</button>
+  </div>
+</body>
+</html>

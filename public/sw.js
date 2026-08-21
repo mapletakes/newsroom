@@ -1,13 +1,22 @@
 // Minimal service worker: exists to satisfy PWA install criteria and give
-// the app shell an offline fallback, not to cache data. API routes are never
-// cached — a live triage queue must always show fresh state.
-const CACHE = 'broadside-shell-v1';
-const SHELL_URLS = ['/mod'];
+// the app a static offline fallback, not to cache data or pages. Every page
+// in this app (deck, mod view, shelf, preferences, ...) is force-dynamic and
+// rendered per-session: theme, role, and channel branding are all baked into
+// the server-rendered HTML itself, not fetched separately. Caching that HTML
+// under its URL and replaying it on a network hiccup — which is exactly what
+// this worker used to do — meant a mod could get served a stale render from
+// a DIFFERENT channel or session (e.g. the newsprint-default shell cached at
+// install time, before any theme was ever set) the moment their connection
+// blipped mid-navigation, most commonly right when switching channels. So:
+// navigations are always network-only, falling back to a static, genuinely
+// non-personalized offline page — never a cached copy of a real page.
+const CACHE = 'broadside-shell-v2';
+const OFFLINE_URL = '/offline.html';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(SHELL_URLS).catch(() => {})),
+    caches.open(CACHE).then((cache) => cache.addAll([OFFLINE_URL]).catch(() => {})),
   );
 });
 
@@ -18,14 +27,22 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Network-first: try the network, cache a copy of successful GETs for the
-// shell, and only fall back to the cache (or the /mod shell) if the network
-// fails entirely — e.g. a dead spot on a phone mid-triage.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
   if (url.pathname.startsWith('/api/')) return;
 
+  // Page navigations: every page is dynamic and session-specific, so this
+  // must never serve (or store) anything but a live network response.
+  if (event.request.mode === 'navigate') {
+    event.respondWith(fetch(event.request).catch(() => caches.match(OFFLINE_URL)));
+    return;
+  }
+
+  // Everything else here is a build-versioned static asset (JS/CSS/fonts/
+  // icons under /_next/static and friends) — content-hashed and identical
+  // for every user, so caching it carries none of the cross-session risk
+  // above and is what actually makes the installed app usable offline.
   event.respondWith(
     fetch(event.request)
       .then((res) => {
@@ -33,6 +50,6 @@ self.addEventListener('fetch', (event) => {
         caches.open(CACHE).then((cache) => cache.put(event.request, copy)).catch(() => {});
         return res;
       })
-      .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/mod'))),
+      .catch(() => caches.match(event.request)),
   );
 });
