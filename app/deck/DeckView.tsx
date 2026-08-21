@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Submission } from '@/components/SubmissionCard';
 import { extractYouTubeId, formatDuration, formatDate, formatClock, kindTint, kindCategory, type KindCategory } from '@/lib/url';
-import { positionsFromOrder, insertAtIndex, isSameOrder } from '@/lib/reorder';
+import { positionsFromOrder, insertAtIndex, isSameOrder, byPosition } from '@/lib/reorder';
 import { queryKeys } from '@/lib/query-keys';
 import { ArchiveButton } from '@/components/ArchiveButton';
 import { QuickLinksDrawer } from './QuickLinksDrawer';
@@ -67,12 +67,6 @@ import { CSS } from '@dnd-kit/utilities';
 type Segment = { id: string; name: string; position: number; collapsed: boolean };
 type QueueData = { submissions: Submission[]; nowPlayingId: string | null };
 type SegmentsData = { segments: Segment[]; ungroupedPosition: number };
-
-// Order within a group: by position (nulls last), then newest first.
-const byPosition = (a: Submission, b: Submission) =>
-  (a.position ?? 1e9) - (b.position ?? 1e9) ||
-  new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-
 
 function SortableQueueItem({
   s,

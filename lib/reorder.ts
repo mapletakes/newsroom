@@ -1,11 +1,24 @@
-// Pure array/position math shared by the deck's drag handlers
-// (app/deck/DeckView.tsx). Extracted so this can be locked down with tests
-// independent of React/dnd-kit — the flash/ordering bugs that have regressed
-// here before were all in this kind of index math, not in dnd-kit itself.
+// Pure array/position math shared by the deck's and shelf's drag handlers
+// (app/deck/DeckView.tsx, app/shelf/[id]/ShelfDetailView.tsx). Extracted so
+// this can be locked down with tests independent of React/dnd-kit — the
+// flash/ordering bugs that have regressed here before were all in this kind
+// of index math, not in dnd-kit itself.
 
 /** Map an ordered list of ids to 1-indexed positions, for persisting after a drag. */
 export function positionsFromOrder(orderedIds: string[]): Map<string, number> {
   return new Map(orderedIds.map((id, i) => [id, i + 1]));
+}
+
+/**
+ * Order within a group: by position (nulls last), then newest first. A drag
+ * only ever updates the `position` field of the affected rows in place — it
+ * doesn't reorder the array those rows live in — so anything rendered in
+ * drag order MUST be run through this first, or the visual order silently
+ * stops matching `position` the moment it's updated from anywhere but a full
+ * refetch (which happens to come back pre-sorted from the server).
+ */
+export function byPosition<T extends { position: number | null; created_at: string }>(a: T, b: T): number {
+  return (a.position ?? 1e9) - (b.position ?? 1e9) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
 }
 
 /**

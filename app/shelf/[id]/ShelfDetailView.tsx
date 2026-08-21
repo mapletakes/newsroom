@@ -21,7 +21,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { formatDuration, formatDate, relativeTime, kindTint } from '@/lib/url';
-import { positionsFromOrder, insertAtIndex, isSameOrder } from '@/lib/reorder';
+import { positionsFromOrder, insertAtIndex, isSameOrder, byPosition } from '@/lib/reorder';
 import { queryKeys } from '@/lib/query-keys';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -751,10 +751,13 @@ export function ShelfDetailView({
   const blockIds = useMemo(() => blocks.map((b) => b.id), [blocks]);
   const knownSegmentIds = useMemo(() => new Set(segments.map((s) => s.id)), [segments]);
   const ungroupedItems = useMemo(
-    () => items.filter((i) => !i.segment_id || !knownSegmentIds.has(i.segment_id)),
+    () => items.filter((i) => !i.segment_id || !knownSegmentIds.has(i.segment_id)).sort(byPosition),
     [items, knownSegmentIds],
   );
-  const itemsForSegment = useCallback((segId: string) => items.filter((i) => i.segment_id === segId), [items]);
+  const itemsForSegment = useCallback(
+    (segId: string) => items.filter((i) => i.segment_id === segId).sort(byPosition),
+    [items],
+  );
   const containerOf = useCallback(
     (itemId: string): string => {
       const item = items.find((i) => i.id === itemId);

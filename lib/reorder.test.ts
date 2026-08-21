@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { positionsFromOrder, insertAtIndex, isSameOrder } from './reorder';
+import { positionsFromOrder, insertAtIndex, isSameOrder, byPosition } from './reorder';
 
 describe('positionsFromOrder', () => {
   it('maps ids to 1-indexed positions in order', () => {
@@ -53,6 +53,45 @@ describe('insertAtIndex', () => {
   it('keeps a multi-select group in its original relative order when inserted together', () => {
     const result = insertAtIndex(items('a', 'd'), items('b', 'c'), 1);
     expect(result.map((i) => i.id)).toEqual(['a', 'b', 'c', 'd']);
+  });
+});
+
+describe('byPosition', () => {
+  type Positioned = { id: string; position: number | null; created_at: string };
+  const at = (id: string, position: number | null, created_at = '2026-01-01T00:00:00.000Z'): Positioned => ({
+    id,
+    position,
+    created_at,
+  });
+
+  it('sorts ascending by position', () => {
+    const result = [at('c', 3), at('a', 1), at('b', 2)].sort(byPosition);
+    expect(result.map((i) => i.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('puts null positions last', () => {
+    const result = [at('b', null), at('a', 1)].sort(byPosition);
+    expect(result.map((i) => i.id)).toEqual(['a', 'b']);
+  });
+
+  it('breaks ties between null positions by newest first', () => {
+    const result = [
+      at('old', null, '2026-01-01T00:00:00.000Z'),
+      at('new', null, '2026-01-02T00:00:00.000Z'),
+    ].sort(byPosition);
+    expect(result.map((i) => i.id)).toEqual(['new', 'old']);
+  });
+
+  it('re-derives the correct order after only the position fields change — the exact operation a drag persists', () => {
+    // This is what a completed drag actually does to the underlying array:
+    // element order is untouched, only .position values are updated in
+    // place (see ShelfDetailView's persistItemOrder / DeckView's
+    // persistGroupOrder). Rendering must re-sort by the new values, not
+    // rely on array order, or a drag visually does nothing.
+    const original = [at('a', 1), at('b', 2), at('c', 3)];
+    const afterDrag = original.map((i) => (i.id === 'c' ? { ...i, position: 1 } : i.id === 'a' ? { ...i, position: 3 } : i));
+    expect(afterDrag.map((i) => i.id)).toEqual(['a', 'b', 'c']); // array order unchanged
+    expect(afterDrag.sort(byPosition).map((i) => i.id)).toEqual(['c', 'b', 'a']); // sorted order reflects the drag
   });
 });
 
