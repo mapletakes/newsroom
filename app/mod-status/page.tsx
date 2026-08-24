@@ -46,6 +46,23 @@ export default async function ModStatusPage() {
     );
   }
 
+  // Every channel this account moderates (not just the one currently active)
+  // — lets the header offer a quick switch without a round trip through
+  // /choose, which is the whole point on a page mods keep open all night.
+  const { data: modRows } = await sb
+    .from('moderators')
+    .select('stream_id')
+    .eq('twitch_user_id', session.twitchUserId);
+  const modStreamIds = (modRows || []).map((r) => r.stream_id);
+  let modStreams: { id: string; twitch_login: string; display_name: string }[] = [];
+  if (modStreamIds.length > 0) {
+    const { data } = await sb
+      .from('streams')
+      .select('id, twitch_login, display_name')
+      .in('id', modStreamIds);
+    modStreams = data || [];
+  }
+
   return (
     <>
       <StreamTheme />
@@ -54,6 +71,7 @@ export default async function ModStatusPage() {
         displayName={session.displayName}
         channel={stream.twitch_login}
         isMod={session.role === 'mod'}
+        channels={modStreams.map((s) => ({ id: s.id, login: s.twitch_login, name: s.display_name }))}
       />
     </>
   );

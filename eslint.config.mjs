@@ -24,6 +24,12 @@ export default defineConfig([
       'react-hooks/set-state-in-effect': 'warn',
       'react-hooks/refs': 'warn',
       'react-hooks/purity': 'warn',
+      // Same story: flags `window.location.href = ...` (a plain global
+      // assignment, not React state) as "modifying a variable defined
+      // outside a component" — an identical pattern already used
+      // unflagged elsewhere (SetupForm.tsx, ChooseView.tsx), so this is a
+      // rule quirk, not a real issue with the pattern itself.
+      'react-hooks/immutability': 'warn',
     },
   },
 ]);

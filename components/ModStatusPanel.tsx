@@ -166,11 +166,17 @@ function SelfControl({
   }, [me.viaMobile, mobileTouched]);
 
   return (
-    <div className="border-t border-ink/20 p-3">
+    // @container so the status row below can respond to how much width IT
+    // actually has, not the viewport's — this same control renders inside a
+    // fixed 320px drawer (variant='tab'/'menu') as well as the standalone
+    // page, and a viewport breakpoint would force a row inside the narrow
+    // drawer on any wide desktop screen, reintroducing the exact overflow
+    // this exists to avoid.
+    <div className="border-t border-ink/20 p-3 @container">
       <span className="block font-mono text-[10px] uppercase tracking-widest text-ink/60 mb-2">
         Your availability
       </span>
-      <div className="flex gap-1 mb-2">
+      <div className="flex flex-col @sm:flex-row gap-1 mb-2">
         {MOD_STATUSES.map((s) => (
           <button
             key={s}
@@ -178,7 +184,7 @@ function SelfControl({
             disabled={saving}
             onClick={() => onSave(s, note, mobile)}
             className={cn(
-              'flex-1 flex items-center justify-center gap-1.5 border px-2 py-2 font-mono text-[10px] uppercase tracking-widest transition-colors disabled:opacity-40',
+              'flex items-center justify-center gap-1.5 border px-2 py-2 font-mono text-[10px] uppercase tracking-widest transition-colors disabled:opacity-40 @sm:flex-1',
               me.status === s ? 'border-ink bg-ink text-paper' : 'border-ink/30 hover:border-ink',
             )}
             title={MOD_STATUS_LABELS[s]}
