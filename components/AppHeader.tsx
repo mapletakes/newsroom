@@ -1,6 +1,7 @@
 import { forwardRef } from 'react';
 import { Wordmark } from './ui/wordmark';
 import { DarkModeToggle } from './DarkModeToggle';
+import { LogOutButton } from './LogOutButton';
 import { cn } from '@/lib/utils';
 
 // The masthead nav row repeated across the deck, mod, settings, and admin
@@ -23,6 +24,7 @@ export const AppHeader = forwardRef<
       <span className="font-mono text-xs uppercase tracking-widest text-ink/60">/ {section}</span>
       <div className="ml-auto flex items-center gap-4 font-mono text-xs">
         {right}
+        <LogOutButton />
         <DarkModeToggle />
       </div>
     </header>
