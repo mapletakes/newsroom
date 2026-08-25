@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSession, getApprovedSession } from '@/lib/session';
-import { sanitizeModStatus, sanitizeStatusNote, STATUS_RESET_AFTER_MS } from '@/lib/mod-status';
+import { sanitizeModStatus, sanitizeStatusNote, STATUS_RESET_AFTER_MS, isRosterInactive } from '@/lib/mod-status';
 import { broadcastModStatusChange } from '@/lib/realtime';
 
 export const dynamic = 'force-dynamic';
@@ -55,18 +55,25 @@ export async function GET() {
     .order('twitch_login', { ascending: true });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  const mods = (data ?? []).map((m) => ({
+    twitchUserId: m.twitch_user_id,
+    login: m.twitch_login,
+    status: m.status ?? null,
+    note: m.status_note ?? null,
+    updatedAt: m.status_updated_at ?? null,
+    viaMobile: m.status_via_mobile === true,
+    // Lets the client mark one row editable without having to be told the
+    // viewer's id separately (and without trusting it if it were).
+    isSelf: m.twitch_user_id === session.twitchUserId,
+  }));
+
   return NextResponse.json({
-    mods: (data ?? []).map((m) => ({
-      twitchUserId: m.twitch_user_id,
-      login: m.twitch_login,
-      status: m.status ?? null,
-      note: m.status_note ?? null,
-      updatedAt: m.status_updated_at ?? null,
-      viaMobile: m.status_via_mobile === true,
-      // Lets the client mark one row editable without having to be told the
-      // viewer's id separately (and without trusting it if it were).
-      isSelf: m.twitch_user_id === session.twitchUserId,
-    })),
+    // A mod removed on Twitch (or who's just stopped covering the stream)
+    // has no removal signal here — see isRosterInactive — so this is a
+    // recency filter, not a membership one. Never applied to the viewer's
+    // own row: they need to see (and use) their own control regardless of
+    // how long it's been since they last set anything.
+    mods: mods.filter((m) => m.isSelf || !isRosterInactive(m.updatedAt)),
   });
 }
 

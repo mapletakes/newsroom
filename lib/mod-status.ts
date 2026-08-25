@@ -80,3 +80,23 @@ export function isStatusStale(updatedAt: string | null | undefined, now = Date.n
 // win or lose the race with the cron), and by the daily cleanup cron as a
 // backstop for streams nobody's currently looking at.
 export const STATUS_RESET_AFTER_MS = 12 * 60 * 60 * 1000; // 12 hours
+
+// A third, longer-running concern: a mod removed on Twitch (or who's just
+// stopped covering the stream) still has a row in `moderators` — nothing
+// currently syncs a de-mod back here, so there's no removal signal to key
+// off. Past this, their row simply stops appearing on the roster. Much
+// longer than the reset above on purpose: that one is about whether a status
+// VALUE is still current, this one is about whether the ACCOUNT is still
+// worth showing at all, and the two aren't meant to line up.
+export const ROSTER_INACTIVE_AFTER_MS = 96 * 60 * 60 * 1000; // 96 hours
+
+/** True if this row has gone quiet long enough to drop off the roster —
+ *  including a mod who's never set a status at all (`updatedAt` null),
+ *  since there's nothing to show for them either. The viewer's OWN row is
+ *  never filtered by this: see the /api/mod-status GET handler. */
+export function isRosterInactive(updatedAt: string | null | undefined, now = Date.now()): boolean {
+  if (!updatedAt) return true;
+  const t = new Date(updatedAt).getTime();
+  if (Number.isNaN(t)) return true;
+  return now - t > ROSTER_INACTIVE_AFTER_MS;
+}

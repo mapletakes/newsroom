@@ -4,12 +4,14 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  isRosterInactive,
   isStatusStale,
   MAX_STATUS_NOTE_CHARS,
   MOD_STATUSES,
   MOD_STATUS_LABELS,
   MOD_STATUS_SHORT,
   MOD_STATUS_TOKEN,
+  ROSTER_INACTIVE_AFTER_MS,
   sanitizeModStatus,
   sanitizeStatusNote,
   STATUS_RESET_AFTER_MS,
@@ -113,5 +115,36 @@ describe('STATUS_RESET_AFTER_MS', () => {
     // actually clear it out) — reset must never fire before stale does.
     expect(STATUS_RESET_AFTER_MS).toBe(12 * 60 * 60 * 1000);
     expect(STATUS_RESET_AFTER_MS).toBeGreaterThan(STATUS_STALE_AFTER_MS);
+  });
+});
+
+describe('isRosterInactive', () => {
+  const now = Date.UTC(2026, 7, 2, 12, 0, 0);
+  const ago = (ms: number) => new Date(now - ms).toISOString();
+
+  it('treats a mod who has never set a status as inactive — nothing to show for them', () => {
+    expect(isRosterInactive(null, now)).toBe(true);
+    expect(isRosterInactive(undefined, now)).toBe(true);
+  });
+
+  it('is 96 hours, and strictly longer than the 12-hour value-reset window', () => {
+    // Different questions on purpose: reset is "is the status value still
+    // current", this is "is the account still worth showing at all" — the
+    // roster window must outlast the reset window, not line up with it.
+    expect(ROSTER_INACTIVE_AFTER_MS).toBe(96 * 60 * 60 * 1000);
+    expect(ROSTER_INACTIVE_AFTER_MS).toBeGreaterThan(STATUS_RESET_AFTER_MS);
+  });
+
+  it('is false just inside the window and true just outside it', () => {
+    expect(isRosterInactive(ago(ROSTER_INACTIVE_AFTER_MS - 60_000), now)).toBe(false);
+    expect(isRosterInactive(ago(ROSTER_INACTIVE_AFTER_MS + 60_000), now)).toBe(true);
+  });
+
+  it('flags the case this exists for — a mod who set a status days ago and never came back', () => {
+    expect(isRosterInactive(ago(10 * 24 * 60 * 60 * 1000), now)).toBe(true);
+  });
+
+  it('does not treat an unparseable timestamp as active', () => {
+    expect(isRosterInactive('not a date', now)).toBe(true);
   });
 });
