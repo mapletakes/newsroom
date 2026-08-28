@@ -28,7 +28,9 @@ import {
   PALETTES,
   paletteContrastFailures,
   paletteToOverlayColors,
+  RECIPE_LIMITS,
   resolveOverlayColors,
+  sanitizeRecipe,
   SELF_HOSTED_FONTS,
   sanitizeAppTheme,
   sanitizeFontFamily,
@@ -181,13 +183,17 @@ describe('derivePalette', () => {
   });
 
   it('never emits a failing palette, across every reachable recipe', () => {
-    // The full control space the UI can produce. Exhaustive rather than
-    // sampled: an accessibility guarantee with gaps in it isn't one.
+    // Swept from RECIPE_LIMITS rather than hardcoded bounds, because those
+    // limits are what the sanitizer clamps to — widening a slider without
+    // re-proving the wider space would otherwise leave the guarantee quietly
+    // covering less than the UI can reach. Exhaustive rather than sampled:
+    // an accessibility guarantee with gaps in it isn't one.
+    const { hue: H, tint: T, sat: S } = RECIPE_LIMITS;
     let checked = 0;
     for (const ground of ['light', 'dark'] as const) {
-      for (let hue = 0; hue <= 360; hue += 15) {
-        for (let tint = 0; tint <= 0.14; tint += 0.02) {
-          for (let sat = 0.2; sat <= 0.85; sat += 0.05) {
+      for (let hue = H.min; hue <= H.max; hue += 15) {
+        for (let tint = T.min; tint <= T.max; tint += 0.02) {
+          for (let sat = S.min; sat <= S.max; sat += 0.05) {
             const p = derivePalette({ ground, hue, tint, sat });
             const failures = paletteContrastFailures(p);
             expect(failures, `${ground} hue${hue} tint${tint.toFixed(2)} sat${sat.toFixed(2)}`).toEqual([]);
@@ -212,6 +218,45 @@ describe('derivePalette', () => {
     const light = derivePalette({ ...DEFAULT_RECIPE, ground: 'light' });
     const dark = derivePalette({ ...DEFAULT_RECIPE, ground: 'dark' });
     expect(contrastRatio(light.paper, dark.paper)).toBeGreaterThan(10);
+  });
+});
+
+describe('sanitizeRecipe', () => {
+  it('clamps every field into the space the sweep above actually proves', () => {
+    const r = sanitizeRecipe({ ground: 'dark', hue: 9999, tint: 5, sat: 1 })!;
+    expect(r.hue).toBe(RECIPE_LIMITS.hue.max);
+    expect(r.tint).toBe(RECIPE_LIMITS.tint.max);
+    expect(r.sat).toBe(RECIPE_LIMITS.sat.max);
+    // The clamp is the only thing standing between a hand-posted recipe and
+    // an untested corner of the space, so it must also hold below the floor.
+    const low = sanitizeRecipe({ ground: 'light', hue: -50, tint: -1, sat: 0 })!;
+    expect(low.hue).toBe(RECIPE_LIMITS.hue.min);
+    expect(low.tint).toBe(RECIPE_LIMITS.tint.min);
+    expect(low.sat).toBe(RECIPE_LIMITS.sat.min);
+  });
+
+  it('rejects anything without a usable ground rather than inventing one', () => {
+    for (const bad of [null, undefined, 42, 'light', {}, { ground: 'beige' }]) {
+      expect(sanitizeRecipe(bad)).toBeUndefined();
+    }
+  });
+
+  it('substitutes the default for non-numeric fields, keeping the recipe usable', () => {
+    const r = sanitizeRecipe({ ground: 'light', hue: 'blue', tint: null, sat: NaN })!;
+    expect(r).toEqual({ ground: 'light', ...{ hue: DEFAULT_RECIPE.hue, tint: DEFAULT_RECIPE.tint, sat: DEFAULT_RECIPE.sat } });
+  });
+
+  it('survives a round trip through sanitizeAppTheme', () => {
+    const recipe = { ground: 'dark' as const, hue: 300, tint: 0.1, sat: 0.5 };
+    expect(sanitizeAppTheme({ preset: 'custom', recipe }).recipe).toEqual(recipe);
+  });
+
+  it('drops a bad recipe without discarding the colours that still render', () => {
+    // A custom theme saved before the builder existed has colours and no
+    // recipe; it has to keep working exactly as it did.
+    const t = sanitizeAppTheme({ preset: 'custom', colors: { ink: '#111111' }, recipe: 'nonsense' });
+    expect(t.recipe).toBeUndefined();
+    expect(t.colors.ink).toBe('#111111');
   });
 });
 

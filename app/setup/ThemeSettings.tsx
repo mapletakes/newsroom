@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { OverlayCard, type OverlayVariant } from '@/app/overlay/OverlayView';
+import { cn } from '@/lib/utils';
 import { SubmissionCard, type Submission } from '@/components/SubmissionCard';
 import {
   appThemeCssVars,
@@ -13,12 +14,17 @@ import {
   DEFAULT_APP_THEME,
   DEFAULT_FONTS,
   DEFAULT_OVERLAY_THEME,
+  DEFAULT_RECIPE,
+  derivePalette,
   FONT_CHOICES,
+  luminance,
   OVERLAY_SLOTS,
   OVERLAY_SLOT_LABELS,
   PALETTE_META,
   PALETTE_TOKENS,
+  PALETTES,
   PRESET_NAMES,
+  RECIPE_LIMITS,
   resolveAppPalette,
   resolveOverlayColors,
   sanitizeFontFamily,
@@ -26,6 +32,8 @@ import {
   type FontRole,
   type OverlaySlot,
   type OverlayTheme,
+  type Palette,
+  type PaletteRecipe,
   type PaletteToken,
 } from '@/lib/theme';
 
@@ -145,6 +153,161 @@ function ColorField({
           </span>
         )}
       </span>
+    </label>
+  );
+}
+
+/** One selectable palette, drawn in its own colours so the choice is made by
+ *  looking rather than by reading a name. The label sits outside the swatch,
+ *  in the page's current theme, so the selected state stays legible whatever
+ *  the palette itself looks like. */
+function PaletteCard({
+  label,
+  palette,
+  selected,
+  onSelect,
+}: {
+  label: string;
+  /** null renders an empty "not built yet" state, for Custom before use. */
+  palette: Palette | null;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      onClick={onSelect}
+      className={cn(
+        'border p-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ochre',
+        selected ? 'border-ink ring-2 ring-ink' : 'border-ink/25 hover:border-ink',
+      )}
+    >
+      <span
+        className="flex items-center justify-between gap-1 px-2 py-2 mb-1.5 border border-ink/10"
+        style={palette ? { background: palette.paper, color: palette.ink } : undefined}
+      >
+        <span className="font-display text-base font-bold leading-none">Aa</span>
+        <span className="flex gap-1">
+          {palette
+            ? (['rust', 'ochre', 'moss', 'slate'] as const).map((t) => (
+                <span key={t} className="w-2 h-2 rounded-full" style={{ background: palette[t] }} />
+              ))
+            : <span className="font-mono text-[10px] opacity-50">—</span>}
+        </span>
+      </span>
+      <span className="block font-mono text-[10px] uppercase tracking-widest truncate">{label}</span>
+    </button>
+  );
+}
+
+/** The guided builder that replaced six free colour pickers.
+ *
+ *  Those pickers let a streamer produce a palette that failed the very bar the
+ *  built-ins are held to — which is how the default theme shipped an ochre at
+ *  2.11:1 behind a risk warning. Here the four accent hues are fixed and only
+ *  ground, temperature, tint and intensity are exposed, every combination of
+ *  which is proven accessible (see the sweep in lib/theme.test.ts). */
+function CustomPaletteBuilder({
+  recipe,
+  palette,
+  onChange,
+}: {
+  recipe: PaletteRecipe | undefined;
+  palette: Palette;
+  onChange: (recipe: PaletteRecipe) => void;
+}) {
+  const r = recipe ?? DEFAULT_RECIPE;
+  const set = (patch: Partial<PaletteRecipe>) => onChange({ ...r, ...patch });
+
+  return (
+    <div className="mb-6 p-3 border border-ink/20 grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-3 content-start">
+        {/* A palette saved with the old pickers has colours but no recipe, so
+            the sliders below can't be showing where it came from. Say so
+            rather than letting them look authoritative. */}
+        {!recipe && (
+          <p className="font-mono text-[10px] text-ochre leading-relaxed">
+            ⚠ Built with the old colour pickers. Moving anything here rebuilds it.
+          </p>
+        )}
+
+        <div>
+          <span className="block font-mono text-[10px] uppercase tracking-widest text-ink/60 mb-1">Ground</span>
+          <ToggleGroup
+            type="single"
+            value={r.ground}
+            onValueChange={(v) => { if (v) set({ ground: v as PaletteRecipe['ground'] }); }}
+            className="text-[10px]"
+            aria-label="Ground"
+          >
+            <ToggleGroupItem value="light">Light</ToggleGroupItem>
+            <ToggleGroupItem value="dark">Dark</ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+
+        <RecipeSlider
+          label="Temperature" value={r.hue} min={RECIPE_LIMITS.hue.min} max={RECIPE_LIMITS.hue.max}
+          step={1} format={(v) => `${Math.round(v)}°`} onChange={(hue) => set({ hue })}
+        />
+        <RecipeSlider
+          label="Paper tint" value={r.tint} min={RECIPE_LIMITS.tint.min} max={RECIPE_LIMITS.tint.max}
+          step={0.01} format={(v) => `${Math.round(v * 100)}%`} onChange={(tint) => set({ tint })}
+        />
+        <RecipeSlider
+          label="Accent intensity" value={r.sat} min={RECIPE_LIMITS.sat.min} max={RECIPE_LIMITS.sat.max}
+          step={0.01} format={(v) => `${Math.round(v * 100)}%`} onChange={(sat) => set({ sat })}
+        />
+      </div>
+
+      {/* Read-only: these are derived, not chosen. Shown with their roles and
+          measured ratios so the guarantee is visible rather than asserted. */}
+      <div className="grid gap-1 content-start">
+        <span className="font-mono text-[10px] uppercase tracking-widest text-ink/60 mb-1">Derived</span>
+        {PALETTE_TOKENS.map((t) => {
+          const ratio = t === 'paper' ? null : contrastRatio(palette[t], palette.paper);
+          return (
+            <span key={t} className="flex items-center gap-2">
+              <span className="w-6 h-4 shrink-0 border border-ink/20" style={{ background: palette[t] }} />
+              <span className="min-w-0 flex-1 font-mono text-[10px] truncate">{TOKEN_LABELS[t]}</span>
+              <span className="font-mono text-[10px] text-ink/45 tabular-nums">
+                {ratio === null ? '—' : `${ratio.toFixed(1)}:1`}
+              </span>
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function RecipeSlider({
+  label, value, min, max, step, format, onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  format: (v: number) => string;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="flex items-baseline justify-between gap-2 font-mono text-[10px] uppercase tracking-widest text-ink/60 mb-1">
+        {label}
+        <span className="text-ink tabular-nums">{format(value)}</span>
+      </span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full accent-ink"
+      />
     </label>
   );
 }
@@ -329,33 +492,42 @@ export function AppThemeSettings({
       </p>
 
       <h3 className="font-mono text-xs uppercase tracking-widest text-ink/60 mb-2">Palette</h3>
-      <ToggleGroup
-        type="single"
-        value={app.preset}
-        onValueChange={(v) => { if (v) setApp({ ...app, preset: v, colors: v === 'custom' ? app.colors : {} }); }}
-        className="mb-3 text-[10px]"
-        aria-label="App palette"
-      >
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3" role="radiogroup" aria-label="App palette">
         {PRESET_LABELS.map(([value, label]) => (
-          <ToggleGroupItem key={value} value={value}>{label}</ToggleGroupItem>
+          <PaletteCard
+            key={value}
+            label={label}
+            palette={PALETTES[value]}
+            selected={app.preset === value}
+            // Dropping `colors` matters: a leftover custom override would
+            // otherwise survive on top of the preset and quietly repaint one
+            // token of it.
+            onSelect={() => setApp({ ...app, preset: value, colors: {} })}
+          />
         ))}
-        <ToggleGroupItem value="custom">Custom</ToggleGroupItem>
-      </ToggleGroup>
+        <PaletteCard
+          label="Custom…"
+          palette={app.preset === 'custom' ? palette : null}
+          selected={app.preset === 'custom'}
+          onSelect={() => {
+            if (app.preset === 'custom') return;
+            // Start from a ground matching whatever they were just looking at,
+            // so opening the builder doesn't flip a dark palette to white.
+            const seeded: PaletteRecipe = {
+              ...DEFAULT_RECIPE,
+              ground: luminance(palette.paper) < 0.5 ? 'dark' : 'light',
+            };
+            setApp({ ...app, preset: 'custom', recipe: seeded, colors: derivePalette(seeded) });
+          }}
+        />
+      </div>
 
       {app.preset === 'custom' && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6 p-3 border border-ink/20">
-          {PALETTE_TOKENS.map((t) => (
-            <ColorField
-              key={t}
-              label={TOKEN_LABELS[t]}
-              value={palette[t]}
-              // Everything here is read at body size, so this is the one place
-              // the strict 4.5 threshold is the right bar.
-              against={t === 'paper' ? palette.ink : palette.paper}
-              onChange={(hex) => setApp({ ...app, colors: { ...app.colors, [t]: hex } })}
-            />
-          ))}
-        </div>
+        <CustomPaletteBuilder
+          recipe={app.recipe}
+          palette={palette}
+          onChange={(recipe) => setApp({ ...app, recipe, colors: derivePalette(recipe) })}
+        />
       )}
 
       <h3 className="font-mono text-xs uppercase tracking-widest text-ink/60 mb-2">Type</h3>

@@ -234,7 +234,43 @@ export type PaletteRecipe = {
   sat: number;
 };
 
+/**
+ * The bounds of the guided builder — and the reason they're a shared constant
+ * rather than three numbers typed into a slider.
+ *
+ * "No recipe can produce an inaccessible palette" is proven by a test that
+ * sweeps this exact space. That proof only covers what it swept, so the UI
+ * and the sanitizer have to be held to the same bounds: a slider that let
+ * `sat` past 0.85, or a hand-posted recipe that skipped the clamp, would be
+ * outside everything anyone has actually checked.
+ */
+export const RECIPE_LIMITS = {
+  hue: { min: 0, max: 360 },
+  tint: { min: 0, max: 0.14 },
+  sat: { min: 0.2, max: 0.85 },
+} as const;
+
 export const DEFAULT_RECIPE: PaletteRecipe = { ground: 'light', hue: 210, tint: 0.04, sat: 0.6 };
+
+/** Clamp an off-the-wire recipe into RECIPE_LIMITS, or reject it outright.
+ *  Returns undefined rather than a default for anything unrecognisable, so a
+ *  theme with no usable recipe simply has no recipe — the palette it already
+ *  stores still renders. */
+export function sanitizeRecipe(raw: unknown): PaletteRecipe | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const o = raw as Record<string, unknown>;
+  if (o.ground !== 'light' && o.ground !== 'dark') return undefined;
+  const clamp = (v: unknown, { min, max }: { min: number; max: number }, fallback: number) => {
+    const n = typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+    return Math.min(max, Math.max(min, n));
+  };
+  return {
+    ground: o.ground,
+    hue: clamp(o.hue, RECIPE_LIMITS.hue, DEFAULT_RECIPE.hue),
+    tint: clamp(o.tint, RECIPE_LIMITS.tint, DEFAULT_RECIPE.tint),
+    sat: clamp(o.sat, RECIPE_LIMITS.sat, DEFAULT_RECIPE.sat),
+  };
+}
 
 /**
  * The most on-target lightness for `hue` against `paper`, never below `min`.
@@ -410,6 +446,18 @@ export type AppTheme = {
   /** Only consulted when preset === 'custom'. */
   colors: Partial<Palette>;
   fonts: Partial<Record<FontRole, string>>;
+  /**
+   * The guided-builder settings that produced `colors`, when a custom palette
+   * came from the builder rather than the older free-form colour pickers.
+   *
+   * Purely a record of the inputs so re-opening the editor can restore where
+   * the controls were — `colors` stays the single source of truth for what
+   * actually renders. That split is deliberate: it keeps the rendering path
+   * identical for custom palettes saved before the builder existed (which
+   * have colours and no recipe), and it means retuning the derivation later
+   * can never silently repaint a theme somebody already approved.
+   */
+  recipe?: PaletteRecipe;
 };
 
 export const DEFAULT_APP_THEME: AppTheme = { preset: DEFAULT_PRESET, colors: {}, fonts: {} };
@@ -583,10 +631,15 @@ function pickPreset(raw: unknown, allowCustom: boolean): string {
  *  written by an older or newer build should degrade to defaults, not 400. */
 export function sanitizeAppTheme(raw: unknown): AppTheme {
   const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const recipe = sanitizeRecipe(o.recipe);
   return {
     preset: pickPreset(o.preset, true),
     colors: pickColors(o.colors, PALETTE_TOKENS),
     fonts: pickFonts(o.fonts, ['display', 'sans', 'mono'] as const),
+    // Omitted entirely when absent or unusable, rather than defaulted — an
+    // AppTheme carrying a recipe it was never built from would put the
+    // editor's controls somewhere its colours don't correspond to.
+    ...(recipe ? { recipe } : {}),
   };
 }
 
