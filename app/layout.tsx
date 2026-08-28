@@ -5,6 +5,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { QueryProvider } from '@/components/query-provider';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister';
+import { PRESET_NAMES } from '@/lib/theme';
 
 export const metadata: Metadata = {
   title: 'The Broadside — a deck for political streamers',
@@ -17,14 +18,14 @@ export const metadata: Metadata = {
   icons: { icon: '/icon.svg', apple: '/icons/apple-touch-icon.png' },
 };
 
-// 'brand' is the stream's own palette, injected as `html.brand` by
-// <StreamTheme /> on the authed pages. Registered here so next-themes treats
-// it as a first-class choice a user can be switched to and can switch away
-// from, rather than something bolted onto the html element behind its back.
-// 'brand' is the stream's branding, 'mine' the viewer's own (see
-// components/StreamTheme.tsx). Both have to be listed here or next-themes
-// won't put the class on <html> at all, and the injected rules never match.
-const THEMES = ['light', 'dark', 'sepia', 'contrast', 'brand', 'mine'];
+// Every built-in palette, plus two that aren't palettes at all: 'brand' is the
+// stream's own colours and 'mine' the viewer's, both injected as `html.brand` /
+// `html.mine` by <StreamTheme /> on the authed pages. All of them have to be
+// listed here or next-themes won't put the class on <html>, and the injected
+// rules never match. Built from PRESET_NAMES rather than spelled out, so
+// adding a palette in lib/theme.ts can't leave this list behind — which would
+// fail silently, as a theme that's offered in the menu but never applies.
+const THEMES = [...PRESET_NAMES, 'brand', 'mine'];
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

@@ -16,7 +16,9 @@ import {
   FONT_CHOICES,
   OVERLAY_SLOTS,
   OVERLAY_SLOT_LABELS,
+  PALETTE_META,
   PALETTE_TOKENS,
+  PRESET_NAMES,
   resolveAppPalette,
   resolveOverlayColors,
   sanitizeFontFamily,
@@ -27,12 +29,10 @@ import {
   type PaletteToken,
 } from '@/lib/theme';
 
-const PRESET_LABELS: [string, string][] = [
-  ['light', 'Newsprint'],
-  ['dark', 'Dark'],
-  ['sepia', 'Sepia'],
-  ['contrast', 'High contrast'],
-];
+// Derived from PALETTE_META so a palette added in lib/theme.ts shows up here
+// without a second edit — the two lists silently disagreeing is how a palette
+// ends up selectable in one picker and invisible in the other.
+const PRESET_LABELS: [string, string][] = PRESET_NAMES.map((n) => [n, PALETTE_META[n].label]);
 
 const TOKEN_LABELS: Record<PaletteToken, string> = {
   ink: 'Text',

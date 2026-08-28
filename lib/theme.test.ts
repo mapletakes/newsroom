@@ -8,10 +8,14 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  ACCENT_HUES,
   appThemeCssVars,
   blend,
   contrastRatio,
   DEFAULT_FONTS,
+  DEFAULT_RECIPE,
+  deriveAccent,
+  derivePalette,
   DEFAULT_PRESET,
   FONT_CHOICES,
   googleFontsHref,
@@ -30,6 +34,7 @@ import {
   sanitizeFontFamily,
   sanitizeOverlayTheme,
   TEXT_SAFE_TOKENS,
+  type PaletteToken,
 } from './theme';
 
 describe('normalizeHex', () => {
@@ -156,6 +161,78 @@ describe('built-in palette accessibility', () => {
 // overlay compute from. Nothing but this test stops the two halves drifting —
 // and they did, the first time these values were edited, which left the CSS
 // (what actually paints) still carrying the inaccessible originals.
+// The guided palette builder's entire promise is that a streamer cannot
+// produce a broken palette — which only means anything if it holds at the
+// edges of every control, not just at the defaults.
+describe('derivePalette', () => {
+  it('holds the semantic hues fixed so risk stays red / amber / green', () => {
+    // A palette free to rotate these could quietly render "high DMCA risk"
+    // in green, which is the one thing this whole system exists to prevent.
+    expect(ACCENT_HUES.rust).toBeLessThan(ACCENT_HUES.ochre);
+    expect(ACCENT_HUES.ochre).toBeLessThan(ACCENT_HUES.moss);
+    expect(ACCENT_HUES.moss).toBeLessThan(ACCENT_HUES.slate);
+  });
+
+  it('produces a full palette with every token set', () => {
+    const p = derivePalette(DEFAULT_RECIPE);
+    for (const token of PALETTE_TOKENS) {
+      expect(p[token], token).toMatch(/^#[0-9a-f]{6}$/);
+    }
+  });
+
+  it('never emits a failing palette, across every reachable recipe', () => {
+    // The full control space the UI can produce. Exhaustive rather than
+    // sampled: an accessibility guarantee with gaps in it isn't one.
+    let checked = 0;
+    for (const ground of ['light', 'dark'] as const) {
+      for (let hue = 0; hue <= 360; hue += 15) {
+        for (let tint = 0; tint <= 0.14; tint += 0.02) {
+          for (let sat = 0.2; sat <= 0.85; sat += 0.05) {
+            const p = derivePalette({ ground, hue, tint, sat });
+            const failures = paletteContrastFailures(p);
+            expect(failures, `${ground} hue${hue} tint${tint.toFixed(2)} sat${sat.toFixed(2)}`).toEqual([]);
+            checked++;
+          }
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(2000);
+  });
+
+  it('lands the accents in a tight band, not merely above the floor', () => {
+    // The point of solving toward a target: green and yellow clear 4.5:1 far
+    // more easily than red, so "first passing value" yields a neon green
+    // beside a muted red. Every accent should carry similar visual weight.
+    const p = derivePalette(DEFAULT_RECIPE);
+    const ratios = (['rust', 'ochre', 'moss', 'slate'] as const).map((t) => contrastRatio(p[t], p.paper));
+    expect(Math.max(...ratios) - Math.min(...ratios)).toBeLessThan(1);
+  });
+
+  it('gives light and dark grounds genuinely different papers', () => {
+    const light = derivePalette({ ...DEFAULT_RECIPE, ground: 'light' });
+    const dark = derivePalette({ ...DEFAULT_RECIPE, ground: 'dark' });
+    expect(contrastRatio(light.paper, dark.paper)).toBeGreaterThan(10);
+  });
+});
+
+describe('the generated built-ins came from the engine', () => {
+  // Broadsheet / Midnight / Ash have a hand-chosen ground but engine-derived
+  // accents, and are stored as literals because globals.css needs the same
+  // values written out. Pinning the saturation each was generated at means a
+  // retune of deriveAccent shows up here as a failure — a decision to make
+  // deliberately, rather than something to notice later in a screenshot.
+  it.each([
+    ['broadsheet', 0.6],
+    ['midnight', 0.58],
+    ['ash', 0.42],
+  ])('%s accents are exactly what deriveAccent gives for its paper', (name, sat) => {
+    const { paper } = PALETTES[name];
+    for (const [token, hue] of Object.entries(ACCENT_HUES)) {
+      expect(deriveAccent(hue, sat, paper), `${name}.${token}`).toBe(PALETTES[name][token as PaletteToken]);
+    }
+  });
+});
+
 describe('globals.css mirrors PALETTES', () => {
   const css = readFileSync(resolve(import.meta.dirname, '../app/globals.css'), 'utf8');
 

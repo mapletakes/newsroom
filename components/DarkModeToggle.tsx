@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Icon, type IconName } from '@/components/ui/icon';
+import { PALETTE_META, PRESET_NAMES } from '@/lib/theme';
 
 // 'brand' is whatever the streamer set in Settings → Theme. Always offered,
 // even on a stream that hasn't set one: `html.brand` with nothing injected
@@ -23,14 +24,19 @@ import { Icon, type IconName } from '@/components/ui/icon';
 // simply looks like the default, which is a truthful thing for "My theme" to
 // mean before you've made one. Listing it always is also what makes the
 // feature discoverable to a mod who doesn't know the page exists.
+//
+// The palettes themselves come from PALETTE_META so this menu can't drift out
+// of step with what actually exists — the three below are the only entries
+// that aren't palettes.
 const OPTIONS: { value: string; label: string; icon: IconName }[] = [
   { value: 'brand', label: 'Stream default', icon: 'camera' },
   { value: 'mine', label: 'My theme', icon: 'bookmark' },
   { value: 'system', label: 'System', icon: 'themeSystem' },
-  { value: 'light', label: 'Newsprint', icon: 'themeLight' },
-  { value: 'dark', label: 'Dark', icon: 'themeDark' },
-  { value: 'sepia', label: 'Sepia', icon: 'themeSepia' },
-  { value: 'contrast', label: 'High contrast', icon: 'themeContrast' },
+  ...PRESET_NAMES.map((name) => ({
+    value: name,
+    label: PALETTE_META[name].label,
+    icon: PALETTE_META[name].icon as IconName,
+  })),
 ];
 
 export function DarkModeToggle() {
