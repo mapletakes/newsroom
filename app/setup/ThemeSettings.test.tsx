@@ -51,6 +51,8 @@ function setRange(input: HTMLElement, value: string) {
   setter.call(input, value);
   input.dispatchEvent(new Event('input', { bubbles: true }));
 }
+/** Same trick, for a swatch's <input type="color">. */
+const setColor = setRange;
 
 afterEach(() => {
   cleanup();
@@ -179,6 +181,123 @@ describe('AppThemeSettings — the guided builder', () => {
     await waitFor(() => {
       expect(savedTheme(posts).colors).toEqual(legacy.colors);
       expect(savedTheme(posts).recipe).toBeUndefined();
+    });
+  });
+});
+
+describe('AppThemeSettings — the colorblind-friendly palette', () => {
+  it('is offered as a regular preset, drawn in its own colours', () => {
+    mockApi();
+    renderSettings();
+    const card = screen.getByRole('radio', { name: /colorblind/i });
+    // A swatch dot per accent, coloured from PALETTES.colorblind — same
+    // rendering path as every other preset card, not a special case.
+    expect(within(card).getByText('Aa')).toBeInTheDocument();
+  });
+
+  it('saves cleanly like any other preset', async () => {
+    const posts = mockApi();
+    const user = userEvent.setup();
+    renderSettings();
+
+    await user.click(screen.getByRole('radio', { name: /colorblind/i }));
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      expect(savedTheme(posts).preset).toBe('colorblind');
+      expect(savedTheme(posts).colors).toEqual({});
+    });
+  });
+});
+
+describe('AppThemeSettings — explicit swatch overrides', () => {
+  it('pins one token without disturbing the others', async () => {
+    const posts = mockApi();
+    const user = userEvent.setup();
+    renderSettings();
+
+    await user.click(screen.getByRole('radio', { name: /custom/i }));
+    setColor(screen.getByLabelText(/set accent \/ alerts explicitly/i), '#336699');
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      const t = savedTheme(posts);
+      expect(t.overrides).toEqual({ rust: '#336699' });
+      expect(t.colors.rust).toBe('#336699');
+      // Every other token still matches what the recipe alone would derive.
+      const derived = derivePalette(t.recipe!);
+      for (const token of ['ink', 'paper', 'ochre', 'moss', 'slate'] as const) {
+        expect(t.colors[token]).toBe(derived[token]);
+      }
+    });
+  });
+
+  it('survives a slider move — pinning is not undone by re-deriving', async () => {
+    const posts = mockApi();
+    const user = userEvent.setup();
+    renderSettings();
+
+    await user.click(screen.getByRole('radio', { name: /custom/i }));
+    setColor(screen.getByLabelText(/set accent \/ alerts explicitly/i), '#336699');
+    setRange(screen.getByLabelText(/temperature/i), '90');
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      const t = savedTheme(posts);
+      expect(t.recipe?.hue).toBe(90);
+      expect(t.colors.rust).toBe('#336699'); // still pinned
+      expect(t.colors.moss).toBe(derivePalette(t.recipe!).moss); // still tracking the recipe
+    });
+  });
+
+  it('reverts to the derived value once the pin is cleared', async () => {
+    const posts = mockApi();
+    const user = userEvent.setup();
+    renderSettings();
+
+    await user.click(screen.getByRole('radio', { name: /custom/i }));
+    setColor(screen.getByLabelText(/set accent \/ alerts explicitly/i), '#336699');
+    await user.click(screen.getByRole('button', { name: /reset accent \/ alerts to derived/i }));
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      const t = savedTheme(posts);
+      expect(t.overrides ?? {}).toEqual({});
+      expect(t.colors).toEqual(derivePalette(t.recipe!));
+    });
+  });
+
+  it('does not block saving a pin that fails the contrast bar, but keeps it visibly flagged', async () => {
+    // The whole point of an explicit override is that it's the streamer's
+    // call, not the engine's — it must not be silently rejected. What it
+    // must NOT do is claim to be safe: the ratio shown has to be the real,
+    // currently-failing one.
+    const posts = mockApi();
+    const user = userEvent.setup();
+    renderSettings();
+
+    await user.click(screen.getByRole('radio', { name: /custom/i }));
+    setColor(screen.getByLabelText(/set accent \/ alerts explicitly/i), '#fefefe'); // near-white on light paper
+    expect(await screen.findByText(/⚠.*:1/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+    await waitFor(() => expect(savedTheme(posts).colors.rust).toBe('#fefefe'));
+  });
+
+  it('clears overrides when a different preset is chosen', async () => {
+    const posts = mockApi();
+    const user = userEvent.setup();
+    renderSettings();
+
+    await user.click(screen.getByRole('radio', { name: /custom/i }));
+    setColor(screen.getByLabelText(/set accent \/ alerts explicitly/i), '#336699');
+    await user.click(screen.getByRole('radio', { name: /midnight/i }));
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      const t = savedTheme(posts);
+      expect(t.preset).toBe('midnight');
+      expect(t.overrides ?? {}).toEqual({});
     });
   });
 });

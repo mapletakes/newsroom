@@ -162,6 +162,20 @@ html.ash, .theme-ash {
   --slate: 110 147 196;
 }
 
+/* Same engine, sourced from Okabe-Ito's accent hues instead of the app's
+   default four (lib/theme.ts's ACCENT_HUES_COLORBLIND has the full reasoning).
+   The one change that matters: moss shifts from a pure green — which sits
+   inside the confusable red-green range that protanopia/deuteranopia both
+   collapse — to a bluish-green well clear of it. */
+html.colorblind, .theme-colorblind {
+  --ink: 18 18 17;
+  --paper: 244 244 243;
+  --rust: 145 82 34;
+  --ochre: 124 94 29;
+  --moss: 26 112 89;
+  --slate: 34 104 145;
+}
+
 html, body {
   background-color: rgb(var(--paper));
   color: rgb(var(--ink));

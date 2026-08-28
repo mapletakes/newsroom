@@ -27,6 +27,7 @@ const GLYPHS = {
   themeBroadsheet: '◑',
   themeMidnight: '◕',
   themeAsh: '◎',
+  themeColorblind: '◈',
   help: '?',
   mobile: '☏',
   raffle: '⚄',

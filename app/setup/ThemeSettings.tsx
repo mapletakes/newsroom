@@ -18,6 +18,7 @@ import {
   derivePalette,
   FONT_CHOICES,
   luminance,
+  MIN_TEXT_CONTRAST,
   OVERLAY_SLOTS,
   OVERLAY_SLOT_LABELS,
   PALETTE_META,
@@ -212,11 +213,17 @@ function PaletteCard({
 function CustomPaletteBuilder({
   recipe,
   palette,
+  overrides,
   onChange,
+  onOverride,
+  onResetOverride,
 }: {
   recipe: PaletteRecipe | undefined;
   palette: Palette;
+  overrides: Partial<Palette>;
   onChange: (recipe: PaletteRecipe) => void;
+  onOverride: (token: PaletteToken, hex: string) => void;
+  onResetOverride: (token: PaletteToken) => void;
 }) {
   const r = recipe ?? DEFAULT_RECIPE;
   const set = (patch: Partial<PaletteRecipe>) => onChange({ ...r, ...patch });
@@ -261,18 +268,52 @@ function CustomPaletteBuilder({
         />
       </div>
 
-      {/* Read-only: these are derived, not chosen. Shown with their roles and
-          measured ratios so the guarantee is visible rather than asserted. */}
+      {/* Derived by default, but each swatch is a real colour picker — the
+          guarantee is a good starting point, not a ceiling on what someone
+          who wants an exact brand colour can do. Overriding one token never
+          touches the others, and the ratio shown is always the CURRENT,
+          actually-rendered one, so a pin that drops below the bar is visible
+          rather than hidden behind a value that's no longer true. */}
       <div className="grid gap-1 content-start">
-        <span className="font-mono text-[10px] uppercase tracking-widest text-ink/60 mb-1">Derived</span>
+        <span className="font-mono text-[10px] uppercase tracking-widest text-ink/60 mb-1">
+          Derived — click a swatch to set one explicitly
+        </span>
         {PALETTE_TOKENS.map((t) => {
           const ratio = t === 'paper' ? null : contrastRatio(palette[t], palette.paper);
+          const poor = ratio !== null && ratio < MIN_TEXT_CONTRAST;
+          const pinned = overrides[t] !== undefined;
           return (
             <span key={t} className="flex items-center gap-2">
-              <span className="w-6 h-4 shrink-0 border border-ink/20" style={{ background: palette[t] }} />
-              <span className="min-w-0 flex-1 font-mono text-[10px] truncate">{TOKEN_LABELS[t]}</span>
-              <span className="font-mono text-[10px] text-ink/45 tabular-nums">
-                {ratio === null ? '—' : `${ratio.toFixed(1)}:1`}
+              <label
+                className="relative shrink-0 w-6 h-4 border border-ink/20 cursor-pointer"
+                style={{ background: palette[t] }}
+                title={`Set ${TOKEN_LABELS[t]} explicitly`}
+              >
+                <input
+                  type="color"
+                  value={palette[t]}
+                  onChange={(e) => onOverride(t, e.target.value)}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  aria-label={`Set ${TOKEN_LABELS[t]} explicitly`}
+                />
+              </label>
+              <span className="min-w-0 flex-1 font-mono text-[10px] truncate">
+                {TOKEN_LABELS[t]}
+                {pinned && <span className="text-ink/40"> · pinned</span>}
+              </span>
+              {pinned && (
+                <button
+                  type="button"
+                  onClick={() => onResetOverride(t)}
+                  className="font-mono text-[10px] text-ink/40 hover:text-rust"
+                  title={`Reset ${TOKEN_LABELS[t]} to derived`}
+                  aria-label={`Reset ${TOKEN_LABELS[t]} to derived`}
+                >
+                  ×
+                </button>
+              )}
+              <span className={cn('font-mono text-[10px] tabular-nums', poor ? 'text-rust font-bold' : 'text-ink/45')}>
+                {ratio === null ? '—' : `${poor ? '⚠ ' : ''}${ratio.toFixed(1)}:1`}
               </span>
             </span>
           );
@@ -479,6 +520,22 @@ export function AppThemeSettings({
   useEffect(() => setPreviewNow(new Date().toISOString()), []);
   const palette = resolveAppPalette(app);
 
+  // Interacting with either the sliders or a swatch confirms a real recipe —
+  // matching the builder's own "moving anything here rebuilds it" warning —
+  // so overrides always have a well-defined derived value to sit on top of,
+  // and a well-defined value to revert to when cleared.
+  const setOverride = (token: PaletteToken, hex: string) => {
+    const recipe = app.recipe ?? DEFAULT_RECIPE;
+    const overrides = { ...app.overrides, [token]: hex };
+    setApp({ ...app, recipe, overrides, colors: { ...derivePalette(recipe), ...overrides } });
+  };
+  const clearOverride = (token: PaletteToken) => {
+    const recipe = app.recipe ?? DEFAULT_RECIPE;
+    const overrides = { ...app.overrides };
+    delete overrides[token];
+    setApp({ ...app, recipe, overrides, colors: { ...derivePalette(recipe), ...overrides } });
+  };
+
   return (
     <section>
       <p className="text-sm text-ink/70 mb-6 max-w-prose leading-relaxed">
@@ -499,10 +556,10 @@ export function AppThemeSettings({
             label={label}
             palette={PALETTES[value]}
             selected={app.preset === value}
-            // Dropping `colors` matters: a leftover custom override would
-            // otherwise survive on top of the preset and quietly repaint one
+            // Dropping colors AND overrides matters: either one left over
+            // would survive on top of the preset and quietly repaint a
             // token of it.
-            onSelect={() => setApp({ ...app, preset: value, colors: {} })}
+            onSelect={() => setApp({ ...app, preset: value, colors: {}, overrides: {} })}
           />
         ))}
         <PaletteCard
@@ -517,7 +574,7 @@ export function AppThemeSettings({
               ...DEFAULT_RECIPE,
               ground: luminance(palette.paper) < 0.5 ? 'dark' : 'light',
             };
-            setApp({ ...app, preset: 'custom', recipe: seeded, colors: derivePalette(seeded) });
+            setApp({ ...app, preset: 'custom', recipe: seeded, colors: derivePalette(seeded), overrides: {} });
           }}
         />
       </div>
@@ -526,7 +583,13 @@ export function AppThemeSettings({
         <CustomPaletteBuilder
           recipe={app.recipe}
           palette={palette}
-          onChange={(recipe) => setApp({ ...app, recipe, colors: derivePalette(recipe) })}
+          overrides={app.overrides ?? {}}
+          // A slider move re-derives from the new recipe but keeps whatever's
+          // pinned — moving Temperature after pinning `rust` shouldn't undo
+          // the pin, only recompute the tokens that were never pinned.
+          onChange={(recipe) => setApp({ ...app, recipe, colors: { ...derivePalette(recipe), ...app.overrides } })}
+          onOverride={setOverride}
+          onResetOverride={clearOverride}
         />
       )}
 

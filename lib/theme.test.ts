@@ -9,6 +9,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   ACCENT_HUES,
+  ACCENT_HUES_COLORBLIND,
   appThemeCssVars,
   blend,
   contrastRatio,
@@ -36,6 +37,7 @@ import {
   sanitizeFontFamily,
   sanitizeOverlayTheme,
   TEXT_SAFE_TOKENS,
+  type PaletteRecipe,
   type PaletteToken,
 } from './theme';
 
@@ -275,6 +277,60 @@ describe('the generated built-ins came from the engine', () => {
     for (const [token, hue] of Object.entries(ACCENT_HUES)) {
       expect(deriveAccent(hue, sat, paper), `${name}.${token}`).toBe(PALETTES[name][token as PaletteToken]);
     }
+  });
+
+  it('colorblind is the exact output of derivePalette with ACCENT_HUES_COLORBLIND', () => {
+    // Whole-palette check, not just the accents — paper and ink are engine
+    // output here too, unlike broadsheet/midnight/ash which chose those two
+    // by hand and only derived the accents.
+    const recipe: PaletteRecipe = { ground: 'light', hue: 40, tint: 0.05, sat: 0.62 };
+    expect(derivePalette(recipe, ACCENT_HUES_COLORBLIND)).toEqual(PALETTES.colorblind);
+  });
+});
+
+describe('ACCENT_HUES_COLORBLIND', () => {
+  const hueDiff = (a: number, b: number) => Math.min(Math.abs(a - b), 360 - Math.abs(a - b));
+
+  it('moves moss out of the hue range that collapses under red-green colour blindness', () => {
+    // Protanopia/deuteranopia confound the red-green opponent channel, which
+    // is what makes roughly 0-70 degrees (red through orange) hard to tell
+    // apart from roughly 90-150 (green). rust sits in the first band in
+    // BOTH hue sets (that's alert — it's meant to read as red/orange); what
+    // has to change is keeping moss out of the second one.
+    const inDangerBand = (h: number) => h >= 90 && h <= 150;
+    expect(inDangerBand(ACCENT_HUES.moss)).toBe(true);
+    expect(inDangerBand(ACCENT_HUES_COLORBLIND.moss)).toBe(false);
+  });
+
+  it('separates rust from moss by more than the standard hue set does', () => {
+    const before = hueDiff(ACCENT_HUES.rust, ACCENT_HUES.moss);
+    const after = hueDiff(ACCENT_HUES_COLORBLIND.rust, ACCENT_HUES_COLORBLIND.moss);
+    expect(after).toBeGreaterThan(before);
+  });
+
+  it('keeps ochre and slate close to the standard set — amber and blue were never the problem', () => {
+    // Only moss needed to move meaningfully; changing hues that were already
+    // fine would just make the colorblind palette look arbitrarily different
+    // rather than specifically fixed.
+    expect(hueDiff(ACCENT_HUES.ochre, ACCENT_HUES_COLORBLIND.ochre)).toBeLessThan(5);
+    expect(hueDiff(ACCENT_HUES.slate, ACCENT_HUES_COLORBLIND.slate)).toBeLessThan(15);
+  });
+
+  it('still guarantees every token, across the same swept recipe space', () => {
+    const { hue: H, tint: T, sat: S } = RECIPE_LIMITS;
+    let checked = 0;
+    for (const ground of ['light', 'dark'] as const) {
+      for (let hue = H.min; hue <= H.max; hue += 30) {
+        for (let tint = T.min; tint <= T.max; tint += 0.04) {
+          for (let sat = S.min; sat <= S.max; sat += 0.1) {
+            const p = derivePalette({ ground, hue, tint, sat }, ACCENT_HUES_COLORBLIND);
+            expect(paletteContrastFailures(p), `${ground} hue${hue} tint${tint.toFixed(2)} sat${sat.toFixed(2)}`).toEqual([]);
+            checked++;
+          }
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(50);
   });
 });
 
