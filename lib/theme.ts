@@ -81,13 +81,64 @@ export const PALETTE_TOKENS = ['ink', 'paper', 'rust', 'ochre', 'moss', 'slate']
 export type PaletteToken = (typeof PALETTE_TOKENS)[number];
 export type Palette = Record<PaletteToken, string>;
 
+/**
+ * Every token except `paper` renders as body-size TEXT on `paper` somewhere:
+ * `ink` is all body copy, and each accent has at least one text role —
+ * `rust` (.dmca-high, ⚠ badges, `text-rust` in 150+ places), `ochre`
+ * (.dmca-medium, the "Partial" mod status, admin pending states), `moss`
+ * (.dmca-low, "Saved ✓"), `slate` (`text-slate`).
+ *
+ * That makes text-safety a property of the PALETTE, not of any one call
+ * site, which is what `paletteContrastFailures` below exists to enforce.
+ * Accents therefore have to be chosen dark enough (on light paper) to read
+ * as text — they can't also be tuned as saturated fills. Where one is used
+ * as a fill it's either an alpha tint (`bg-ochre/10`) or a small non-text
+ * indicator, both of which stay legible at a text-safe value; `::selection`
+ * in globals.css is tinted for exactly this reason.
+ */
+export const TEXT_SAFE_TOKENS = PALETTE_TOKENS.filter((t) => t !== 'paper');
+
+/** WCAG AA for body-size text. The app has no large-text-only palette role,
+ *  so this is the single bar every token above is held to. */
+export const MIN_TEXT_CONTRAST = 4.5;
+
+/**
+ * Which tokens in a palette would be illegible as text on its own paper.
+ * Empty means the palette is safe.
+ *
+ * Deliberately a plain function over a Palette rather than a check baked
+ * into the settings UI: it backs both the build-time guarantee that every
+ * SHIPPED palette passes (lib/theme.test.ts) and the live feedback a
+ * streamer gets while building one of their own, so the two can't drift
+ * into disagreeing about what "accessible" means.
+ */
+export function paletteContrastFailures(
+  p: Palette,
+  threshold = MIN_TEXT_CONTRAST,
+): { token: PaletteToken; ratio: number }[] {
+  const failures: { token: PaletteToken; ratio: number }[] = [];
+  for (const token of TEXT_SAFE_TOKENS) {
+    const ratio = contrastRatio(p[token], p.paper);
+    if (ratio < threshold) failures.push({ token, ratio });
+  }
+  return failures;
+}
+
 /** The four built-ins, mirroring the `.theme-*` blocks in globals.css. Kept
  *  here as hex too so the overlay can resolve a preset into concrete slot
- *  colours without a stylesheet. */
+ *  colours without a stylesheet.
+ *
+ *  Every value here is covered by the contrast test — see the note on
+ *  TEXT_SAFE_TOKENS. Three were adjusted when that test was added and
+ *  caught them: light's rust (4.42:1) and ochre (2.11:1), and sepia's ochre
+ *  (2.78:1). The ochres in particular had been picked as bright highlight
+ *  golds, which simply cannot carry small text on cream paper — the
+ *  replacements hold the same hue and saturation and only drop lightness
+ *  until they clear the bar. */
 export const PALETTES: Record<string, Palette> = {
-  light: { ink: '#0d0d0e', paper: '#f5f1e8', rust: '#c4451c', ochre: '#d4a017', moss: '#3d5c3a', slate: '#2c3e50' },
+  light: { ink: '#0d0d0e', paper: '#f5f1e8', rust: '#c0431b', ochre: '#8a680f', moss: '#3d5c3a', slate: '#2c3e50' },
   dark: { ink: '#e8e4db', paper: '#141416', rust: '#e8663e', ochre: '#e8b730', moss: '#5a8a55', slate: '#6b8faa' },
-  sepia: { ink: '#2e2218', paper: '#f0e3ca', rust: '#a64a2c', ochre: '#b08026', moss: '#566038', slate: '#4a4858' },
+  sepia: { ink: '#2e2218', paper: '#f0e3ca', rust: '#a64a2c', ochre: '#825e1c', moss: '#566038', slate: '#4a4858' },
   contrast: { ink: '#000000', paper: '#ffffff', rust: '#c6200c', ochre: '#966000', moss: '#006800', slate: '#00208c' },
 };
 

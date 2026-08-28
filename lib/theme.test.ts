@@ -4,6 +4,8 @@
 // the only thing between those two facts, so they're what's covered hardest
 // here.
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   appThemeCssVars,
@@ -14,17 +16,20 @@ import {
   FONT_CHOICES,
   googleFontsHref,
   hexToTriplet,
+  MIN_TEXT_CONTRAST,
   normalizeHex,
   OVERLAY_SLOTS,
   overlayCssVars,
   PALETTE_TOKENS,
   PALETTES,
+  paletteContrastFailures,
   paletteToOverlayColors,
   resolveOverlayColors,
   SELF_HOSTED_FONTS,
   sanitizeAppTheme,
   sanitizeFontFamily,
   sanitizeOverlayTheme,
+  TEXT_SAFE_TOKENS,
 } from './theme';
 
 describe('normalizeHex', () => {
@@ -81,9 +86,9 @@ describe('contrastRatio', () => {
 
   // The warning bar sets its text at 40px black and its label at 20px bold,
   // both comfortably "large" by WCAG (>=18.66px bold), where AA asks 3.0
-  // rather than 4.5. The shipped rust-on-paper pair sits at ~4.4: fine as
-  // rendered, but it is NOT a pairing to reuse at body size, which is why the
-  // settings UI grades against the threshold for the size it actually paints.
+  // rather than 4.5 — which is why the settings UI grades overlay slots
+  // against the threshold for the size they actually paint, while the app
+  // palette below is held to the stricter body-text bar throughout.
   it('rates the shipped warning bar as readable at the size it renders', () => {
     const c = paletteToOverlayColors(PALETTES.light);
     expect(contrastRatio(c.warnBg, c.warnText)).toBeGreaterThan(3);
@@ -95,6 +100,81 @@ describe('contrastRatio', () => {
       expect(contrastRatio(c.cardBg, c.cardText), name).toBeGreaterThan(4.5);
     }
   });
+});
+
+// The guarantee that lets the app ship a palette picker at all: a streamer
+// choosing a built-in should never be able to land on one that renders risk
+// warnings or status labels illegibly. Every one of these caught a real
+// shipped bug when first written — light's ochre was at 2.11:1 behind the
+// "◐ medium DMCA risk" label on the DEFAULT theme.
+describe('built-in palette accessibility', () => {
+  it('has no token below the body-text bar, in any shipped palette', () => {
+    for (const [name, palette] of Object.entries(PALETTES)) {
+      const failures = paletteContrastFailures(palette);
+      expect(
+        failures,
+        // Named in the failure message so a future palette edit says exactly
+        // which token broke and by how much, rather than just "expected []".
+        `${name}: ${failures.map((f) => `${f.token} ${f.ratio.toFixed(2)}:1`).join(', ')}`,
+      ).toEqual([]);
+    }
+  });
+
+  it('grades every token except paper — paper IS the background', () => {
+    expect(TEXT_SAFE_TOKENS).not.toContain('paper');
+    // Guards against a token being added to the palette and silently escaping
+    // the check above.
+    expect([...TEXT_SAFE_TOKENS].sort()).toEqual(
+      PALETTE_TOKENS.filter((t) => t !== 'paper').slice().sort(),
+    );
+  });
+
+  it('reports the offending token and its real ratio, not just a boolean', () => {
+    // A deliberately broken palette: pale yellow text on cream.
+    const broken = { ...PALETTES.light, rust: '#f7e9a0' };
+    const failures = paletteContrastFailures(broken);
+    expect(failures).toHaveLength(1);
+    expect(failures[0].token).toBe('rust');
+    expect(failures[0].ratio).toBeLessThan(MIN_TEXT_CONTRAST);
+  });
+
+  it('accepts a colour sitting exactly at the threshold, not just above it', () => {
+    // Boundary check — the comparison is `< threshold`, so a colour graded at
+    // precisely the bar must be usable rather than rejected. Every token is
+    // set to the same value here so one exact ratio covers all of them.
+    const p = PALETTES.light;
+    const uniform = Object.fromEntries(
+      PALETTE_TOKENS.map((t) => [t, t === 'paper' ? p.paper : p.ink]),
+    ) as typeof p;
+    expect(paletteContrastFailures(uniform, contrastRatio(p.ink, p.paper))).toEqual([]);
+  });
+});
+
+// PALETTES and the `.theme-*` blocks in globals.css are the same four
+// palettes written twice, and they have to be: the stylesheet needs literal
+// values to paint with, while PALETTES is what the settings preview and the
+// overlay compute from. Nothing but this test stops the two halves drifting —
+// and they did, the first time these values were edited, which left the CSS
+// (what actually paints) still carrying the inaccessible originals.
+describe('globals.css mirrors PALETTES', () => {
+  const css = readFileSync(resolve(import.meta.dirname, '../app/globals.css'), 'utf8');
+
+  /** Pull `--token: r g b;` declarations out of one `.theme-*` block. */
+  function paletteFromCss(themeClass: string): Record<string, string> {
+    const block = new RegExp(`\\.${themeClass}\\s*\\{([^}]*)\\}`).exec(css);
+    if (!block) throw new Error(`no .${themeClass} block found in globals.css`);
+    const out: Record<string, string> = {};
+    for (const [, token, r, g, b] of block[1].matchAll(/--(\w+):\s*(\d+)\s+(\d+)\s+(\d+)\s*;/g)) {
+      out[token] = '#' + [r, g, b].map((n) => Number(n).toString(16).padStart(2, '0')).join('');
+    }
+    return out;
+  }
+
+  for (const name of Object.keys(PALETTES)) {
+    it(`${name} matches, token for token`, () => {
+      expect(paletteFromCss(`theme-${name}`)).toEqual(PALETTES[name]);
+    });
+  }
 });
 
 describe('sanitizeFontFamily', () => {

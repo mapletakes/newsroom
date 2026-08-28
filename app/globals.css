@@ -79,8 +79,8 @@ layer(base);
 :root, .theme-light {
   --ink: 13 13 14;
   --paper: 245 241 232;
-  --rust: 196 69 28;
-  --ochre: 212 160 23;
+  --rust: 192 67 27;
+  --ochre: 138 104 15;
   --moss: 61 92 58;
   --slate: 44 62 80;
 }
@@ -112,7 +112,7 @@ html.sepia, .theme-sepia {
   --ink: 46 34 24;
   --paper: 240 227 202;
   --rust: 166 74 44;
-  --ochre: 176 128 38;
+  --ochre: 130 94 28;
   --moss: 86 96 56;
   --slate: 74 72 88;
 }
@@ -141,8 +141,15 @@ html, body {
 .ov-display { font-family: var(--ov-font-display, var(--font-display)); }
 .ov-mono { font-family: var(--ov-font-mono, var(--font-mono)); }
 
+/* Tinted rather than a solid --ochre fill. Two reasons, both measured: a
+   solid highlight left ink at 1.47:1 on the dark palette and 2.63:1 on
+   sepia — selected text was very nearly invisible — and --ochre is now
+   chosen to be legible as small TEXT on paper (see TEXT_SAFE_TOKENS in
+   lib/theme.ts), which makes it too dark to sit under ink as a solid block.
+   At 0.35 the highlight still reads clearly as ochre while ink over it
+   clears 4.5:1 on all four palettes (6.46:1 worst case, on dark). */
 ::selection {
-  background-color: rgb(var(--ochre));
+  background-color: rgb(var(--ochre) / 0.35);
   color: rgb(var(--ink));
 }
 
