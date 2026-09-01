@@ -51,8 +51,17 @@ function setRange(input: HTMLElement, value: string) {
   setter.call(input, value);
   input.dispatchEvent(new Event('input', { bubbles: true }));
 }
-/** Same trick, for a swatch's <input type="color">. */
-const setColor = setRange;
+/** Drives the swatch picker's precision fallback: open the popover, type an
+ *  exact hex, submit. Exercised in preference to clicking a grid swatch
+ *  because it pins down an exact, assertable value rather than "whichever
+ *  cell happens to be closest to #336699". */
+async function pickExactColor(user: ReturnType<typeof userEvent.setup>, triggerLabel: RegExp, hex: string) {
+  await user.click(screen.getByLabelText(triggerLabel));
+  const hexField = screen.getByLabelText(/exact hex value/i);
+  await user.clear(hexField);
+  await user.type(hexField, hex);
+  await user.click(screen.getByRole('button', { name: /^use$/i }));
+}
 
 afterEach(() => {
   cleanup();
@@ -217,7 +226,7 @@ describe('AppThemeSettings — explicit swatch overrides', () => {
     renderSettings();
 
     await user.click(screen.getByRole('radio', { name: /custom/i }));
-    setColor(screen.getByLabelText(/set accent \/ alerts explicitly/i), '#336699');
+    await pickExactColor(user, /set accent \/ alerts explicitly/i, '#336699');
     await user.click(screen.getByRole('button', { name: /^save$/i }));
 
     await waitFor(() => {
@@ -238,7 +247,7 @@ describe('AppThemeSettings — explicit swatch overrides', () => {
     renderSettings();
 
     await user.click(screen.getByRole('radio', { name: /custom/i }));
-    setColor(screen.getByLabelText(/set accent \/ alerts explicitly/i), '#336699');
+    await pickExactColor(user, /set accent \/ alerts explicitly/i, '#336699');
     setRange(screen.getByLabelText(/temperature/i), '90');
     await user.click(screen.getByRole('button', { name: /^save$/i }));
 
@@ -256,7 +265,7 @@ describe('AppThemeSettings — explicit swatch overrides', () => {
     renderSettings();
 
     await user.click(screen.getByRole('radio', { name: /custom/i }));
-    setColor(screen.getByLabelText(/set accent \/ alerts explicitly/i), '#336699');
+    await pickExactColor(user, /set accent \/ alerts explicitly/i, '#336699');
     await user.click(screen.getByRole('button', { name: /reset accent \/ alerts to derived/i }));
     await user.click(screen.getByRole('button', { name: /^save$/i }));
 
@@ -277,7 +286,7 @@ describe('AppThemeSettings — explicit swatch overrides', () => {
     renderSettings();
 
     await user.click(screen.getByRole('radio', { name: /custom/i }));
-    setColor(screen.getByLabelText(/set accent \/ alerts explicitly/i), '#fefefe'); // near-white on light paper
+    await pickExactColor(user, /set accent \/ alerts explicitly/i, '#fefefe'); // near-white on light paper
     expect(await screen.findByText(/⚠.*:1/)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /^save$/i }));
@@ -290,7 +299,7 @@ describe('AppThemeSettings — explicit swatch overrides', () => {
     renderSettings();
 
     await user.click(screen.getByRole('radio', { name: /custom/i }));
-    setColor(screen.getByLabelText(/set accent \/ alerts explicitly/i), '#336699');
+    await pickExactColor(user, /set accent \/ alerts explicitly/i, '#336699');
     await user.click(screen.getByRole('radio', { name: /midnight/i }));
     await user.click(screen.getByRole('button', { name: /^save$/i }));
 

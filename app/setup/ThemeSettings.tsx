@@ -5,6 +5,7 @@ import { AppHeader } from '@/components/AppHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { SwatchPicker } from '@/components/ui/swatch-picker';
 import { OverlayCard, type OverlayVariant } from '@/app/overlay/OverlayView';
 import { cn } from '@/lib/utils';
 import { SubmissionCard, type Submission } from '@/components/SubmissionCard';
@@ -284,19 +285,12 @@ function CustomPaletteBuilder({
           const pinned = overrides[t] !== undefined;
           return (
             <span key={t} className="flex items-center gap-2">
-              <label
-                className="relative shrink-0 w-6 h-4 border border-ink/20 cursor-pointer"
-                style={{ background: palette[t] }}
-                title={`Set ${TOKEN_LABELS[t]} explicitly`}
-              >
-                <input
-                  type="color"
-                  value={palette[t]}
-                  onChange={(e) => onOverride(t, e.target.value)}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  aria-label={`Set ${TOKEN_LABELS[t]} explicitly`}
-                />
-              </label>
+              <SwatchPicker
+                value={palette[t]}
+                onChange={(hex) => onOverride(t, hex)}
+                label={TOKEN_LABELS[t]}
+                isAccessible={t === 'paper' ? undefined : (hex) => contrastRatio(hex, palette.paper) >= MIN_TEXT_CONTRAST}
+              />
               <span className="min-w-0 flex-1 font-mono text-[10px] truncate">
                 {TOKEN_LABELS[t]}
                 {pinned && <span className="text-ink/40"> · pinned</span>}
