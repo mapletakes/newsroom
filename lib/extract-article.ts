@@ -1,3 +1,5 @@
+import { metaTag as meta, titleTag } from './html-meta';
+
 export type ArticleMeta = {
   title: string | null;
   description: string | null;
@@ -6,23 +8,6 @@ export type ArticleMeta = {
   author: string | null;
   publishedAt: string | null;
 };
-
-function meta(html: string, name: string): string | null {
-  // Match <meta property="name" content="..."> or <meta name="name" content="...">
-  // Also handles content before property/name and single quotes
-  const re = new RegExp(
-    `<meta\\s+[^>]*(?:property|name)=["']${name}["'][^>]*content=["']([^"']*?)["']` +
-    `|<meta\\s+[^>]*content=["']([^"']*?)["'][^>]*(?:property|name)=["']${name}["']`,
-    'i',
-  );
-  const m = html.match(re);
-  return m?.[1] || m?.[2] || null;
-}
-
-function titleTag(html: string): string | null {
-  const m = html.match(/<title[^>]*>([^<]*)<\/title>/i);
-  return m?.[1]?.trim() || null;
-}
 
 export async function extractArticle(url: string): Promise<ArticleMeta> {
   const res = await fetch(url, {

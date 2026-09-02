@@ -11,6 +11,7 @@ import { supabaseAdmin } from './supabase';
 import { extractArticle } from './extract-article';
 import { fetchYouTubeMeta } from './extract-youtube';
 import { extractTwitter } from './extract-twitter';
+import { extractTikTok } from './extract-tiktok';
 import { enrichContent, hostDMCARisk } from './enrich';
 import { scanContentWarning } from './content-warning';
 import { recordUsage } from './usage';
@@ -58,6 +59,16 @@ export async function runListItemExtraction(itemId: string, streamId: string) {
       publisher = meta.publisher;
       author = meta.author;
       publishedAt = meta.publishedAt;
+      bodyText = meta.description;
+    } else if (item.kind === 'tiktok') {
+      const meta = await extractTikTok(item.url);
+      title = meta.title;
+      description = meta.description;
+      thumbnail = meta.thumbnail;
+      publisher = meta.publisher;
+      author = meta.author;
+      publishedAt = meta.publishedAt;
+      duration = meta.durationSeconds;
       bodyText = meta.description;
     } else {
       // Playlists, clips, and anything else we don't have a dedicated
