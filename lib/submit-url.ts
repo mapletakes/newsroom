@@ -88,11 +88,22 @@ export async function submitUrlToQueue(params: SubmitUrlParams): Promise<SubmitU
     if (error) return { submission: null };
     submission = data;
 
+    // Only collapse against a link that's still ACTIVE in the queue
+    // (pending or approved) — never against one that's already played or
+    // rejected. Without this, a link resubmitted weeks after it aired (or
+    // after a mod explicitly rejected it) silently merged into that old,
+    // already-resolved row instead of landing as a fresh pending item: the
+    // resubmission looked successful but nothing new ever reached the mod
+    // queue. Every duplicate delivery worth collapsing — a chat pile-on, a
+    // retry, several mods pasting the same link — is still pending or
+    // approved when it happens, so this loses none of the original
+    // protection.
     const { data: all } = await sb
       .from('submissions')
       .select('id')
       .eq('stream_id', streamId)
       .eq('normalized_url', normalized)
+      .in('status', ['pending', 'approved'])
       .order('created_at', { ascending: true })
       .order('id', { ascending: true });
 
