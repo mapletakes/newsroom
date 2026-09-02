@@ -572,10 +572,20 @@ export function DeckView({
     return flat;
   }, [blocks, queue, segments]);
 
-  // Auto-select the first item in play order when nothing is active, or when
-  // the active item has left the queue (played/removed from elsewhere).
+  // Auto-ADVANCE to the first item in play order when the active item has
+  // left the queue (played/removed from elsewhere) — deliberately does NOT
+  // also cover "nothing is active" (activeId === null). That used to be the
+  // same branch, and it's what made opening the deck put something on air:
+  // a fresh tab starts with activeId null, this effect picked
+  // orderedQueue[0] as if the streamer had chosen it, and the now-playing
+  // effect below immediately reported that to the server — before anyone
+  // had actually clicked anything. Requiring an activeId first means this
+  // only ever fires to replace something that WAS genuinely selected (by
+  // the streamer's own click, or by the server-seeded now-playing item
+  // above), never to invent a first selection out of an idle deck.
   useEffect(() => {
-    const activeExists = !!activeId && orderedQueue.some((s) => s.id === activeId);
+    if (!activeId) return;
+    const activeExists = orderedQueue.some((s) => s.id === activeId);
     if (!activeExists && orderedQueue.length > 0) {
       setActiveId(orderedQueue[0].id);
       setStartedAt(Date.now());
@@ -1464,14 +1474,29 @@ export function DeckView({
             </div>
           ) : !active ? (
             <div className="text-center py-24">
-              <p className="font-display text-3xl mb-3">No approved items yet.</p>
-              <p className="text-ink/60 font-mono text-sm mb-6">
-                Your mods need to approve submissions in the
-                <Link href="/mod" className="underline ml-1">
-                  Mod View
-                </Link>
-                , or add links directly from the sidebar.
-              </p>
+              {orderedQueue.length === 0 ? (
+                <>
+                  <p className="font-display text-3xl mb-3">No approved items yet.</p>
+                  <p className="text-ink/60 font-mono text-sm mb-6">
+                    Your mods need to approve submissions in the
+                    <Link href="/mod" className="underline ml-1">
+                      Mod View
+                    </Link>
+                    , or add links directly from the sidebar.
+                  </p>
+                </>
+              ) : (
+                // The queue isn't empty — nothing is active because nothing's
+                // been chosen yet (a fresh deck, or one nothing has ever been
+                // played on). Deliberately not auto-selected: see the play-order
+                // effect above for why picking one silently would put it on air.
+                <>
+                  <p className="font-display text-3xl mb-3">Nothing on air yet.</p>
+                  <p className="text-ink/60 font-mono text-sm mb-6">
+                    Pick an item from the queue to bring it up.
+                  </p>
+                </>
+              )}
             </div>
           ) : null}
           {active && (

@@ -139,6 +139,10 @@ describe('DeckView — mark played / undo', () => {
     renderDeck();
 
     await screen.findByText(SUB.title);
+    // Nothing is auto-selected on load anymore (see DeckView's play-order
+    // effect) — the streamer has to click an item before it's "on air", so
+    // the test does that click too, same as a real session would.
+    await user.click(screen.getByText(SUB.title));
     const baselineCount = screen.getAllByText(SUB.title).length;
 
     await user.click(screen.getByRole('button', { name: /played — next/i }));
@@ -153,17 +157,27 @@ describe('DeckView — mark played / undo', () => {
     await new Promise((r) => setTimeout(r, 100));
     expect(screen.queryByText(SUB.title)).not.toBeInTheDocument();
 
-    // Undo, and confirm it restores exactly the baseline count (no
-    // duplicate) and actually cancels the pending write.
+    // Undo restores the item to the queue — but, correctly, does NOT put it
+    // back on air: markPlayed already advanced activeId away (to whatever
+    // was next, or null here since this was the only item), and undo only
+    // reverses the optimistic removal from the queue list, not that
+    // navigation. Re-activating it automatically would be exactly the bug
+    // the play-order effect fix (auto-select) addresses — the streamer
+    // clicks it again if they want it live. So the restored count is 1
+    // (queue list only), not baselineCount (2, which included the active
+    // card) — what this test actually guards is that it's exactly 1, not 2
+    // or more, i.e. undo doesn't leave a duplicate queue entry behind.
     const undoButton = await screen.findByRole('button', { name: /undo/i });
     await user.click(undoButton);
-    expect(screen.getAllByText(SUB.title)).toHaveLength(baselineCount);
+    const restoredCount = screen.getAllByText(SUB.title).length;
+    expect(restoredCount).toBe(1);
+    expect(restoredCount).toBeLessThan(baselineCount);
 
     // Wait out the window the cancelled write would have fired in, inside
     // this same test, so nothing is left pending for a later test to catch.
     await new Promise((r) => setTimeout(r, 5200));
     expect(backend.patchCalls).toBe(0);
-    expect(screen.getAllByText(SUB.title)).toHaveLength(baselineCount);
+    expect(screen.getAllByText(SUB.title)).toHaveLength(restoredCount);
   }, 10000);
 
   it('marking played persists after the undo window if not undone', async () => {
@@ -172,6 +186,8 @@ describe('DeckView — mark played / undo', () => {
     renderDeck();
 
     await screen.findByText(SUB.title);
+    // Same as above — select it first; nothing is auto-selected on load.
+    await user.click(screen.getByText(SUB.title));
     await user.click(screen.getByRole('button', { name: /played — next/i }));
 
     await waitFor(() => expect(backend.patchCalls).toBe(1), { timeout: 6000 });
