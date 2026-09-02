@@ -28,11 +28,21 @@ const HIGH_RISK_HOSTS = [
   'spotify.com', 'music.apple.com', 'music.youtube.com',
 ];
 
+// Only ever returns 'medium' by way of the model's own judgment in
+// enrichContent (see the `order` comparison there) — this host-only check
+// used to also flag any .com whose hostname merely CONTAINS "news" or
+// "media" as medium risk. That matched far more than it meant to
+// (localnewsonline.com, socialmediaexample.com, a thousand small
+// independent outlets) without being predictive of anything — a domain
+// containing those letters says nothing about whether reacting to it draws
+// a copyright strike. The explicit list below plus the model reading the
+// actual content (now via web_fetch, not a guessed description) is the
+// real signal; this stays a clean two-value pre-screen rather than a
+// three-value one whose middle value was noise.
 export function hostDMCARisk(url: string): 'low' | 'medium' | 'high' {
   try {
     const h = new URL(url).hostname.replace(/^www\./, '').toLowerCase();
     if (HIGH_RISK_HOSTS.some((x) => h === x || h.endsWith('.' + x))) return 'high';
-    if (h.endsWith('.com') && (h.includes('news') || h.includes('media'))) return 'medium';
     return 'low';
   } catch { return 'low'; }
 }
