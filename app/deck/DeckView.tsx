@@ -4,10 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Submission } from '@/components/SubmissionCard';
-import { extractYouTubeId, formatDuration, formatDate, formatClock, kindTint, kindCategory, type KindCategory } from '@/lib/url';
+import { formatDuration, kindCategory, type KindCategory } from '@/lib/url';
 import { positionsFromOrder, insertAtIndex, isSameOrder, byPosition } from '@/lib/reorder';
 import { queryKeys } from '@/lib/query-keys';
-import { ArchiveButton } from '@/components/ArchiveButton';
 import { QuickLinksDrawer } from './QuickLinksDrawer';
 import { QuestionsPanel } from '@/components/QuestionsPanel';
 import { DeckRail } from '@/components/DeckRail';
@@ -22,15 +21,11 @@ import { ShortcutsModal } from './ShortcutsModal';
 import { AppHeader } from '@/components/AppHeader';
 import { Icon } from '@/components/ui/icon';
 import { SaveToListMenu } from '@/components/SaveToListMenu';
-import { TriggerWarningBanner, TriggerWarningEditor } from '@/components/TriggerWarning';
-import { Button, buttonVariants } from '@/components/ui/button';
-import { Input, Textarea } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SimpleTooltip } from '@/components/ui/tooltip';
-import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import {
   DropdownMenu,
@@ -59,298 +54,13 @@ import {
   arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
-  useSortable,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { SegmentBlock, type Segment } from './SegmentBlock';
+import { ActiveItemCard } from './ActiveItemCard';
 
-type Segment = { id: string; name: string; position: number; collapsed: boolean };
 type QueueData = { submissions: Submission[]; nowPlayingId: string | null };
 type SegmentsData = { segments: Segment[]; ungroupedPosition: number };
-
-function SortableQueueItem({
-  s,
-  isActive,
-  selected,
-  onSelect,
-  onRemove,
-  onToggleSelect,
-}: {
-  s: Submission;
-  isActive: boolean;
-  selected: boolean;
-  onSelect: () => void;
-  onRemove: () => void;
-  onToggleSelect: (shiftKey: boolean) => void;
-}) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: s.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0 : 1,
-  };
-
-  return (
-    <div ref={setNodeRef} style={style}>
-      {/* mr-1.5 keeps the remove button clear of the sidebar's scrollbar —
-          without it, the X sits flush against the scroll track and users
-          have reported mis-hitting one for the other. */}
-      <div className={`flex items-stretch gap-0 mr-1.5 ${selected ? 'bg-ink/5' : ''}`}>
-        {/* The whole card is the drag source. Plain click activates (and clears
-            the multi-selection); Ctrl/Cmd-click toggles this card in the
-            selection; Shift-click extends a range. dnd-kit suppresses the click
-            after a real drag, so reordering never changes now-playing. */}
-        <Card
-          asChild
-          className={cn(
-            kindTint(s.kind),
-            isActive ? 'ring-2 ring-rust ring-inset' : selected ? 'ring-2 ring-rust/40 ring-inset' : '',
-          )}
-        >
-          <button
-            {...attributes}
-            {...listeners}
-            onClick={(e) => {
-              if (e.shiftKey) onToggleSelect(true);
-              else if (e.metaKey || e.ctrlKey) onToggleSelect(false);
-              else onSelect();
-            }}
-            className="flex-1 text-left p-3 min-w-0 cursor-grab active:cursor-grabbing"
-          >
-          <div className="flex gap-3">
-            {s.thumbnail_url && (
-              <img
-                src={s.thumbnail_url}
-                alt=""
-                loading="lazy"
-                className="shrink-0 w-28 h-[4.5rem] object-cover border border-ink/20"
-              />
-            )}
-            <div className="min-w-0 flex-1">
-              <div className="font-mono text-[11px] uppercase tracking-widest text-ink/60 mb-1">
-                {isActive && <span className="text-rust font-bold mr-1">▶ NOW</span>}
-                {s.kind.replace('_', ' ')}
-                {s.duration_seconds ? ` · ${formatDuration(s.duration_seconds)}` : ''}
-                {s.published_at ? ` · ${formatDate(s.published_at)}` : ''}
-                {s.dmca_risk === 'high' && <span className="text-rust ml-1">⚠</span>}
-                {s.content_warning && (
-                  <SimpleTooltip content={s.content_warning}>
-                    <span className="text-rust font-bold ml-1 cursor-default">⚠ CW</span>
-                  </SimpleTooltip>
-                )}
-                {s.trigger_warning && (
-                  <SimpleTooltip content={s.trigger_warning}>
-                    <span className="bg-rust text-paper font-bold ml-1 px-1 cursor-default">⚠ TW</span>
-                  </SimpleTooltip>
-                )}
-              </div>
-              <div className="font-display text-lg font-bold leading-tight line-clamp-2">
-                {s.title || s.url}
-              </div>
-              {(s.publisher || s.author) && (
-                <div className="font-mono text-xs text-ink/50 truncate mt-0.5">
-                  {[s.publisher, s.author].filter(Boolean).join(' · ')}
-                </div>
-              )}
-              {(s.summary || s.description) && (
-                <p className="text-sm text-ink/70 leading-snug line-clamp-2 mt-1">
-                  {s.summary || s.description}
-                </p>
-              )}
-            </div>
-          </div>
-          </button>
-        </Card>
-        <button
-          onClick={(e) => { e.stopPropagation(); onRemove(); }}
-          className="shrink-0 w-7 flex items-center justify-center text-ink/40 hover:text-rust hover:bg-rust/10 rounded-full transition-colors"
-          aria-label="Remove"
-          tabIndex={-1}
-        >
-          <Icon name="remove" className="text-base" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function SegmentBlock({
-  containerId,
-  title,
-  editable,
-  collapsed,
-  items,
-  filtering,
-  activeId,
-  draggingSourceContainer,
-  overContainerId,
-  sortable,
-  selectedIds,
-  onSelectItem,
-  onRemoveItem,
-  onToggleSelect,
-  onRenameLocal,
-  onRenameCommit,
-  onToggleCollapse,
-  onDelete,
-  onClearItems,
-}: {
-  containerId: string; // 'ungrouped' or a segment id — the drop target id
-  title: string | null; // null → no header (render items flat)
-  editable: boolean;
-  collapsed: boolean;
-  items: Submission[];
-  filtering: boolean; // a type filter is active (suppresses the empty hint)
-  activeId: string | null;
-  draggingSourceContainer: string | null; // container of the item being dragged, if any
-  overContainerId: string | null; // container currently under the cursor
-  sortable: boolean; // whether this block can be drag-reordered (has a header)
-  selectedIds: Set<string>;
-  onSelectItem: (id: string) => void;
-  onRemoveItem: (id: string) => void;
-  onToggleSelect: (id: string, shiftKey: boolean) => void;
-  onRenameLocal?: (name: string) => void;
-  onRenameCommit?: () => void;
-  onToggleCollapse?: () => void;
-  onDelete?: () => void;
-  onClearItems?: () => void;
-}) {
-  // The block is a sortable: draggable by its header grip to reorder blocks,
-  // and a drop target so items can be dragged into it (even when collapsed).
-  const {
-    setNodeRef,
-    attributes,
-    listeners,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: containerId });
-
-  // True when an item from a DIFFERENT block is hovering this one (anywhere —
-  // header, items, or gaps), i.e. a drop here would move it in at the bottom.
-  // Driven by the context-level over-container so it works even when the
-  // cursor is over an individual item rather than the container itself.
-  const isDropTarget =
-    overContainerId === containerId &&
-    draggingSourceContainer !== null &&
-    draggingSourceContainer !== containerId;
-
-  // Combined runtime of any videos in this block.
-  const totalSeconds = items.reduce((sum, s) => sum + (s.duration_seconds || 0), 0);
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`mb-2 rounded-sm transition-colors ${
-        isDropTarget ? 'ring-2 ring-rust bg-rust/5' : ''
-      }`}
-    >
-      {title !== null && (
-        <div className="flex items-center gap-1 mb-1 mr-1.5 bg-ink/10 px-1 py-1">
-          {sortable && (
-            <button
-              {...attributes}
-              {...listeners}
-              className="shrink-0 w-5 flex items-center justify-center cursor-grab active:cursor-grabbing text-ink/30 hover:text-ink/60 select-none"
-              aria-label="Drag to reorder segment"
-              tabIndex={-1}
-            >
-              ⠿
-            </button>
-          )}
-          <button
-            onClick={onToggleCollapse}
-            className="shrink-0 w-5 text-ink/60 hover:text-ink"
-            aria-label={collapsed ? 'Expand' : 'Collapse'}
-          >
-            {collapsed ? '▸' : '▾'}
-          </button>
-          {editable ? (
-            <input
-              value={title}
-              size={Math.min(Math.max(title.length + 1, 6), 28)}
-              onChange={(e) => onRenameLocal?.(e.target.value)}
-              onBlur={() => onRenameCommit?.()}
-              onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-              className="min-w-0 shrink bg-transparent font-mono text-xs uppercase tracking-widest font-bold focus:outline-none focus:bg-paper px-1 py-0.5"
-            />
-          ) : (
-            <span className="min-w-0 font-mono text-xs uppercase tracking-widest font-bold text-ink/50 px-1 py-0.5 truncate max-w-[12rem]">
-              {title}
-            </span>
-          )}
-          <span className="mr-auto shrink-0 font-mono text-xs font-semibold text-ink/60">
-            ({items.length}{totalSeconds > 0 ? ` · ${formatDuration(totalSeconds)}` : ''})
-          </span>
-          {onClearItems && items.length > 0 && (
-            <SimpleTooltip content="Reject all items here (clears the block)">
-              <button
-                onClick={onClearItems}
-                className="shrink-0 w-5 flex items-center justify-center text-ink/30 hover:text-rust"
-                aria-label="Reject all items in this block"
-              >
-                <Icon name="clearAll" className="text-sm" />
-              </button>
-            </SimpleTooltip>
-          )}
-          {onDelete && (
-            <button onClick={onDelete} className="shrink-0 w-5 flex items-center justify-center text-ink/30 hover:text-rust" aria-label="Delete segment">
-              <Icon name="remove" className="text-sm" />
-            </button>
-          )}
-        </div>
-      )}
-      {!collapsed ? (
-        <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
-          <div className="space-y-1 min-h-[2rem]">
-            {items.map((s) => (
-              <SortableQueueItem
-                key={s.id}
-                s={s}
-                isActive={s.id === activeId}
-                selected={selectedIds.has(s.id)}
-                onSelect={() => onSelectItem(s.id)}
-                onRemove={() => onRemoveItem(s.id)}
-                onToggleSelect={(shiftKey) => onToggleSelect(s.id, shiftKey)}
-              />
-            ))}
-            {isDropTarget && items.length === 0 && (
-              <div className="border-2 border-dashed border-rust bg-rust/10 px-2 py-2 text-center font-mono text-[10px] uppercase tracking-widest text-rust">
-                Drop here
-              </div>
-            )}
-            {title !== null && items.length === 0 && !isDropTarget && !filtering && (
-              <div className="font-mono text-[10px] text-ink/40 px-6 py-2 italic">
-                empty — drag items here
-              </div>
-            )}
-          </div>
-        </SortableContext>
-      ) : (
-        isDropTarget && (
-          <div className="border-2 border-dashed border-rust bg-rust/10 px-2 py-2 text-center font-mono text-[10px] uppercase tracking-widest text-rust">
-            Drop to add here
-          </div>
-        )
-      )}
-    </div>
-  );
-}
 
 export function DeckView({
   displayName,
@@ -1339,11 +1049,6 @@ export function DeckView({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const embedYouTube =
-    active && (active.kind === 'youtube' || active.kind === 'youtube_short')
-      ? extractYouTubeId(active.url)
-      : null;
-
   const draggingBlock = activeDragId !== null && isBlockId(activeDragId);
   const activeDragItem = activeDragId && !draggingBlock ? queue.find((s) => s.id === activeDragId) || null : null;
   const activeDragBlock = draggingBlock
@@ -1499,219 +1204,20 @@ export function DeckView({
               )}
             </div>
           ) : null}
-          {active && (
-            <article>
-              <div className="flex items-center gap-2 mb-3 flex-wrap font-mono text-xs uppercase tracking-widest">
-                <Badge size="default">{active.kind.replace('_', ' ')}</Badge>
-                {active.duration_seconds ? (
-                  <Badge variant="outlineStrong" size="default">{formatDuration(active.duration_seconds)}</Badge>
-                ) : null}
-                {active.credibility_tag && (
-                  <Badge variant="outlineStrong" size="default">{active.credibility_tag}</Badge>
-                )}
-                {active.dmca_risk === 'high' && (
-                  <Badge variant="destructive" size="default">⚠ High DMCA risk</Badge>
-                )}
-                {active.dmca_risk === 'medium' && (
-                  <Badge variant="warning" size="default">◐ Medium risk</Badge>
-                )}
-                {active.content_warning && (
-                  <SimpleTooltip content={active.content_warning}>
-                    <Badge variant="destructive" size="default" className="cursor-default">
-                      ⚠ Content warning
-                    </Badge>
-                  </SimpleTooltip>
-                )}
-                {active.publisher && <span className="text-ink/60">· {active.publisher}</span>}
-                {active.published_at && <span className="text-ink/60">· {formatDate(active.published_at)}</span>}
-                <span className="ml-auto flex items-center gap-3 normal-case tracking-normal">
-                  <span className="flex items-center gap-1.5 font-mono text-rust font-bold tracking-widest uppercase" title="Time on air for this item">
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-rust live-dot" />
-                    {formatClock(elapsedSeconds)}
-                  </span>
-                  <ArchiveButton id={active.id} url={active.url} archiveUrl={active.archive_url} />
-                </span>
-              </div>
-
-              <h1 className="font-display text-3xl lg:text-4xl font-black leading-tight mb-4">
-                {active.title || active.url}
-              </h1>
-
-              {/* Directly under the headline and above everything else on the
-                  item — this is what's on the overlay right now, and what's
-                  going out with the next chat post. */}
-              <div className="max-w-3xl mb-6 flex flex-col gap-2 items-start">
-                {active.trigger_warning && <TriggerWarningBanner text={active.trigger_warning} className="w-full" />}
-                <TriggerWarningEditor
-                  key={active.id}
-                  value={active.trigger_warning}
-                  onSave={(v) => saveTriggerWarning(active.id, v)}
-                />
-              </div>
-
-              {(active.summary || active.description) && (
-                <p className="text-lg leading-relaxed mb-6 max-w-3xl whitespace-pre-line">
-                  {active.summary || active.description}
-                </p>
-              )}
-
-              {active.mod_notes && (
-                <div className="max-w-3xl mb-6 border-l-4 border-ochre bg-ochre/10 px-4 py-3">
-                  <span className="font-mono text-xs uppercase tracking-widest text-ochre block mb-1">
-                    Mod note
-                  </span>
-                  <span className="text-sm">{active.mod_notes}</span>
-                </div>
-              )}
-
-              {embedYouTube && (
-                <div className="aspect-video bg-ink mb-6 max-w-3xl">
-                  <iframe
-                    src={`https://www.youtube.com/embed/${embedYouTube}`}
-                    className="w-full h-full"
-                    allowFullScreen
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  />
-                </div>
-              )}
-
-              {active.kind === 'article' && active.thumbnail_url && (
-                <img
-                  src={active.thumbnail_url}
-                  alt=""
-                  className="max-w-3xl border border-ink/20 mb-6"
-                />
-              )}
-
-              {active.topics && active.topics.length > 0 && (
-                <div className="flex flex-wrap gap-1 mb-6">
-                  {active.topics.map((t) => (
-                    <span
-                      key={t}
-                      className="font-mono text-xs uppercase bg-paper border border-ink/30 px-2 py-1"
-                    >
-                      #{t}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {active.related_coverage &&
-                Array.isArray(active.related_coverage) &&
-                active.related_coverage.length > 0 && (
-                  <div className="mb-6 max-w-3xl">
-                    <div className="rule-double mb-3" />
-                    <h2 className="font-mono text-xs uppercase tracking-widest text-ink/60 mb-3">
-                      Related coverage ({active.related_coverage.length})
-                    </h2>
-                    <div className="space-y-2">
-                      {active.related_coverage.map((c, i) => (
-                        <a
-                          key={i}
-                          href={c.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="block card-paper p-3 hover:border-ink"
-                        >
-                          <div className="font-display text-sm font-bold leading-tight mb-1">
-                            {c.title}
-                          </div>
-                          <div className="font-mono text-xs uppercase tracking-widest text-ink/60 mb-1">
-                            {c.publisher}
-                          </div>
-                          {c.snippet && (
-                            <div className="text-xs text-ink/70 leading-relaxed line-clamp-2">
-                              {c.snippet}
-                            </div>
-                          )}
-                        </a>
-                      ))}
-                    </div>
-                    <div className="rule-double mt-3" />
-                  </div>
-                )}
-
-              <div className="flex gap-3 flex-wrap mb-6">
-                <a href={active.url} target="_blank" rel="noreferrer" className={buttonVariants()}>
-                  Open source ↗
-                </a>
-                {!curateOnly && (
-                  <Button variant="moss" onClick={markPlayed}>
-                    ✓ Played — next
-                  </Button>
-                )}
-                {!curateOnly && (
-                  <Button variant="outline" onClick={skip}>
-                    Skip
-                  </Button>
-                )}
-                <Button variant="outlineDestructive" onClick={rejectActive} title="Remove from deck">
-                  <Icon name="remove" className="text-base" />
-                  Remove
-                </Button>
-                {!curateOnly && (
-                  <>
-                    <Button
-                      variant="outline"
-                      onClick={announce}
-                      title={
-                        pinOnAnnounce
-                          ? "Post 'Watching: …' to your chat and pin it for 20 minutes"
-                          : "Post 'Watching: …' to your chat so a mod can pin it"
-                      }
-                    >
-                      <Icon name="announce" className="text-base" />
-                      Post to chat
-                    </Button>
-                    <label
-                      className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-widest text-ink/60 cursor-pointer self-center"
-                      title="Pins the message for 20 minutes and replaces whatever's currently pinned. Needs your Twitch account reconnected since this was added — if it's not, the post fails outright rather than sending unpinned."
-                    >
-                      <input
-                        type="checkbox"
-                        checked={pinOnAnnounce}
-                        onChange={(e) => setPinOnAnnounce(e.target.checked)}
-                      />
-                      Pin
-                    </label>
-                  </>
-                )}
-                <SaveToListMenu
-                  trigger={
-                    <Button variant="outline">
-                      <Icon name="bookmark" className="text-base" />
-                      Save to…
-                    </Button>
-                  }
-                  onSave={async (listId) => {
-                    const r = await fetch(`/api/lists/${listId}/items`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ submissionId: active.id }),
-                    });
-                    if (!r.ok) return { ok: false };
-                    const data = await r.json();
-                    return { ok: true, added: data.added, skipped: data.skipped };
-                  }}
-                />
-              </div>
-
-              {!curateOnly && (
-                <label className="block max-w-3xl">
-                  <span className="font-mono text-xs uppercase tracking-widest text-ink/60">
-                    Takeaway for show notes (optional)
-                  </span>
-                  <Textarea
-                    value={takeaway}
-                    onChange={(e) => setTakeaway(e.target.value)}
-                    rows={3}
-                    className="w-full mt-1"
-                    placeholder="Add a one-liner about what you said about this on stream..."
-                  />
-                </label>
-              )}
-            </article>
-          )}
+          <ActiveItemCard
+            active={active}
+            elapsedSeconds={elapsedSeconds}
+            curateOnly={curateOnly}
+            takeaway={takeaway}
+            onTakeawayChange={setTakeaway}
+            pinOnAnnounce={pinOnAnnounce}
+            onPinOnAnnounceChange={setPinOnAnnounce}
+            onMarkPlayed={markPlayed}
+            onSkip={skip}
+            onReject={rejectActive}
+            onAnnounce={announce}
+            onSaveTriggerWarning={saveTriggerWarning}
+          />
         </section>
 
         {/* Sidebar */}
