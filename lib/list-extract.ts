@@ -79,7 +79,7 @@ export async function runListItemExtraction(itemId: string, streamId: string) {
     const enriched =
       item.kind === 'twitter'
         ? { summary: null, credibility: null, topics: null as string[] | null, dmcaRisk: null, contentWarning: false }
-        : await enrichContent({ url: item.url, title, publisher, body: bodyText, streamId });
+        : await enrichContent({ url: item.url, title, publisher, body: bodyText, kind: item.kind, streamId });
 
     await sb.from('list_items').update({
       title,

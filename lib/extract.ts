@@ -87,7 +87,7 @@ export async function runExtraction(submissionId: string) {
     const enriched =
       sub.kind === 'twitter'
         ? { summary: null, credibility: null, topics: null as string[] | null, dmcaRisk: null, contentWarning: false }
-        : await enrichContent({ url: sub.url, title, publisher, body: bodyText, streamId: sub.stream_id });
+        : await enrichContent({ url: sub.url, title, publisher, body: bodyText, kind: sub.kind, streamId: sub.stream_id });
 
     await sb.from('submissions').update({
       title,

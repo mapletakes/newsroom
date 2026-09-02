@@ -1,4 +1,5 @@
 import { metaTag as meta, titleTag } from './html-meta';
+import { safeFetchText } from './safe-fetch';
 
 export type ArticleMeta = {
   title: string | null;
@@ -10,15 +11,20 @@ export type ArticleMeta = {
 };
 
 export async function extractArticle(url: string): Promise<ArticleMeta> {
-  const res = await fetch(url, {
+  // This is the one extractor that fetches an arbitrary, unvalidated host —
+  // article links come from chat with no allowlist of trusted domains, so
+  // safeFetchText's SSRF guard and size cap apply here, not just a plain
+  // fetch(). Article HTML is almost always well under a megabyte; 2MB
+  // leaves generous room while still bounding memory against a server that
+  // just keeps streaming.
+  const { text: html } = await safeFetchText(url, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
       'Accept': 'text/html,application/xhtml+xml',
     },
-    redirect: 'follow',
-    signal: AbortSignal.timeout(10000),
+    maxBytes: 2 * 1024 * 1024,
+    timeoutMs: 10000,
   });
-  const html = await res.text();
 
   const title =
     meta(html, 'og:title') ||

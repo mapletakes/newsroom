@@ -11,6 +11,7 @@
 // Date().toISOString()` as a published date whenever the real one couldn't
 // be found rather than just leaving it null.
 import { metaTag, titleTag } from './html-meta';
+import { safeFetchText } from './safe-fetch';
 
 export type TikTokMeta = {
   title: string | null;
@@ -122,25 +123,27 @@ async function fetchOEmbed(url: string): Promise<OEmbed | null> {
  * oEmbed can offer instead of failing the whole extraction (see the file
  * comment for why the source this was drafted from didn't do that).
  *
- * `fetch(url, { redirect: 'follow' })` doubles as short-link resolution: a
- * vm.tiktok.com/vt.tiktok.com link's response body IS the final video
- * page's HTML, so there's no separate resolve step to get wrong.
+ * Following redirects (via safeFetchText, which validates each hop rather
+ * than trusting fetch()'s own automatic chase) doubles as short-link
+ * resolution: a vm.tiktok.com/vt.tiktok.com link's response body IS the
+ * final video page's HTML, so there's no separate resolve step to get
+ * wrong.
  */
 export async function extractTikTok(url: string): Promise<TikTokMeta> {
   let html = '';
   let resolvedUrl = url;
   try {
-    const res = await fetch(url, {
+    const res = await safeFetchText(url, {
       headers: {
         'User-Agent': BROWSER_UA,
         'Accept-Language': 'en-US,en;q=0.9',
         Accept: 'text/html,application/xhtml+xml',
       },
-      redirect: 'follow',
-      signal: AbortSignal.timeout(10000),
+      maxBytes: 3 * 1024 * 1024,
+      timeoutMs: 10000,
     });
     resolvedUrl = res.url || url;
-    html = await res.text();
+    html = res.text;
   } catch {
     return EMPTY;
   }

@@ -1,4 +1,5 @@
 import { extractYouTubeId } from './url';
+import { safeFetchText } from './safe-fetch';
 
 export type YouTubeMeta = {
   title: string | null;
@@ -153,16 +154,21 @@ function extractJsonAfter(html: string, marker: string): string | null {
 // YouTube API key isn't available. No key needed.
 async function scrapeWatchPageMeta(url: string): Promise<Partial<YouTubeMeta> | null> {
   try {
-    const r = await fetch(url, {
+    // Host here is always youtube.com/youtu.be — detectKind already
+    // confirmed that before this was ever called — so safeFetchText's SSRF
+    // guard is a formality; the size cap is the part that actually earns
+    // its keep, bounding a watch page's often-hefty inline JSON.
+    const r = await safeFetchText(url, {
       headers: {
         'User-Agent': BROWSER_UA,
         'Accept-Language': 'en-US,en;q=0.9',
         Cookie: 'SOCS=CAI; CONSENT=YES+1',
       },
-      signal: AbortSignal.timeout(10000),
+      maxBytes: 5 * 1024 * 1024,
+      timeoutMs: 10000,
     });
-    if (!r.ok) return null;
-    const json = extractJsonAfter(await r.text(), 'ytInitialPlayerResponse');
+    if (r.status < 200 || r.status >= 300) return null;
+    const json = extractJsonAfter(r.text, 'ytInitialPlayerResponse');
     if (!json) return null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data = JSON.parse(json) as any;
@@ -247,17 +253,21 @@ export async function expandPlaylistWithMeta(url: string): Promise<PlaylistItem[
 
 async function scrapePlaylist(listId: string): Promise<PlaylistItem[]> {
   try {
-    const r = await fetch(`https://www.youtube.com/playlist?list=${listId}&hl=en`, {
+    // A long playlist's ytInitialData blob can run several megabytes — the
+    // cap here is what actually matters (host is fixed to youtube.com, so
+    // the SSRF guard is a formality, same as scrapeWatchPageMeta above).
+    const r = await safeFetchText(`https://www.youtube.com/playlist?list=${listId}&hl=en`, {
       headers: {
         'User-Agent': BROWSER_UA,
         'Accept-Language': 'en-US,en;q=0.9',
         // Skip the EU consent interstitial that otherwise replaces the page.
         Cookie: 'SOCS=CAI; CONSENT=YES+1',
       },
-      signal: AbortSignal.timeout(12000),
+      maxBytes: 10 * 1024 * 1024,
+      timeoutMs: 12000,
     });
-    if (!r.ok) return [];
-    return scrapePlaylistItems(await r.text());
+    if (r.status < 200 || r.status >= 300) return [];
+    return scrapePlaylistItems(r.text);
   } catch {
     return [];
   }
