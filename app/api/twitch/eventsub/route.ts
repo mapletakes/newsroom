@@ -61,6 +61,38 @@ async function respondToVideoCommand(stream: {
   );
 }
 
+/**
+ * Claims `eventId` in processed_events, so this exact chat message (even if
+ * Twitch retries the webhook, or a duplicate subscription delivers it
+ * again) is acted on exactly once. Returns false — meaning "already
+ * claimed, do nothing" — for a duplicate delivery; true otherwise.
+ *
+ * Deliberately called only right before a side effect that ISN'T already
+ * self-idempotent some other way, not unconditionally for every message:
+ *  - respondToVideoCommand has its own cooldown, claimed before it sends —
+ *    a retried delivery within that window is already a no-op.
+ *  - handleRaffleEntry's insert has a DB-level unique(raffle_id,
+ *    chatter_login) constraint — a duplicate entry is already a no-op.
+ *  - submitQuestionToQueue has no such constraint (every call inserts a new
+ *    row), so a retried delivery WOULD create a duplicate question without
+ *    this.
+ *  - submitUrlToQueue's own dedup is intentionally bypassable
+ *    (allow_duplicates), so a retried delivery of the identical event
+ *    would slip past it as if it were a second, distinct submission.
+ * Ordinary chat that doesn't match anything never reaches this at all —
+ * the common case pays for the stream lookup above and nothing else.
+ */
+async function claimEventOnce(sb: ReturnType<typeof supabaseAdmin>, eventId: string): Promise<boolean> {
+  if (!eventId) return true;
+  const { error: seenErr } = await sb.from('processed_events').insert({ id: eventId });
+  const outcome = classifyDedupOutcome(seenErr);
+  if (outcome === 'duplicate') return false;
+  if (outcome === 'process-with-warning') {
+    console.warn('processed_events insert failed (run migration?):', seenErr!.message);
+  }
+  return true;
+}
+
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
   const msgId = req.headers.get('twitch-eventsub-message-id') || '';
@@ -111,26 +143,22 @@ export async function POST(req: NextRequest) {
 
   const sb = supabaseAdmin();
 
-  // Idempotency: ingest each chat message exactly once, even if Twitch retries
-  // the webhook (slow handler) or a duplicate subscription delivers it again.
-  // event.message_id is stable across every delivery of the same chat message,
-  // so it dedups both cases while leaving allow_duplicates (separate messages
-  // posting the same URL) intact.
+  // event.message_id is stable across every delivery of the same chat
+  // message — computing it is free, but CLAIMING it (the processed_events
+  // insert) is a DB write, and doing that unconditionally for every message
+  // meant every single chat line paid for a write before anything had even
+  // looked at its text. The claim is now made lazily, right before each
+  // side effect that actually needs it — see claimEventOnce below.
   const eventId: string = resolveEventId(event, msgId);
-  if (eventId) {
-    const { error: seenErr } = await sb.from('processed_events').insert({ id: eventId });
-    const outcome = classifyDedupOutcome(seenErr);
-    if (outcome === 'duplicate') return new NextResponse(null, { status: 204 });
-    if (outcome === 'process-with-warning') {
-      console.warn('processed_events insert failed (run migration?):', seenErr!.message);
-    }
-  }
 
   const broadcasterUserId = event.broadcaster_user_id;
   const chatterName = event.chatter_user_name || event.chatter_user_login || 'anon';
   const messageText = event.message?.text || '';
 
-  // Look up stream
+  // Look up stream — the one DB read every notification-type message still
+  // has to pay for: which commands this channel even listens for (and
+  // whether it's blocked, and who's ignored) all live on this row, so
+  // there's no way to tell "this message doesn't matter" without it.
   const { data: stream } = await sb
     .from('streams')
     .select('id, twitch_user_id, submit_command, allow_anyone, ignored_users, approved, video_command, now_playing_id, video_command_last_sent_at, questions_enabled, question_command, questions_open, raffle_enabled')
@@ -203,6 +231,10 @@ export async function POST(req: NextRequest) {
   }
 
   if (questionText !== null) {
+    // Claimed here, not up front — see claimEventOnce's doc comment.
+    // submitQuestionToQueue has no dedup of its own, so a retried delivery
+    // without this would land as a second, duplicate question.
+    if (!(await claimEventOnce(sb, eventId))) return new NextResponse(null, { status: 204 });
     // Per-asker, not per-channel like video_command's cooldown: one person
     // shouldn't be able to flood the mod queue during exactly the moment
     // questions matter most (a live interview). checkRateLimit fails open
@@ -236,8 +268,17 @@ export async function POST(req: NextRequest) {
   // Extract URLs
   const urls = extractUrlsFromMessage(payload);
   if (urls.length === 0) {
+    // The common case — ordinary chat, or a command that carried no link —
+    // ends here having paid for exactly one DB call (the stream lookup
+    // above), not two: nothing happened, so there's nothing to claim.
     return new NextResponse(null, { status: 204 });
   }
+
+  // Claimed here, not up front — see claimEventOnce's doc comment.
+  // submitUrlToQueue's own dedup is intentionally bypassable
+  // (allow_duplicates), so a retried delivery without this could slip
+  // through as if it were a second, distinct submission.
+  if (!(await claimEventOnce(sb, eventId))) return new NextResponse(null, { status: 204 });
 
   // Submit each URL to the queue (includes dedup + AI extraction — several
   // seconds). Twitch expects a fast ack and retries slow/failed deliveries
