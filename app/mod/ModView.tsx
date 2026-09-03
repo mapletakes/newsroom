@@ -19,11 +19,12 @@ import { useInvalidateOnChange } from '@/lib/use-invalidate-on-change';
 import { queryKeys } from '@/lib/query-keys';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Icon } from '@/components/ui/icon';
 import { formatDuration, sanitizeShareUrl } from '@/lib/url';
+import { AnnounceButton } from './AnnounceButton';
+import { CopyButton } from './CopyButton';
+import { ModActions } from './ModActions';
 
 const STATUS_KEYS = ['pending', 'approved', 'played', 'rejected'] as const;
 type StatusKey = (typeof STATUS_KEYS)[number];
@@ -610,127 +611,3 @@ export function ModView({
   );
 }
 
-function AnnounceButton({ submissionId }: { submissionId: string }) {
-  const [status, setStatus] = useState('');
-  // Opt-in per click, not sticky — see DeckView's pinOnAnnounce for why.
-  const [pin, setPin] = useState(false);
-  const post = async () => {
-    if (status === 'Posting…') return;
-    setStatus('Posting…');
-    try {
-      const r = await fetch('/api/deck/announce', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: submissionId, pin }),
-      });
-      if (r.ok) {
-        setStatus(pin ? 'Posted & pinned ✓' : 'Posted ✓');
-      } else {
-        const e = await r.json().catch(() => ({}));
-        setStatus(e.detail || e.error || 'Failed');
-      }
-    } catch {
-      setStatus('Failed');
-    }
-    setTimeout(() => setStatus(''), 4000);
-  };
-  return (
-    <span className="shrink-0 flex items-center gap-2">
-      <Button
-        variant="outline"
-        size="xs"
-        onClick={post}
-        className="text-xs"
-        title={pin ? "Post 'Watching: …' to chat and pin it for 20 minutes" : "Post 'Watching: …' to chat"}
-        aria-label="Post 'Watching: …' to chat"
-      >
-        <Icon name="announce" className="text-sm" />
-        <span className="hidden sm:inline">Post to chat</span>
-      </Button>
-      <label
-        className="hidden sm:flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-widest text-ink/60 cursor-pointer"
-        title="Pins the message for 20 minutes and replaces whatever's currently pinned. Needs your Twitch account reconnected since this was added — if it's not, the post fails outright rather than sending unpinned."
-      >
-        <input type="checkbox" checked={pin} onChange={(e) => setPin(e.target.checked)} />
-        Pin
-      </label>
-      {status && <span className="font-mono text-xs text-ink/60">{status}</span>}
-    </span>
-  );
-}
-
-function CopyButton({ value }: { value: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <Button
-      variant="outline"
-      size="xs"
-      className="shrink-0 text-xs"
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(value);
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1500);
-        } catch {
-          /* clipboard unavailable */
-        }
-      }}
-    >
-      {copied ? 'Copied!' : 'Copy'}
-    </Button>
-  );
-}
-
-function ModActions({
-  id,
-  onApprove,
-  onReject,
-  pending,
-}: {
-  id: string;
-  onApprove: (id: string, note: string) => void;
-  onReject: (id: string) => void;
-  pending: boolean;
-}) {
-  const [note, setNote] = useState('');
-  const [showNote, setShowNote] = useState(false);
-
-  return (
-    <div className="flex flex-col gap-2 w-full">
-      <div className="flex gap-2 items-center">
-        <Button
-          variant="moss"
-          size="sm"
-          className="flex-1 sm:flex-none px-4 py-2.5 text-sm sm:px-3 sm:py-1.5 sm:text-xs"
-          onClick={() => onApprove(id, note)}
-          disabled={pending}
-        >
-          {pending ? 'Working…' : 'Approve'}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="flex-1 sm:flex-none px-4 py-2.5 text-sm sm:px-3 sm:py-1.5 sm:text-xs"
-          onClick={() => onReject(id)}
-          disabled={pending}
-        >
-          Reject
-        </Button>
-      </div>
-      <button
-        onClick={() => setShowNote(!showNote)}
-        className="self-start font-mono text-xs uppercase tracking-widest text-ink/50 hover:text-ink"
-      >
-        {showNote ? '− hide note' : '+ add note'}
-      </button>
-      {showNote && (
-        <Input
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="e.g. skip to 4:32, check the replies, paywalled..."
-          className="w-full text-xs"
-        />
-      )}
-    </div>
-  );
-}
