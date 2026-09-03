@@ -1,12 +1,9 @@
 import { supabaseAdmin } from './supabase';
-import { extractArticle } from './extract-article';
-import { fetchYouTubeMeta, expandPlaylist } from './extract-youtube';
-import { extractTwitter } from './extract-twitter';
-import { extractTikTok } from './extract-tiktok';
-import { enrichContent, hostDMCARisk } from './enrich';
-import { scanContentWarning } from './content-warning';
+import { expandPlaylist } from './extract-youtube';
+import { hostDMCARisk } from './enrich';
 import { recordUsage } from './usage';
 import { detectKind, normalizeUrl } from './url';
+import { extractMetaForKind, enrichExtractedMeta } from './extract-kind';
 
 export async function runExtraction(submissionId: string) {
   const sb = supabaseAdmin();
@@ -18,25 +15,7 @@ export async function runExtraction(submissionId: string) {
   if (error || !sub) return;
 
   try {
-    let title: string | null = null;
-    let description: string | null = null;
-    let thumbnail: string | null = null;
-    let publisher: string | null = null;
-    let author: string | null = null;
-    let publishedAt: string | null = null;
-    let duration: number | null = null;
-    let bodyText: string | null = null;
-
-    if (sub.kind === 'youtube' || sub.kind === 'youtube_short') {
-      const meta = await fetchYouTubeMeta(sub.url);
-      title = meta.title;
-      description = meta.description;
-      thumbnail = meta.thumbnail;
-      publisher = meta.publisher;
-      publishedAt = meta.publishedAt;
-      duration = meta.durationSeconds;
-      bodyText = [meta.description, meta.transcript].filter(Boolean).join('\n\n');
-    } else if (sub.kind === 'youtube_playlist') {
+    if (sub.kind === 'youtube_playlist') {
       const urls = await expandPlaylist(sub.url);
       for (const u of urls) {
         await sb.from('submissions').insert({
@@ -54,69 +33,46 @@ export async function runExtraction(submissionId: string) {
         mod_notes: `expanded into ${urls.length} item(s)`,
       }).eq('id', sub.id);
       return;
-    } else if (sub.kind === 'twitter') {
-      const meta = await extractTwitter(sub.url);
-      title = meta.title;
-      description = meta.description;
-      publisher = 'X / Twitter';
-      author = meta.author;
-      bodyText = meta.description;
-    } else if (sub.kind === 'tiktok') {
-      const meta = await extractTikTok(sub.url);
-      title = meta.title;
-      description = meta.description;
-      thumbnail = meta.thumbnail;
-      publisher = meta.publisher;
-      author = meta.author;
-      publishedAt = meta.publishedAt;
-      duration = meta.durationSeconds;
-      bodyText = meta.description;
-    } else {
-      const meta = await extractArticle(sub.url);
-      title = meta.title;
-      description = meta.description;
-      thumbnail = meta.thumbnail;
-      publisher = meta.publisher;
-      author = meta.author;
-      publishedAt = meta.publishedAt;
-      bodyText = meta.description;
     }
 
-    // Tweets are short enough to read verbatim — skip the AI summary/analysis
-    // and just keep the tweet text (stored as `description`).
-    const enriched =
-      sub.kind === 'twitter'
-        ? { summary: null, credibility: null, topics: null as string[] | null, dmcaRisk: null, contentWarning: false }
-        : await enrichContent({ url: sub.url, title, publisher, body: bodyText, kind: sub.kind, streamId: sub.stream_id });
+    // No dedicated extractor (twitch_clip, twitch_vod, unknown) degrades to
+    // treating the URL as an article — see extractMetaForKind's doc comment
+    // in lib/extract-kind.ts for why that's the right fallback here (and
+    // NOT in list-extract.ts, which skips enrichment entirely instead).
+    const meta =
+      (await extractMetaForKind(sub.url, sub.kind)) ??
+      (await extractMetaForKind(sub.url, 'article'))!;
+
+    const enriched = await enrichExtractedMeta({
+      url: sub.url,
+      kind: sub.kind,
+      meta,
+      streamId: sub.stream_id,
+    });
 
     await sb.from('submissions').update({
-      title,
-      description,
-      thumbnail_url: thumbnail,
-      publisher,
-      author,
-      published_at: publishedAt,
-      duration_seconds: duration,
+      title: meta.title,
+      description: meta.description,
+      thumbnail_url: meta.thumbnail,
+      publisher: meta.publisher,
+      author: meta.author,
+      published_at: meta.publishedAt,
+      duration_seconds: meta.duration,
       summary: enriched.summary,
       credibility_tag: enriched.credibility,
       topics: enriched.topics,
-      dmca_risk: enriched.dmcaRisk || hostDMCARisk(sub.url),
+      dmca_risk: enriched.dmcaRisk,
     }).eq('id', sub.id);
 
     // One extract event per processed item (covers the YouTube/article fetches).
     await recordUsage({ streamId: sub.stream_id, kind: 'extract', meta: { kind: sub.kind } });
 
-    // Graphic-content flag: explicit warning words in the title/description, or
-    // the AI judging the content likely shows disturbing imagery. Written
-    // separately and guarded so a database without the column (migration not
-    // yet run) still gets the full enrichment above.
-    const contentWarning =
-      scanContentWarning(title, description) ||
-      (enriched.contentWarning ? 'Possible graphic content (AI-flagged)' : null);
-    if (contentWarning) {
+    // Written separately and guarded so a database without the column
+    // (migration not yet run) still gets the full enrichment above.
+    if (enriched.contentWarning) {
       const { error: cwErr } = await sb
         .from('submissions')
-        .update({ content_warning: contentWarning })
+        .update({ content_warning: enriched.contentWarning })
         .eq('id', sub.id);
       if (cwErr) console.warn('content_warning not written (run the migration?):', cwErr.message);
     }

@@ -5,16 +5,13 @@
 // status/segment/submitter fields; submissions has no `note`/`added_by`),
 // and playlist expansion doesn't apply here — a list item is always exactly
 // one row, added by a person putting one thing on a list, not chat pushing
-// through hundreds of drive-by links.
+// through hundreds of drive-by links. The kind→extractor dispatch and the
+// enrichment step ARE shared, though — see lib/extract-kind.ts.
 
 import { supabaseAdmin } from './supabase';
-import { extractArticle } from './extract-article';
-import { fetchYouTubeMeta } from './extract-youtube';
-import { extractTwitter } from './extract-twitter';
-import { extractTikTok } from './extract-tiktok';
-import { enrichContent, hostDMCARisk } from './enrich';
-import { scanContentWarning } from './content-warning';
+import { hostDMCARisk } from './enrich';
 import { recordUsage } from './usage';
+import { extractMetaForKind, enrichExtractedMeta } from './extract-kind';
 
 export async function runListItemExtraction(itemId: string, streamId: string) {
   const sb = supabaseAdmin();
@@ -26,82 +23,39 @@ export async function runListItemExtraction(itemId: string, streamId: string) {
   if (error || !item) return;
 
   try {
-    let title: string | null = null;
-    let description: string | null = null;
-    let thumbnail: string | null = null;
-    let publisher: string | null = null;
-    let author: string | null = null;
-    let publishedAt: string | null = null;
-    let duration: number | null = null;
-    let bodyText: string | null = null;
+    // Unlike runExtraction, a kind with no dedicated extractor (twitch_clip,
+    // twitch_vod, unknown, or a playlist that somehow landed here) skips
+    // enrichment entirely and keeps the bare URL — a shelf item is worth
+    // less guessing than a chat-fed submission. See extractMetaForKind's doc
+    // comment in lib/extract-kind.ts.
+    const meta = await extractMetaForKind(item.url, item.kind);
+    if (!meta) return;
 
-    if (item.kind === 'youtube' || item.kind === 'youtube_short') {
-      const meta = await fetchYouTubeMeta(item.url);
-      title = meta.title;
-      description = meta.description;
-      thumbnail = meta.thumbnail;
-      publisher = meta.publisher;
-      publishedAt = meta.publishedAt;
-      duration = meta.durationSeconds;
-      bodyText = [meta.description, meta.transcript].filter(Boolean).join('\n\n');
-    } else if (item.kind === 'twitter') {
-      const meta = await extractTwitter(item.url);
-      title = meta.title;
-      description = meta.description;
-      publisher = 'X / Twitter';
-      author = meta.author;
-      bodyText = meta.description;
-    } else if (item.kind === 'article') {
-      const meta = await extractArticle(item.url);
-      title = meta.title;
-      description = meta.description;
-      thumbnail = meta.thumbnail;
-      publisher = meta.publisher;
-      author = meta.author;
-      publishedAt = meta.publishedAt;
-      bodyText = meta.description;
-    } else if (item.kind === 'tiktok') {
-      const meta = await extractTikTok(item.url);
-      title = meta.title;
-      description = meta.description;
-      thumbnail = meta.thumbnail;
-      publisher = meta.publisher;
-      author = meta.author;
-      publishedAt = meta.publishedAt;
-      duration = meta.durationSeconds;
-      bodyText = meta.description;
-    } else {
-      // Playlists, clips, and anything else we don't have a dedicated
-      // extractor for: keep the bare URL, skip enrichment.
-      return;
-    }
-
-    const enriched =
-      item.kind === 'twitter'
-        ? { summary: null, credibility: null, topics: null as string[] | null, dmcaRisk: null, contentWarning: false }
-        : await enrichContent({ url: item.url, title, publisher, body: bodyText, kind: item.kind, streamId });
+    const enriched = await enrichExtractedMeta({
+      url: item.url,
+      kind: item.kind,
+      meta,
+      streamId,
+    });
 
     await sb.from('list_items').update({
-      title,
-      description,
-      thumbnail_url: thumbnail,
-      publisher,
-      author,
-      published_at: publishedAt,
-      duration_seconds: duration,
+      title: meta.title,
+      description: meta.description,
+      thumbnail_url: meta.thumbnail,
+      publisher: meta.publisher,
+      author: meta.author,
+      published_at: meta.publishedAt,
+      duration_seconds: meta.duration,
       summary: enriched.summary,
       credibility_tag: enriched.credibility,
       topics: enriched.topics,
-      dmca_risk: enriched.dmcaRisk || hostDMCARisk(item.url),
+      dmca_risk: enriched.dmcaRisk,
     }).eq('id', item.id);
 
     await recordUsage({ streamId, kind: 'extract', meta: { kind: item.kind, source: 'list_item' } });
 
-    const contentWarning =
-      scanContentWarning(title, description) ||
-      (enriched.contentWarning ? 'Possible graphic content (AI-flagged)' : null);
-    if (contentWarning) {
-      await sb.from('list_items').update({ content_warning: contentWarning }).eq('id', item.id);
+    if (enriched.contentWarning) {
+      await sb.from('list_items').update({ content_warning: enriched.contentWarning }).eq('id', item.id);
     }
   } catch (err) {
     console.error('list item extraction failed for', itemId, err);
