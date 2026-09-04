@@ -456,9 +456,16 @@ export function DeckView({
     selectItem(id);
   };
 
-  // Removes instantly, but the actual played write is delayed 5s behind an
-  // Undo toast — same pattern as removeFromQueue, so marking played by
-  // accident (e.g. a stray 'p' keypress) is as easy to walk back as reject.
+  // Removes instantly; the write goes to the server right away too, not
+  // delayed behind a cancellable timer. The deck is a shared, realtime-synced
+  // surface — the mod view's on-air bar and the overlay both read this same
+  // state, and curator mods can act on the same deck from a second browser —
+  // so pretending the write hasn't happened yet, even for a few seconds,
+  // means any of those reading during that window sees the item as if it
+  // were never removed (or a page reload on the deck itself does). Undo is a
+  // second, equally real write back to 'approved', not a cancellation — same
+  // reasoning as ModView's approve/reject (see its own comment on
+  // approveItem/rejectItem for why that surface made the same call).
   const markPlayed = () => {
     if (!active) return;
     const playedId = active.id;
@@ -472,15 +479,8 @@ export function DeckView({
     setTakeaway(prepNoteFor(next?.id ?? null));
     queryClient.setQueryData<QueueData>(queueKey, (prev) =>
       prev ? { ...prev, submissions: prev.submissions.filter((s) => s.id !== playedId) } : prev); // optimistic
-    // Track this as a pending write from the moment of the optimistic update,
-    // not just once the delayed fetch itself fires — see the pendingWrites
-    // doc comment for why a fixed-timestamp version of this gap could still
-    // let a stale refresh through.
-    beginPendingWrite();
 
-    let undone = false;
-    const timer = setTimeout(() => {
-      if (undone) return;
+    reconcileAfterWrites(
       fetch('/api/queue', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -490,19 +490,23 @@ export function DeckView({
           takeaway: tk,
           duration_on_screen_s: duration,
         }),
-      }).then(settlePendingWrite, settlePendingWrite);
-    }, 5000);
+      }),
+    );
 
     toast('Marked played', {
       duration: 5000,
       action: {
         label: 'Undo',
         onClick: () => {
-          undone = true;
-          clearTimeout(timer);
           queryClient.setQueryData<QueueData>(queueKey, (prev) =>
             prev ? { ...prev, submissions: [played, ...prev.submissions] } : prev);
-          settlePendingWrite(); // the write never happened — stop tracking it, and resync
+          reconcileAfterWrites(
+            fetch('/api/queue', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: playedId, status: 'approved' }),
+            }),
+          );
         },
       },
     });
@@ -516,38 +520,38 @@ export function DeckView({
     setTakeaway(prepNoteFor(next?.id ?? null));
   };
 
-  // Removes instantly, but the actual reject write is delayed 5s behind an
-  // Undo toast — during a live show this is faster than a confirm dialog and
-  // makes the Del-key shortcut harmless if it's hit by accident.
+  // Removes instantly; the write goes to the server right away too — see
+  // markPlayed's doc comment for why. During a live show this is still
+  // faster than a confirm dialog and makes the Del-key shortcut harmless if
+  // it's hit by accident, since Undo is one click away either way.
   const removeFromQueue = (id: string) => {
     const removed = queue.find((s) => s.id === id);
     if (!removed) return;
     queryClient.setQueryData<QueueData>(queueKey, (prev) =>
       prev ? { ...prev, submissions: prev.submissions.filter((s) => s.id !== id) } : prev);
-    // See markPlayed — tracks the write as pending from the optimistic
-    // update itself, not just once the delayed fetch fires.
-    beginPendingWrite();
 
-    let undone = false;
-    const timer = setTimeout(() => {
-      if (undone) return;
+    reconcileAfterWrites(
       fetch('/api/queue', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, status: 'rejected' }),
-      }).then(settlePendingWrite, settlePendingWrite);
-    }, 5000);
+      }),
+    );
 
     toast('Removed from deck', {
       duration: 5000,
       action: {
         label: 'Undo',
         onClick: () => {
-          undone = true;
-          clearTimeout(timer);
           queryClient.setQueryData<QueueData>(queueKey, (prev) =>
             prev ? { ...prev, submissions: [removed, ...prev.submissions] } : prev);
-          settlePendingWrite(); // the write never happened — stop tracking it, and resync
+          reconcileAfterWrites(
+            fetch('/api/queue', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id, status: 'approved' }),
+            }),
+          );
         },
       },
     });

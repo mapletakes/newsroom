@@ -1,21 +1,19 @@
-// Integration coverage for the deck's trickiest, most bug-prone path: an
-// item removed via markPlayed/removeFromQueue must never flash back in
-// while its write is delayed behind the 5s Undo toast, and Undo must never
-// leave a duplicate behind. This exact regression has broken twice — see
-// git history on suppressRefreshUntil/beginPendingWrite/settlePendingWrite —
-// so it's the one place in the app that most needs a standing test rather
-// than a rebuilt-from-scratch mock harness every time it's touched.
+// Integration coverage for the deck's trickiest, most bug-prone path:
+// markPlayed/removeFromQueue write to the server immediately (not delayed
+// behind a cancellable timer — see their doc comments in DeckView.tsx for
+// why: the deck is a shared, realtime-synced surface, and a delayed write
+// means anyone reading during that window — a page reload, the mod view's
+// on-air bar, the overlay, a second curator — sees the item as if it were
+// never removed). These tests prove: the item never flashes back in even if
+// a refetch lands while the write's own (short) network round-trip is still
+// in flight, the write itself needs no artificial delay to persist, and
+// Undo is a real compensating write, not a free cancellation, so it must
+// actually restore the item once that write resolves too.
 //
-// Written against the pre-React-Query DeckView as a baseline; it should
-// keep passing unmodified once DeckView migrates to useQuery/useMutation,
-// which is the whole point of writing it now rather than after.
-//
-// Real timers, deliberately: the delayed write is a genuine setTimeout, and
-// every test either cancels it (via Undo) or lets it fully resolve before
-// returning — a test that finishes early while its own timer is still
-// pending leaves it to fire during a LATER test against whatever fetch mock
-// happens to be installed then, which is exactly the kind of cross-test
-// flake this file exists to prevent, not cause.
+// This exact class of regression has broken before (see git history on
+// suppressRefreshUntil/beginPendingWrite/settlePendingWrite) — this is the
+// one place in the app that most needs a standing test rather than a
+// rebuilt-from-scratch mock harness every time it's touched.
 
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { render, screen, waitFor, cleanup } from '@testing-library/react';
@@ -64,15 +62,16 @@ function jsonResponse(body: unknown, status = 200) {
 /**
  * A minimal fake backend: the item is 'approved' until a PATCH sets it to
  * something else, exactly like the real API — GET always reflects current
- * server-side truth, so a refetch landing before the real write happens
- * would legitimately still show the item, which is the whole point.
+ * server-side truth, so a refetch landing before a PATCH resolves would
+ * legitimately still show the item, which is the whole point of holdNextPatch.
  */
 function installMockBackend() {
   const state = { status: 'approved' as string, patchCalls: 0 };
+  let patchGate: Promise<void> | null = null;
 
   vi.stubGlobal(
     'fetch',
-    vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       const method = init?.method || 'GET';
 
@@ -85,6 +84,7 @@ function installMockBackend() {
         });
       }
       if (url === '/api/queue' && method === 'PATCH') {
+        if (patchGate) await patchGate;
         state.patchCalls++;
         const body = JSON.parse(String(init?.body || '{}'));
         state.status = body.status;
@@ -98,12 +98,27 @@ function installMockBackend() {
     }),
   );
 
-  return state;
+  return {
+    state,
+    // Delays the NEXT PATCH's resolution until the returned function is
+    // called — lets a test force a refetch attempt while a write is
+    // genuinely still in flight, the real-world race this file exists to
+    // guard against (a reload, a realtime broadcast, a background poll
+    // landing mid-write), without depending on a fixed artificial delay.
+    holdNextPatch(): () => void {
+      let release!: () => void;
+      patchGate = new Promise<void>((r) => { release = r; });
+      return () => {
+        release();
+        patchGate = null;
+      };
+    },
+  };
 }
 
 function renderDeck() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const view = render(
     <QueryClientProvider client={client}>
       <TooltipProvider>
         <DeckView displayName="Some Streamer" streamId="mock-stream" isAdmin={false} curateOnly={false} />
@@ -111,15 +126,7 @@ function renderDeck() {
       </TooltipProvider>
     </QueryClientProvider>,
   );
-}
-
-// Same trick used to verify this bug live: a realtime broadcast or a
-// visible-tab poll both funnel through the same visibilitychange-driven
-// catch-up refetch, so firing this event mid-window reproduces "a refresh
-// lands while the write is still pending" without needing to wait out the
-// real 5s window to test it.
-function forceVisibilityRefetch() {
-  document.dispatchEvent(new Event('visibilitychange'));
+  return { ...view, client };
 }
 
 describe('DeckView — mark played / undo', () => {
@@ -133,10 +140,10 @@ describe('DeckView — mark played / undo', () => {
     vi.unstubAllGlobals();
   });
 
-  it('does not flash the item back in if a refetch lands during the undo window, and undo leaves no duplicate', async () => {
+  it('does not flash the item back in if a refetch lands while the write is still in flight, and undo sends a real compensating write', async () => {
     const backend = installMockBackend();
     const user = userEvent.setup();
-    renderDeck();
+    const { client } = renderDeck();
 
     await screen.findByText(SUB.title);
     // Nothing is auto-selected on load anymore (see DeckView's play-order
@@ -145,42 +152,42 @@ describe('DeckView — mark played / undo', () => {
     await user.click(screen.getByText(SUB.title));
     const baselineCount = screen.getAllByText(SUB.title).length;
 
+    // Hold the PATCH open so there's a real window to force a refetch into —
+    // this is the race the fix closes: pendingWrites must suppress a GET
+    // landing while our own write is genuinely still in flight, the same way
+    // it always did, just over a real (short) network gap now instead of an
+    // artificial 5s one.
+    const releasePatch = backend.holdNextPatch();
+
     await user.click(screen.getByRole('button', { name: /played — next/i }));
 
     // Optimistic removal: gone immediately from both the active card and the sidebar.
     expect(screen.queryByText(SUB.title)).not.toBeInTheDocument();
 
-    // The exact race this test exists for: force a refetch well before the
-    // 5s delayed write fires, while the server still reports the item as
-    // approved. Pre-fix, this brought the item back.
-    forceVisibilityRefetch();
-    await new Promise((r) => setTimeout(r, 100));
+    // Force exactly what a realtime broadcast or a background poll tick
+    // does — invalidateQueries — while the PATCH is still held open. Pre-fix
+    // (and pre-guard), this would bring the item back.
+    await client.invalidateQueries();
     expect(screen.queryByText(SUB.title)).not.toBeInTheDocument();
 
-    // Undo restores the item to the queue — but, correctly, does NOT put it
-    // back on air: markPlayed already advanced activeId away (to whatever
-    // was next, or null here since this was the only item), and undo only
-    // reverses the optimistic removal from the queue list, not that
-    // navigation. Re-activating it automatically would be exactly the bug
-    // the play-order effect fix (auto-select) addresses — the streamer
-    // clicks it again if they want it live. So the restored count is 1
-    // (queue list only), not baselineCount (2, which included the active
-    // card) — what this test actually guards is that it's exactly 1, not 2
-    // or more, i.e. undo doesn't leave a duplicate queue entry behind.
+    // Let the write actually complete — no artificial delay to wait out.
+    releasePatch();
+    await waitFor(() => expect(backend.state.patchCalls).toBe(1));
+    expect(screen.queryByText(SUB.title)).not.toBeInTheDocument();
+
+    // Undo now sends a REAL compensating write (status: 'approved'), not a
+    // cancelled timer — confirm it actually fires and the item comes back
+    // exactly once (no duplicate).
     const undoButton = await screen.findByRole('button', { name: /undo/i });
     await user.click(undoButton);
+    await waitFor(() => expect(backend.state.patchCalls).toBe(2));
+    expect(backend.state.status).toBe('approved');
     const restoredCount = screen.getAllByText(SUB.title).length;
     expect(restoredCount).toBe(1);
     expect(restoredCount).toBeLessThan(baselineCount);
+  });
 
-    // Wait out the window the cancelled write would have fired in, inside
-    // this same test, so nothing is left pending for a later test to catch.
-    await new Promise((r) => setTimeout(r, 5200));
-    expect(backend.patchCalls).toBe(0);
-    expect(screen.getAllByText(SUB.title)).toHaveLength(restoredCount);
-  }, 10000);
-
-  it('marking played persists after the undo window if not undone', async () => {
+  it('marking played writes to the server immediately — no delay to wait out before it persists', async () => {
     const backend = installMockBackend();
     const user = userEvent.setup();
     renderDeck();
@@ -190,7 +197,9 @@ describe('DeckView — mark played / undo', () => {
     await user.click(screen.getByText(SUB.title));
     await user.click(screen.getByRole('button', { name: /played — next/i }));
 
-    await waitFor(() => expect(backend.patchCalls).toBe(1), { timeout: 6000 });
+    // No 5s wait: the write fires as part of the click, not behind a timer.
+    await waitFor(() => expect(backend.state.patchCalls).toBe(1));
+    expect(backend.state.status).toBe('played');
     expect(screen.queryByText(SUB.title)).not.toBeInTheDocument();
-  }, 10000);
+  });
 });
