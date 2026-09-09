@@ -1,4 +1,12 @@
 -- ============================================================
+-- BASELINE MIGRATION — captures the schema exactly as it stood in
+-- production on 2026-09-09, the day Supabase CLI migrations were adopted.
+-- This is a historical record, not something to run against the existing
+-- database — production already has every one of these tables/columns/
+-- functions. See supabase/README.md for the one-time adoption step that
+-- marks this migration as already-applied without re-executing it, and for
+-- how to write every migration from here on.
+-- ============================================================
 -- newsroom schema
 -- Run this in the Supabase SQL editor.
 -- ============================================================

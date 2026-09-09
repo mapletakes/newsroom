@@ -30,6 +30,65 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ submission: result.submission });
 }
 
+type QueueOverviewRow = {
+  pending: number;
+  approved: number;
+  played: number;
+  rejected: number;
+  total: number;
+  now_playing: Record<string, unknown> | null;
+};
+
+// Old per-status fan-out (5 count queries + a sequential now-playing lookup)
+// — kept only as the fallback below, for a database queue_overview() hasn't
+// been created in yet (see supabase/migrations/…_add_queue_overview.sql and
+// supabase/README.md for the one-time adoption step). Once that migration
+// is applied, every request silently takes the single-RPC path instead;
+// nothing here needs the code deploy and the migration to land in a
+// specific order.
+async function legacyOverview(
+  sb: ReturnType<typeof supabaseAdmin>,
+  streamId: string,
+): Promise<QueueOverviewRow> {
+  const [pending, approved, played, rejected, total] = await Promise.all([
+    sb.from('submissions').select('*', { count: 'exact', head: true })
+      .eq('stream_id', streamId).eq('status', 'pending'),
+    sb.from('submissions').select('*', { count: 'exact', head: true })
+      .eq('stream_id', streamId).eq('status', 'approved'),
+    sb.from('submissions').select('*', { count: 'exact', head: true })
+      .eq('stream_id', streamId).eq('status', 'played'),
+    sb.from('submissions').select('*', { count: 'exact', head: true })
+      .eq('stream_id', streamId).eq('status', 'rejected'),
+    sb.from('submissions').select('*', { count: 'exact', head: true })
+      .eq('stream_id', streamId),
+  ]);
+
+  let nowPlaying: Record<string, unknown> | null = null;
+  const { data: streamRow, error: srErr } = await sb
+    .from('streams')
+    .select('now_playing_id')
+    .eq('id', streamId)
+    .maybeSingle();
+  if (!srErr && streamRow?.now_playing_id) {
+    const { data: np } = await sb
+      .from('submissions')
+      .select('*')
+      .eq('id', streamRow.now_playing_id)
+      .eq('stream_id', streamId)
+      .maybeSingle();
+    nowPlaying = np || null;
+  }
+
+  return {
+    pending: pending.count ?? 0,
+    approved: approved.count ?? 0,
+    played: played.count ?? 0,
+    rejected: rejected.count ?? 0,
+    total: total.count ?? 0,
+    now_playing: nowPlaying,
+  };
+}
+
 export async function GET(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
@@ -44,49 +103,30 @@ export async function GET(req: NextRequest) {
     .order('created_at', { ascending: false })
     .limit(200);
   if (status) q = q.eq('status', status);
-  const { data, error } = await q;
+
+  // Counts (for the tab labels, independent of the active filter) and
+  // now-playing (for the mod view), fetched together via one RPC — see
+  // queue_overview() in supabase/migrations — instead of the 5 separate
+  // per-status counts plus a sequential now-playing lookup this replaced.
+  const [{ data, error }, ov] = await Promise.all([
+    q,
+    sb.rpc('queue_overview', { p_stream_id: session.streamId }).maybeSingle(),
+  ]);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Accurate status counts for the tab labels, independent of the active filter.
-  const [pending, approved, played, rejected, total] = await Promise.all([
-    sb.from('submissions').select('*', { count: 'exact', head: true })
-      .eq('stream_id', session.streamId).eq('status', 'pending'),
-    sb.from('submissions').select('*', { count: 'exact', head: true })
-      .eq('stream_id', session.streamId).eq('status', 'approved'),
-    sb.from('submissions').select('*', { count: 'exact', head: true })
-      .eq('stream_id', session.streamId).eq('status', 'played'),
-    sb.from('submissions').select('*', { count: 'exact', head: true })
-      .eq('stream_id', session.streamId).eq('status', 'rejected'),
-    sb.from('submissions').select('*', { count: 'exact', head: true })
-      .eq('stream_id', session.streamId),
-  ]);
-
-  // What the streamer is currently showing on the deck (for the mod view).
-  let nowPlaying: Record<string, unknown> | null = null;
-  const { data: streamRow, error: srErr } = await sb
-    .from('streams')
-    .select('now_playing_id')
-    .eq('id', session.streamId)
-    .maybeSingle();
-  if (!srErr && streamRow?.now_playing_id) {
-    const { data: np } = await sb
-      .from('submissions')
-      .select('*')
-      .eq('id', streamRow.now_playing_id)
-      .eq('stream_id', session.streamId)
-      .maybeSingle();
-    nowPlaying = np || null;
-  }
+  const overview: QueueOverviewRow = !ov.error && ov.data
+    ? (ov.data as QueueOverviewRow)
+    : await legacyOverview(sb, session.streamId);
 
   return NextResponse.json({
     submissions: data || [],
-    nowPlaying,
+    nowPlaying: overview.now_playing,
     counts: {
-      pending: pending.count ?? 0,
-      approved: approved.count ?? 0,
-      played: played.count ?? 0,
-      rejected: rejected.count ?? 0,
-      total: total.count ?? 0,
+      pending: overview.pending,
+      approved: overview.approved,
+      played: overview.played,
+      rejected: overview.rejected,
+      total: overview.total,
     },
   });
 }
