@@ -168,7 +168,19 @@ export async function PATCH(req: NextRequest) {
   // Assign to a segment (or back to ungrouped). Append to the end of the
   // target group so it lands at the bottom of that segment.
   if ('segment_id' in body) {
-    const targetSeg: string | null = body.segment_id || null;
+    let targetSeg: string | null = body.segment_id || null;
+    // Ignore a segment id that isn't a real segment on this stream — a
+    // stale/foreign id falls back to ungrouped instead of being written
+    // (same rule addToDeck applies for the quick-add path).
+    if (targetSeg) {
+      const { data: seg } = await sb
+        .from('segments')
+        .select('id')
+        .eq('id', targetSeg)
+        .eq('stream_id', session.streamId)
+        .maybeSingle();
+      targetSeg = seg?.id ?? null;
+    }
     patch.segment_id = targetSeg;
     let posQ = sb
       .from('submissions')

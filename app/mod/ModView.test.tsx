@@ -55,9 +55,12 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 /** Mutable in-memory backend, filtered by ?status= like the real API. */
-function installMockBackend(initial: ReturnType<typeof makeSub>[]) {
+function installMockBackend(
+  initial: ReturnType<typeof makeSub>[],
+  segments: { id: string; name: string }[] = [],
+) {
   const state = new Map(initial.map((s) => [s.id, { ...s }]));
-  const patches: { id: string; status: string }[] = [];
+  const patches: { id: string; status?: string; segment_id?: string | null }[] = [];
 
   const counts = () => {
     const c = { pending: 0, approved: 0, played: 0, rejected: 0, total: 0 };
@@ -82,11 +85,20 @@ function installMockBackend(initial: ReturnType<typeof makeSub>[]) {
       if (url === '/api/queue' && method === 'PATCH') {
         const body = JSON.parse(String(init?.body || '{}'));
         const item = state.get(body.id);
+        const patch: { id: string; status?: string; segment_id?: string | null } = { id: body.id };
         if (item && typeof body.status === 'string') {
           item.status = body.status;
-          patches.push({ id: body.id, status: body.status });
+          patch.status = body.status;
         }
+        if (item && 'segment_id' in body) {
+          item.segment_id = body.segment_id;
+          patch.segment_id = body.segment_id;
+        }
+        patches.push(patch);
         return jsonResponse({ submission: item ?? {} });
+      }
+      if (url.startsWith('/api/segments') && method === 'GET') {
+        return jsonResponse({ segments, ungroupedPosition: 0 });
       }
       if (url.startsWith('/api/archive')) return jsonResponse({ ok: true });
       return jsonResponse({});
@@ -96,7 +108,7 @@ function installMockBackend(initial: ReturnType<typeof makeSub>[]) {
   return { state, patches };
 }
 
-function renderModView() {
+function renderModView(overrides: { isMod?: boolean; canCurate?: boolean } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
@@ -107,7 +119,8 @@ function renderModView() {
           streamDisplayName="Some Streamer"
           submitCommand={null}
           streamId="mock-stream"
-          isMod
+          isMod={overrides.isMod ?? true}
+          canCurate={overrides.canCurate ?? false}
         />
         <Toaster />
       </TooltipProvider>
@@ -206,5 +219,91 @@ describe('ModView — keyboard triage', () => {
     await userEvent.keyboard('?');
 
     expect(await screen.findByText(/keyboard shortcuts/i)).toBeInTheDocument();
+  });
+});
+
+// Sending an approved item straight into a segment — driven by the same
+// canCurate boolean for both a curate-authorized mod and the streamer (see
+// sessionCanCurate/ModView's canCurate prop), never by role directly.
+describe('ModView — approve into a segment', () => {
+  it('is unavailable without canCurate, even for a mod', async () => {
+    installMockBackend([makeSub('a', 'Item A', 'pending')], [{ id: 'seg-1', name: 'Politics' }]);
+    renderModView({ isMod: true, canCurate: false });
+
+    await screen.findByText('Item A');
+    expect(screen.queryByRole('button', { name: /approve into a segment/i })).not.toBeInTheDocument();
+  });
+
+  it('lets a curate-authorized mod approve into a chosen segment', async () => {
+    const backend = installMockBackend(
+      [makeSub('a', 'Item A', 'pending')],
+      [{ id: 'seg-1', name: 'Politics' }],
+    );
+    const user = userEvent.setup();
+    renderModView({ isMod: true, canCurate: true });
+
+    await screen.findByText('Item A');
+    await user.click(await screen.findByRole('button', { name: /approve into a segment/i }));
+    await user.click(await screen.findByText('Politics'));
+
+    await waitFor(() =>
+      expect(backend.patches).toContainEqual({ id: 'a', status: 'approved', segment_id: 'seg-1' }),
+    );
+  });
+
+  it('lets the streamer (isMod false, canCurate true) approve into a segment too', async () => {
+    const backend = installMockBackend(
+      [makeSub('a', 'Item A', 'pending')],
+      [{ id: 'seg-1', name: 'Politics' }],
+    );
+    const user = userEvent.setup();
+    renderModView({ isMod: false, canCurate: true });
+
+    await screen.findByText('Item A');
+    await user.click(await screen.findByRole('button', { name: /approve into a segment/i }));
+    await user.click(await screen.findByText('Politics'));
+
+    await waitFor(() =>
+      expect(backend.patches).toContainEqual({ id: 'a', status: 'approved', segment_id: 'seg-1' }),
+    );
+  });
+
+  it('routes the focused item into the Nth segment on a number-key shortcut', async () => {
+    const backend = installMockBackend(
+      [makeSub('a', 'Item A', 'pending')],
+      [{ id: 'seg-1', name: 'Politics' }, { id: 'seg-2', name: 'Tech' }],
+    );
+    renderModView({ isMod: true, canCurate: true });
+
+    await screen.findByText('Item A');
+    // Segments load asynchronously; wait for the picker to confirm they're in.
+    await screen.findByRole('button', { name: /approve into a segment/i });
+    await userEvent.keyboard('2');
+
+    await waitFor(() =>
+      expect(backend.patches).toContainEqual({ id: 'a', status: 'approved', segment_id: 'seg-2' }),
+    );
+  });
+
+  it('clears the segment on Undo so a later plain approve does not inherit it', async () => {
+    const backend = installMockBackend(
+      [makeSub('a', 'Item A', 'pending')],
+      [{ id: 'seg-1', name: 'Politics' }],
+    );
+    const user = userEvent.setup();
+    renderModView({ isMod: true, canCurate: true });
+
+    await screen.findByText('Item A');
+    await user.click(await screen.findByRole('button', { name: /approve into a segment/i }));
+    await user.click(await screen.findByText('Politics'));
+    await waitFor(() =>
+      expect(backend.patches).toContainEqual({ id: 'a', status: 'approved', segment_id: 'seg-1' }),
+    );
+
+    await user.click(await screen.findByRole('button', { name: /undo/i }));
+
+    await waitFor(() =>
+      expect(backend.patches).toContainEqual({ id: 'a', status: 'pending', segment_id: null }),
+    );
   });
 });

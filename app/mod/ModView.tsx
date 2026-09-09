@@ -14,6 +14,7 @@ import { ModStatusPanel } from '@/components/ModStatusPanel';
 import { RafflePanel } from '@/components/RafflePanel';
 import { DeckRail } from '@/components/DeckRail';
 import { ModShortcutsModal } from './ModShortcutsModal';
+import type { ModActionsSegment } from './ModActions';
 import { useElementHeight } from '@/lib/use-element-height';
 import { useInvalidateOnChange } from '@/lib/use-invalidate-on-change';
 import { queryKeys } from '@/lib/query-keys';
@@ -102,6 +103,27 @@ export function ModView({
   // every filter's cached query (not just the one currently on screen) so
   // switching tabs later shows fresh data instead of a stale cache.
   useInvalidateOnChange(streamId, queueKeyAllFilters);
+
+  // Segments to approve straight into — streamer, or a mod authorized to
+  // curate (see sessionCanCurate; canCurate already folds both cases into
+  // one boolean, so this checks canCurate and never isMod directly). Only
+  // fetched for that audience: anyone else can't send an item anywhere but
+  // ungrouped, so the list would just be wasted UI weight for them.
+  const segmentsKey = queryKeys.segments(streamId);
+  const { data: segmentsData } = useQuery({
+    queryKey: segmentsKey,
+    queryFn: async (): Promise<ModActionsSegment[]> => {
+      const r = await fetch('/api/segments');
+      if (!r.ok) return [];
+      const data = await r.json();
+      return (data.segments || []).map((s: { id: string; name: string }) => ({ id: s.id, name: s.name }));
+    },
+    enabled: canCurate,
+    refetchInterval: 120000,
+  });
+  const segments = canCurate ? (segmentsData ?? []) : [];
+  useInvalidateOnChange(streamId, segmentsKey);
+  const segmentNameById = new Map(segments.map((s) => [s.id, s.name]));
 
   // Keyed by submission id, not local to a row's action component: a card
   // stays mounted through its own mutate() call (see below), but keeping
@@ -204,12 +226,24 @@ export function ModView({
   // so pretending an action didn't happen yet would let two mods act on the
   // same item based on stale state. Undo here is a second, equally real
   // write back to pending, not a cancellation.
-  const approveItem = async (id: string, note: string) => {
-    const result = await mutate(id, { status: 'approved', mod_notes: note || null });
+  // segmentId is undefined for the plain Approve button (lands wherever the
+  // server default puts it — ungrouped) and null/an id when a destination was
+  // explicitly picked from the segment menu or a number-key shortcut.
+  const approveItem = async (id: string, note: string, segmentId?: string | null) => {
+    const patch: Record<string, unknown> = { status: 'approved', mod_notes: note || null };
+    if (segmentId !== undefined) patch.segment_id = segmentId;
+    const result = await mutate(id, patch);
     if (result.ok) {
-      toast('Approved', {
+      const destination = segmentId ? segmentNameById.get(segmentId) : null;
+      toast(destination ? `Approved → ${destination}` : 'Approved', {
         duration: 5000,
-        action: { label: 'Undo', onClick: () => mutate(id, { status: 'pending' }) },
+        action: {
+          label: 'Undo',
+          // An explicit destination was picked, so clear it back out on undo —
+          // otherwise a later plain re-approve would silently inherit the old
+          // segment instead of landing back in ungrouped.
+          onClick: () => mutate(id, segmentId !== undefined ? { status: 'pending', segment_id: null } : { status: 'pending' }),
+        },
       });
     }
     return result;
@@ -301,6 +335,10 @@ export function ModView({
     } else if ((e.key === 'r' || e.key === 'R') && target && !pendingIds.has(target.id)) {
       e.preventDefault();
       rejectItem(target.id);
+    } else if (/^[1-9]$/.test(e.key) && target && !pendingIds.has(target.id) && segments[Number(e.key) - 1]) {
+      // Approve the focused item straight into the Nth segment, in deck order.
+      e.preventDefault();
+      approveItem(target.id, '', segments[Number(e.key) - 1].id);
     } else if (e.key === 'Enter' && target) {
       e.preventDefault();
       window.open(target.url, '_blank', 'noopener,noreferrer');
@@ -315,7 +353,7 @@ export function ModView({
   return (
     <div className="min-h-screen flex flex-col">
       {confirmDialog}
-      <ModShortcutsModal open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+      <ModShortcutsModal open={shortcutsOpen} onOpenChange={setShortcutsOpen} segments={segments} />
       {/* Same rail, same module order, as the deck (app/deck/DeckView.tsx) —
           a mod who learns where a module lives on one screen shouldn't have
           to relearn it as a header link on the other. Quick links has no
@@ -516,12 +554,19 @@ export function ModView({
                     <div className="font-mono text-xs text-rust w-full">⚠ {rowErrors[s.id]}</div>
                   )}
                   {s.status === 'pending' && (
-                    <ModActions id={s.id} onApprove={approveItem} onReject={rejectItem} pending={pendingIds.has(s.id)} />
+                    <ModActions
+                      id={s.id}
+                      onApprove={approveItem}
+                      onReject={rejectItem}
+                      pending={pendingIds.has(s.id)}
+                      segments={segments}
+                    />
                   )}
                   {s.status === 'approved' && (
                     <div className="flex flex-col gap-1 w-full">
                       <span className="font-mono text-xs uppercase tracking-widest text-moss">
                         ✓ approved · waiting for streamer
+                        {s.segment_id && segmentNameById.get(s.segment_id) && ` · in ${segmentNameById.get(s.segment_id)}`}
                       </span>
                       {s.mod_notes && (
                         <span className="font-mono text-xs text-ink/60">
