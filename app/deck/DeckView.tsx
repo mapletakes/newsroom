@@ -1250,7 +1250,7 @@ export function DeckView({
               {totalRemainingSeconds > 0 ? ` · ${formatDuration(totalRemainingSeconds)} left` : ''})
             </span>
             <span className="min-w-0 truncate font-mono text-[10px] text-ink/40">
-              click select · ⇧/⌃-click multi · drag to reorder{!curateOnly && ' · P played'} · Del remove
+              click select · ⇧/⌃-click multi · middle-click open · drag to reorder{!curateOnly && ' · P played'} · Del remove
             </span>
             <SimpleTooltip content="Keyboard shortcuts">
               <button

@@ -53,7 +53,15 @@ export function SortableQueueItem({
         {/* The whole card is the drag source. Plain click activates (and clears
             the multi-selection); Ctrl/Cmd-click toggles this card in the
             selection; Shift-click extends a range. dnd-kit suppresses the click
-            after a real drag, so reordering never changes now-playing. */}
+            after a real drag, so reordering never changes now-playing.
+            Middle-click is the odd one out: it opens the source link in a new
+            tab and does nothing else — no activation, no selection change —
+            same as middle-clicking any ordinary link. That's deliberate:
+            Ctrl/Cmd-click was already spoken for (multi-select) before this
+            was added, and this is the one gesture that was still free. It's
+            wired as onAuxClick (not onClick) because middle-click never fires
+            a click event; PointerSensor also ignores non-primary buttons
+            (button !== 0), so this never fights dnd-kit for the gesture. */}
         <Card
           asChild
           className={cn(
@@ -68,6 +76,16 @@ export function SortableQueueItem({
               if (e.shiftKey) onToggleSelect(true);
               else if (e.metaKey || e.ctrlKey) onToggleSelect(false);
               else onSelect();
+            }}
+            onAuxClick={(e) => {
+              if (e.button !== 1) return;
+              e.preventDefault();
+              window.open(s.url, '_blank', 'noopener,noreferrer');
+            }}
+            onMouseDown={(e) => {
+              // Stops the browser's middle-click autoscroll cursor from
+              // appearing before onAuxClick even fires.
+              if (e.button === 1) e.preventDefault();
             }}
             className="flex-1 text-left p-3 min-w-0 cursor-grab active:cursor-grabbing"
           >

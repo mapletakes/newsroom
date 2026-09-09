@@ -16,7 +16,7 @@
 // rebuilt-from-scratch mock harness every time it's touched.
 
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, cleanup, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -201,5 +201,27 @@ describe('DeckView — mark played / undo', () => {
     await waitFor(() => expect(backend.state.patchCalls).toBe(1));
     expect(backend.state.status).toBe('played');
     expect(screen.queryByText(SUB.title)).not.toBeInTheDocument();
+  });
+
+  it('middle-clicking a queue card opens its source link in a new tab without activating or selecting it', async () => {
+    installMockBackend();
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    renderDeck();
+
+    const title = await screen.findByText(SUB.title);
+    const card = title.closest('button');
+    if (!card) throw new Error('expected the queue card to render as a button');
+
+    // fireEvent has no built-in "auxclick" mapping (unlike "click"), so the
+    // event is constructed directly — this is exactly what a real
+    // middle-click dispatches.
+    fireEvent(card, new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 }));
+
+    expect(openSpy).toHaveBeenCalledWith(SUB.url, '_blank', 'noopener,noreferrer');
+    // Nothing is auto-selected on load (see DeckView's play-order effect), so
+    // if the middle-click had also activated the card, the sidebar's "▶ NOW"
+    // marker and the "Nothing on air yet" empty state would swap places.
+    expect(screen.queryByText(/▶ NOW/)).not.toBeInTheDocument();
+    expect(screen.getByText('Nothing on air yet.')).toBeInTheDocument();
   });
 });

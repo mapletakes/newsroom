@@ -47,6 +47,7 @@ export function ShortcutsModal({
           <Row keys={<Key>Click</Key>}>Select a card (clears multi-select)</Row>
           <Row keys={<><Key>⇧</Key>Click</>}>Extend the selection to a range</Row>
           <Row keys={<><Key>⌃</Key>/<Key>⌘</Key>Click</>}>Toggle a card in the selection</Row>
+          <Row keys={<Key>Middle-click</Key>}>Open a card&apos;s source link in a new tab, without selecting it</Row>
           <Row keys={<Key>Drag</Key>}>Reorder items or move them between segments</Row>
           <Row keys={<Key>?</Key>}>Show this help</Row>
         </div>
