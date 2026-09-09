@@ -15,7 +15,7 @@ export default async function DeckPage() {
   const sb = supabaseAdmin();
   const { data: stream } = await sb
     .from('streams')
-    .select('approved, questions_enabled, questions_open, mod_status_enabled, raffle_enabled')
+    .select('approved, questions_enabled, questions_open, mod_status_enabled, raffle_enabled, discord_webhook_url')
     .eq('id', session.streamId)
     .maybeSingle();
   if (stream?.approved === false) redirect('/blocked');
@@ -45,6 +45,7 @@ export default async function DeckPage() {
         questionsOpen={stream?.questions_open !== false}
         modStatusEnabled={stream?.mod_status_enabled === true}
         raffleEnabled={stream?.raffle_enabled === true}
+        discordWebhookConfigured={!!stream?.discord_webhook_url}
       />
     </>
   );

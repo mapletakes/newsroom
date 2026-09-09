@@ -72,6 +72,7 @@ export function DeckView({
   questionsOpen = true,
   modStatusEnabled = false,
   raffleEnabled = false,
+  discordWebhookConfigured = false,
 }: {
   displayName: string;
   streamId: string;
@@ -85,6 +86,7 @@ export function DeckView({
   questionsOpen?: boolean;
   modStatusEnabled?: boolean;
   raffleEnabled?: boolean;
+  discordWebhookConfigured?: boolean;
 }) {
   const queryClient = useQueryClient();
   const queueKey = queryKeys.queue(streamId, 'approved');
@@ -178,6 +180,7 @@ export function DeckView({
   const [addUrl, setAddUrl] = useState('');
   const [adding, setAdding] = useState(false);
   const announcingRef = useRef(false);
+  const postingToDiscordRef = useRef(false);
 
   // A segment name being typed lives here, not in the query cache — same
   // reasoning as ShelfDetailView's name/editingNameRef: keeps a background
@@ -659,6 +662,39 @@ export function DeckView({
     }
   };
 
+  // Posts everything played since the last Discord post to the configured
+  // webhook (see lib/discord.ts). Confirmed first, same as deleteSegment and
+  // clearBlock below — it reaches an audience outside the app and can't be
+  // pulled back once Discord has it, unlike everything else on this page
+  // which just edits local state.
+  const postToDiscord = async () => {
+    if (postingToDiscordRef.current) return;
+    if (!(await confirm({
+      title: 'Post played list to Discord?',
+      description: 'Sends everything played since the last Discord post to your configured channel.',
+      confirmText: 'Post',
+    }))) return;
+    postingToDiscordRef.current = true;
+    const id = toast.loading('Posting to Discord…');
+    try {
+      const r = await fetch('/api/notes/discord', { method: 'POST' });
+      const data = await r.json().catch(() => ({}));
+      if (r.ok) {
+        toast.success(`Posted ${data.count} item${data.count === 1 ? '' : 's'} to Discord`, { id });
+      } else if (data.error === 'nothing-to-post') {
+        toast('Nothing new to post', { id });
+      } else if (data.error === 'no-webhook') {
+        toast.error('No Discord webhook configured — add one in Settings', { id });
+      } else {
+        toast.error(data.detail || data.error || 'Could not post to Discord', { id });
+      }
+    } catch {
+      toast.error('Could not post to Discord', { id });
+    } finally {
+      postingToDiscordRef.current = false;
+    }
+  };
+
   // Trigger warnings are authored here as well as in the mod view: during a
   // show it's usually the streamer who realises an item needs one, and it has
   // to reach the overlay before the item goes up rather than after a round
@@ -1090,6 +1126,7 @@ export function DeckView({
         questionsOpen={questionsOpen}
         modStatusEnabled={modStatusEnabled}
         raffleEnabled={raffleEnabled}
+        discordWebhookConfigured={discordWebhookConfigured}
         onSelect={activateItem}
         onPlayed={markPlayed}
         onSkip={skip}
@@ -1098,6 +1135,7 @@ export function DeckView({
         onPlayNext={playNext}
         onSaveTriggerWarning={saveTriggerWarning}
         onAddUrl={addLinkByUrl}
+        onPostToDiscord={postToDiscord}
       />
     ) : (
     <div className="min-h-screen flex flex-col">
@@ -1137,6 +1175,11 @@ export function DeckView({
               <a href="/api/notes?format=markdown&commit=1" className="underline hover:text-rust">
                 Export Notes
               </a>
+            )}
+            {!curateOnly && discordWebhookConfigured && (
+              <button type="button" onClick={postToDiscord} className="underline hover:text-rust">
+                Post to Discord
+              </button>
             )}
             {!curateOnly && (
               <Link href="/setup" className="underline hover:text-rust">

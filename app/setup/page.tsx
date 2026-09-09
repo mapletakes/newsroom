@@ -47,6 +47,7 @@ export default async function SetupPage() {
         ignoredUsers={stream?.ignored_users ?? []}
         preferredSources={stream?.preferred_sources ?? []}
         addToken={stream?.add_token ?? null}
+        discordWebhookConfigured={!!stream?.discord_webhook_url}
         appTheme={sanitizeAppTheme(stream?.app_theme)}
         overlayTheme={sanitizeOverlayTheme(stream?.overlay_theme)}
         questionsEnabled={stream?.questions_enabled === true}

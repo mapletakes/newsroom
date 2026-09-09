@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getApprovedSession } from '@/lib/session';
 import { sanitizeAppTheme, sanitizeOverlayTheme } from '@/lib/theme';
+import { validateWebhookUrl } from '@/lib/discord';
+import { encryptSecret } from '@/lib/crypto';
 
 export async function POST(req: NextRequest) {
   const session = await getApprovedSession();
@@ -84,6 +86,24 @@ export async function POST(req: NextRequest) {
   // Validating once at the write keeps every reader from having to.
   if ('app_theme' in body) patch.app_theme = sanitizeAppTheme(body.app_theme);
   if ('overlay_theme' in body) patch.overlay_theme = sanitizeOverlayTheme(body.overlay_theme);
+
+  // discord_webhook_url is write-only from the client's point of view — the
+  // page never receives the stored value back (see app/setup/page.tsx), so
+  // an empty string here always means "nothing new typed", never "clear it".
+  // Clearing goes through the explicit remove_discord_webhook flag instead,
+  // which also resets the post boundary so a later webhook for a different
+  // channel starts fresh rather than skipping whatever was "already posted"
+  // to the old one.
+  if (typeof body.discord_webhook_url === 'string' && body.discord_webhook_url.trim()) {
+    const check = validateWebhookUrl(body.discord_webhook_url);
+    if (!check.ok) {
+      return NextResponse.json({ error: 'invalid webhook', detail: check.error }, { status: 400 });
+    }
+    patch.discord_webhook_url = encryptSecret(check.url);
+  } else if (body.remove_discord_webhook === true) {
+    patch.discord_webhook_url = null;
+    patch.discord_posted_at = null;
+  }
 
   const { error } = await sb.from('streams').update(patch).eq('id', session.streamId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

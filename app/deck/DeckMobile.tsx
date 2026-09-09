@@ -222,6 +222,7 @@ export function DeckMobile({
   questionsOpen,
   modStatusEnabled,
   raffleEnabled = false,
+  discordWebhookConfigured = false,
   canSetNowPlaying = false,
   onSelect,
   onPlayed,
@@ -231,6 +232,7 @@ export function DeckMobile({
   onPlayNext,
   onSaveTriggerWarning,
   onAddUrl,
+  onPostToDiscord,
 }: {
   active: Submission | null;
   orderedQueue: Submission[];
@@ -248,6 +250,7 @@ export function DeckMobile({
   questionsOpen: boolean;
   modStatusEnabled: boolean;
   raffleEnabled?: boolean;
+  discordWebhookConfigured?: boolean;
   onSelect: (id: string) => void;
   onPlayed: () => void;
   onSkip: () => void;
@@ -256,6 +259,7 @@ export function DeckMobile({
   onPlayNext: (id: string) => void;
   onSaveTriggerWarning: (id: string, v: string | null) => Promise<{ ok?: boolean } | void> | void;
   onAddUrl: (url: string) => Promise<boolean>;
+  onPostToDiscord: () => void;
 }) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [modStatusOpen, setModStatusOpen] = useState(false);
@@ -337,6 +341,20 @@ export function DeckMobile({
               {!curateOnly && (
                 <DropdownMenuItem asChild>
                   <a href="/api/notes?format=markdown&commit=1">Export notes</a>
+                </DropdownMenuItem>
+              )}
+              {!curateOnly && discordWebhookConfigured && (
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    // Deferred the same way Raffle is below: the confirm
+                    // dialog this opens is itself a Radix dialog, and
+                    // opening one while this menu is still mid-close fights
+                    // it for focus.
+                    setTimeout(() => onPostToDiscord(), 0);
+                  }}
+                >
+                  Post to Discord
                 </DropdownMenuItem>
               )}
               {isAdmin && <DropdownMenuItem asChild><Link href="/admin">Admin</Link></DropdownMenuItem>}

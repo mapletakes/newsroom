@@ -23,6 +23,7 @@ app/
     queue/reorder/     ─ drag-drop reorder
     queue/clear/       ─ bulk-reject pending items
     notes/             ─ GET show notes as JSON or Markdown
+    notes/discord/     ─ GET preview / POST the played list to a Discord webhook
     setup/             ─ save settings
     auth/              ─ logout
 lib/
@@ -34,6 +35,7 @@ lib/
   enrich.ts            ─ Anthropic summary + credibility + DMCA risk
   submit-url.ts        ─ shared queue insertion + dedup logic
   search-coverage.ts   ─ Brave Search for related coverage
+  discord.ts           ─ builds and sends the played list to a Discord webhook
   twitch-oauth.ts      ─ OAuth helpers
   twitch-eventsub.ts   ─ EventSub verification, subscription management
   supabase.ts          ─ service-role client
@@ -84,7 +86,7 @@ supabase/
 5. Mods open `/mod` → see incoming links, approve/reject/add notes, and attach a viewer-facing trigger warning to anything that needs one.
 6. Streamer opens `/deck` → shows only **approved** items in a drag-sortable sidebar. Trigger warnings can also be added or edited here mid-show, and appear on the overlay immediately.
 7. When the streamer hits **Played**, the item is timestamped and copied to `show_notes`.
-8. Export to Markdown anytime from `/api/notes?format=markdown`.
+8. Export to Markdown anytime from `/api/notes?format=markdown`, or post the played list to a Discord channel from Setup → Account or the deck header.
 
 ## Architectural choices &amp; trade-offs
 
@@ -96,6 +98,7 @@ supabase/
 - **Theme values are validated on write, not on read.** A font family ends up inside both a stylesheet URL and a CSS `font-family`, and colours are written straight into a `<style>`; `lib/theme.ts` normalises colours to `#rrggbb` and restricts families to letters, digits and spaces once, at the point of saving, so no reader has to re-derive the rules.
 - **Three warning fields, on purpose.** `content_warning` is AI-guessed and internal (a triage hint on the card). `mod_notes` is an internal production aside. `trigger_warning` is the only one written *for the audience* — the streamer or a mod types it, and it's published verbatim: it opens the `!video` reply and the "Post to chat" message (ahead of the title and url, so it survives Twitch's pinned-message preview), and it's shown on the on-air overlay. Keeping them separate is what lets the first two stay candid.
 - **YouTube playlist handling** auto-expands into individual submissions when extracted, then the playlist itself is marked rejected with a `mod_notes` trail.
+- **Discord posting gets its own boundary column.** `discord_posted_at` tracks what's already gone to Discord separately from `notes_exported_at`'s Markdown boundary — a streamer posting to Discord and exporting Markdown to somewhere else on different schedules would otherwise find one export silently empty because the other already advanced a shared cursor. The webhook URL itself is a bearer secret (anyone holding it can post into that channel), so it's encrypted at rest the same way as the Twitch OAuth tokens and never sent back to the client after saving — only a "configured" flag is.
 - **Insert-first dedup** handles concurrent submissions without unique constraints, preserving the allow_duplicates feature.
 
 ## License

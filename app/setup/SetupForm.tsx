@@ -10,6 +10,7 @@ import { AppThemeSettings, OverlayThemeSettings } from './ThemeSettings';
 import type { AppTheme, OverlayTheme } from '@/lib/theme';
 import { Curators } from './Curators';
 import { QuickAdd } from './QuickAdd';
+import { DiscordExport } from './DiscordExport';
 import { OverlaySource } from './OverlaySource';
 import { EventSubStatus } from './EventSubStatus';
 
@@ -48,6 +49,7 @@ export function SetupForm({
   ignoredUsers,
   preferredSources,
   addToken,
+  discordWebhookConfigured = false,
   appTheme,
   overlayTheme,
   questionsEnabled = false,
@@ -65,6 +67,7 @@ export function SetupForm({
   ignoredUsers: string[];
   preferredSources: string[];
   addToken: string | null;
+  discordWebhookConfigured?: boolean;
   appTheme: AppTheme;
   overlayTheme: OverlayTheme;
   questionsEnabled?: boolean;
@@ -91,6 +94,7 @@ export function SetupForm({
   // regenerating it on one tab would leave the other showing a dead URL until
   // a reload.
   const [token, setToken] = useState<string | null>(addToken);
+  const [discordConfigured, setDiscordConfigured] = useState(discordWebhookConfigured);
 
   const [tab, setTab] = useState<TabId>('chat');
   // Deep-linkable and refresh-proof via the hash, which needs no router round
@@ -486,12 +490,17 @@ export function SetupForm({
         </Button>
       </section>
 
-      <section>
+      <section className="mb-10">
         <h2 className="font-display text-2xl font-bold mb-4">Show notes</h2>
         <div className="space-y-2 font-mono text-sm">
           <div><a href="/api/notes?format=markdown&commit=1" className="underline hover:text-rust">-&gt; Export show notes since last export (Markdown)</a></div>
           <div><a href="/api/notes?format=markdown" className="underline hover:text-rust text-ink/60">-&gt; Preview latest notes (don&apos;t mark exported)</a></div>
         </div>
+      </section>
+
+      <section>
+        <h2 className="font-display text-2xl font-bold mb-4">Discord</h2>
+        <DiscordExport configured={discordConfigured} setConfigured={setDiscordConfigured} />
       </section>
       </>
       )}

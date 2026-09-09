@@ -52,6 +52,19 @@ alter table public.streams add column if not exists video_command_last_sent_at t
 alter table public.streams add column if not exists app_theme jsonb;
 alter table public.streams add column if not exists overlay_theme jsonb;
 
+-- Discord export: the streamer pastes an incoming webhook URL from their own
+-- Discord channel settings (Edit Channel → Integrations → Webhooks), and
+-- "Post played list to Discord" sends everything in show_notes since the
+-- last post as one or more chat messages. Encrypted at rest the same way as
+-- the Twitch OAuth tokens above (lib/crypto.ts) since it's a bearer secret —
+-- anyone holding it can post into that channel. discord_posted_at gets its
+-- own boundary column rather than reusing notes_exported_at: a streamer who
+-- posts to Discord AND exports Markdown to e.g. Substack on different
+-- schedules would otherwise find one export silently empty because the
+-- other already advanced the shared boundary.
+alter table public.streams add column if not exists discord_webhook_url text;
+alter table public.streams add column if not exists discord_posted_at timestamptz;
+
 -- Moderators on a stream
 create table if not exists public.moderators (
   stream_id uuid references public.streams(id) on delete cascade,
