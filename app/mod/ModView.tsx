@@ -567,6 +567,9 @@ export function ModView({
                       <span className="font-mono text-xs uppercase tracking-widest text-moss">
                         ✓ approved · waiting for streamer
                         {s.segment_id && segmentNameById.get(s.segment_id) && ` · in ${segmentNameById.get(s.segment_id)}`}
+                        {/* Only set when a mod (not the streamer) approved this —
+                            see supabase/migrations/…_add_submission_approver.sql. */}
+                        {s.approved_by_display_name && ` · by ${s.approved_by_display_name}`}
                       </span>
                       {s.mod_notes && (
                         <span className="font-mono text-xs text-ink/60">

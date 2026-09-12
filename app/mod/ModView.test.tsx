@@ -17,7 +17,12 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { Toaster } from '@/components/ui/sonner';
 import { ModView } from './ModView';
 
-function makeSub(id: string, title: string, status: string) {
+function makeSub(
+  id: string,
+  title: string,
+  status: string,
+  overrides: Record<string, unknown> = {},
+) {
   return {
     id,
     url: `https://example.com/${id}`,
@@ -47,6 +52,11 @@ function makeSub(id: string, title: string, status: string) {
     submitter_is_mod: false,
     submitter_is_vip: false,
     created_at: '2026-07-08T00:00:00.000Z',
+    // Only set when a mod (not the streamer) approved this — see
+    // supabase/migrations/…_add_submission_approver.sql.
+    approved_by_login: null,
+    approved_by_display_name: null,
+    ...overrides,
   };
 }
 
@@ -283,6 +293,33 @@ describe('ModView — approve into a segment', () => {
     await waitFor(() =>
       expect(backend.patches).toContainEqual({ id: 'a', status: 'approved', segment_id: 'seg-2' }),
     );
+  });
+
+  it('shows which mod approved an already-approved item, on the Approved tab', async () => {
+    installMockBackend([
+      makeSub('a', 'Item A', 'approved', { approved_by_login: 'somemod', approved_by_display_name: 'SomeMod' }),
+    ]);
+    const user = userEvent.setup();
+    renderModView({ isMod: true, canCurate: true });
+
+    await user.click(await screen.findByText(/approved \(1\)/i));
+
+    expect(await screen.findByText(/by SomeMod/)).toBeInTheDocument();
+  });
+
+  it('shows no approver marker on the Approved tab when the streamer approved it themselves', async () => {
+    installMockBackend([makeSub('a', 'Item A', 'approved')]);
+    const user = userEvent.setup();
+    renderModView({ isMod: false, canCurate: true });
+
+    await user.click(await screen.findByText(/approved \(1\)/i));
+
+    // "· by <name>" (the approver marker) is distinct from "submitted by
+    // <login>" (SubmissionCard's own, unrelated line) — this only checks
+    // for the former, since makeSub's default submitter_login always
+    // renders the latter.
+    await screen.findByText('Item A');
+    expect(screen.queryByText(/·\s*by\s/)).not.toBeInTheDocument();
   });
 
   it('clears the segment on Undo so a later plain approve does not inherit it', async () => {
