@@ -225,3 +225,57 @@ describe('DeckView — mark played / undo', () => {
     expect(screen.getByText('Nothing on air yet.')).toBeInTheDocument();
   });
 });
+
+// The "mod: <name>" marker (SortableQueueItem's sidebar card and
+// ActiveItemCard's badge row) — only set server-side when a mod, not the
+// streamer, approved or added the item. See lib/curate.ts, the queue PATCH
+// route, and supabase/migrations/…_add_submission_approver.sql.
+describe('DeckView — mod approval marker', () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  // No PATCH path needed here — these tests only ever read the queue.
+  function installBackendWith(sub: Record<string, unknown>) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith('/api/queue')) {
+          return jsonResponse({
+            submissions: [sub],
+            nowPlaying: null,
+            counts: { pending: 0, approved: 1, played: 0, rejected: 0, total: 1 },
+          });
+        }
+        if (url.startsWith('/api/segments')) return jsonResponse({ segments: [], ungroupedPosition: 0 });
+        if (url.startsWith('/api/twitch/eventsub/status')) return jsonResponse({ connected: true });
+        if (url.startsWith('/api/quick-links')) return jsonResponse({ links: [] });
+        if (url.startsWith('/api/deck/now-playing')) return jsonResponse({ ok: true });
+        return jsonResponse({});
+      }),
+    );
+  }
+
+  it('shows which mod approved an item, on both the sidebar card and the on-air card', async () => {
+    installBackendWith({ ...SUB, id: 'sub-mod', approved_by_login: 'somemod', approved_by_display_name: 'SomeMod' });
+    const user = userEvent.setup();
+    renderDeck();
+
+    const title = await screen.findByText(SUB.title);
+    expect(await screen.findAllByText(/mod: SomeMod/)).not.toHaveLength(0);
+
+    // Select it so the on-air card renders too, and check its badge row.
+    await user.click(title);
+    await waitFor(() => expect(screen.getAllByText(/mod: SomeMod/).length).toBeGreaterThanOrEqual(2));
+  });
+
+  it('shows no marker when the streamer approved or added the item (both fields null)', async () => {
+    installBackendWith({ ...SUB, id: 'sub-streamer', approved_by_login: null, approved_by_display_name: null });
+    renderDeck();
+
+    await screen.findByText(SUB.title);
+    expect(screen.queryByText(/mod:/)).not.toBeInTheDocument();
+  });
+});

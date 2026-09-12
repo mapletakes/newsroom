@@ -20,6 +20,11 @@ export async function addToDeck(
   rawUrl: string,
   submitterLogin: string,
   segmentId?: string | null,
+  // Set only when a mod is the one adding this straight to the deck — the
+  // streamer's own quick-add (personal token, or their own session) leaves
+  // this null, same rule the queue PATCH route applies for approvals. See
+  // supabase/migrations/20260912052136_add_submission_approver.sql.
+  approvedBy?: { login: string; displayName: string } | null,
 ): Promise<AddToDeckResult> {
   // Strip playlist context (list/index/…) before anything else sees this URL —
   // see stripYouTubePlaylistContext's doc comment. A video someone adds while
@@ -86,6 +91,8 @@ export async function addToDeck(
           kind: 'youtube',
           status: 'approved',
           approved_at: new Date().toISOString(),
+          approved_by_login: approvedBy?.login ?? null,
+          approved_by_display_name: approvedBy?.displayName ?? null,
           segment_id: segId,
           title: v.title,
           thumbnail_url: v.thumbnail,
@@ -132,6 +139,8 @@ export async function addToDeck(
       kind,
       status: 'approved',
       approved_at: new Date().toISOString(),
+      approved_by_login: approvedBy?.login ?? null,
+      approved_by_display_name: approvedBy?.displayName ?? null,
       segment_id: segId,
       submitter_login: submitterLogin,
     })

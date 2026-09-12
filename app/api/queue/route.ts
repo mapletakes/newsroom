@@ -149,7 +149,21 @@ export async function PATCH(req: NextRequest) {
   const patch: Record<string, unknown> = {};
   if (body.status) {
     patch.status = body.status;
-    if (body.status === 'approved') patch.approved_at = new Date().toISOString();
+    if (body.status === 'approved') {
+      patch.approved_at = new Date().toISOString();
+      // Only recorded for a mod's approval — the streamer approving their
+      // own queue isn't "approved by a mod", so leave both null in that
+      // case (the deck badge just won't render).
+      patch.approved_by_login = session.role === 'mod' ? session.twitchLogin : null;
+      patch.approved_by_display_name = session.role === 'mod' ? session.displayName : null;
+    } else if (body.status !== 'played') {
+      // Leaving 'approved' for anything other than 'played' (unapprove back
+      // to pending, or reject) means it's no longer a mod-approved deck item
+      // — clear the attribution so a later re-approval by someone else (or
+      // the streamer) doesn't inherit stale credit.
+      patch.approved_by_login = null;
+      patch.approved_by_display_name = null;
+    }
     if (body.status === 'played') patch.played_at = new Date().toISOString();
   }
   if (typeof body.position === 'number') patch.position = body.position;

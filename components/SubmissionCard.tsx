@@ -37,6 +37,11 @@ type Submission = {
   submitter_is_mod: boolean | null;
   submitter_is_vip: boolean | null;
   created_at: string;
+  // Who approved this onto the deck — set only when a mod (not the
+  // streamer) is the one who approved it or added it directly. See
+  // supabase/migrations/20260912052136_add_submission_approver.sql.
+  approved_by_login: string | null;
+  approved_by_display_name: string | null;
 };
 
 const KIND_LABELS: Record<string, string> = {

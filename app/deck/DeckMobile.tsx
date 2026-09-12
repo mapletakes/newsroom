@@ -170,6 +170,7 @@ function QueueSheet({
                     {s.trigger_warning && <span className="bg-rust text-paper px-1 font-bold">⚠ TW</span>}
                     <span className="truncate">{s.publisher || s.kind.replace('_', ' ')}</span>
                     {s.duration_seconds ? <span>· {formatDuration(s.duration_seconds)}</span> : null}
+                    {s.approved_by_display_name && <span>· mod: {s.approved_by_display_name}</span>}
                   </span>
                   <span className="mt-0.5 block font-display text-base font-bold leading-tight line-clamp-2">
                     {s.title || s.url}
@@ -276,7 +277,14 @@ export function DeckMobile({
   }, [active?.id]);
 
   const meta = active
-    ? [active.publisher, active.kind.replace('_', ' '), active.duration_seconds ? formatDuration(active.duration_seconds) : null]
+    ? [
+        active.publisher,
+        active.kind.replace('_', ' '),
+        active.duration_seconds ? formatDuration(active.duration_seconds) : null,
+        // Only set when a mod (not the streamer) approved or added this —
+        // see supabase/migrations/…_add_submission_approver.sql.
+        active.approved_by_display_name ? `mod: ${active.approved_by_display_name}` : null,
+      ]
         .filter(Boolean)
         .join(' · ')
     : '';

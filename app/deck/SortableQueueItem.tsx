@@ -115,6 +115,11 @@ export function SortableQueueItem({
                     <span className="bg-rust text-paper font-bold ml-1 px-1 cursor-default">⚠ TW</span>
                   </SimpleTooltip>
                 )}
+                {/* Only set when a mod (not the streamer) approved or added
+                    this — see supabase/migrations/…_add_submission_approver.sql. */}
+                {s.approved_by_display_name && (
+                  <span className="text-ink/40 ml-1">· mod: {s.approved_by_display_name}</span>
+                )}
               </div>
               <div className="font-display text-lg font-bold leading-tight line-clamp-2">
                 {s.title || s.url}

@@ -76,6 +76,11 @@ export function ActiveItemCard({
         )}
         {active.publisher && <span className="text-ink/60">· {active.publisher}</span>}
         {active.published_at && <span className="text-ink/60">· {formatDate(active.published_at)}</span>}
+        {/* Only set when a mod (not the streamer) approved or added this —
+            see supabase/migrations/…_add_submission_approver.sql. */}
+        {active.approved_by_display_name && (
+          <span className="text-ink/60">· mod: {active.approved_by_display_name}</span>
+        )}
         <span className="ml-auto flex items-center gap-3 normal-case tracking-normal">
           <span className="flex items-center gap-1.5 font-mono text-rust font-bold tracking-widest uppercase" title="Time on air for this item">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-rust live-dot" />

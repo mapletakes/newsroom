@@ -96,6 +96,8 @@ const SAMPLE_SUBMISSION: Submission = {
   submitter_is_mod: false,
   submitter_is_vip: false,
   created_at: PREVIEW_FALLBACK_DATE,
+  approved_by_login: null,
+  approved_by_display_name: null,
 };
 
 // ── App palette + type ────────────────────────────────────────

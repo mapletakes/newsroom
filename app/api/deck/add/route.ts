@@ -17,7 +17,8 @@ export async function POST(req: NextRequest) {
   const url = String(body.url || '').trim();
   if (!url) return NextResponse.json({ error: 'missing url' }, { status: 400 });
 
-  const result = await addToDeck(session.streamId, url, session.twitchLogin);
+  const approvedBy = session.role === 'mod' ? { login: session.twitchLogin, displayName: session.displayName } : null;
+  const result = await addToDeck(session.streamId, url, session.twitchLogin, undefined, approvedBy);
   if (!result.ok) {
     return NextResponse.json({ error: result.error || 'failed to add' }, { status: 400 });
   }
