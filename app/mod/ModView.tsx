@@ -625,11 +625,16 @@ export function ModView({
                       }}
                     />
                   )}
+                  {/* Some mods' browsers won't let them right-click → copy
+                      link address on the card (extension/lockdown quirks) —
+                      this is an explicit way to get the same URL onto their
+                      clipboard. */}
+                  <CopyButton value={s.url} label="Copy link" className="ml-auto" />
                   <a
                     href={s.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="font-mono text-xs uppercase tracking-widest underline ml-auto"
+                    className="font-mono text-xs uppercase tracking-widest underline"
                   >
                     Open ↗
                   </a>

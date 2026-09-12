@@ -344,3 +344,31 @@ describe('ModView — approve into a segment', () => {
     );
   });
 });
+
+// Some mods' browsers won't let them right-click → copy link address on the
+// card (extension/lockdown quirks) — see ModView.tsx's Copy link button.
+describe('ModView — copy link', () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+    // jsdom's navigator.clipboard is a getter-only own property — delete
+    // the per-test override rather than leaving it to leak into other files.
+    delete (navigator as { clipboard?: unknown }).clipboard;
+  });
+
+  it('copies the item URL to the clipboard, on every status tab', async () => {
+    installMockBackend([makeSub('a', 'Item A', 'pending')]);
+    const user = userEvent.setup();
+    // userEvent.setup() installs its own virtual clipboard — define the mock
+    // after it, or this override gets silently clobbered.
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    renderModView();
+
+    await screen.findByText('Item A');
+    await user.click(screen.getByRole('button', { name: /copy link/i }));
+
+    expect(writeText).toHaveBeenCalledWith('https://example.com/a');
+    expect(await screen.findByRole('button', { name: /copied/i })).toBeInTheDocument();
+  });
+});

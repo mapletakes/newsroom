@@ -7,13 +7,13 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 
-export function CopyButton({ value }: { value: string }) {
+export function CopyButton({ value, label = 'Copy', className = '' }: { value: string; label?: string; className?: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <Button
       variant="outline"
       size="xs"
-      className="shrink-0 text-xs"
+      className={`shrink-0 text-xs ${className}`}
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(value);
@@ -24,7 +24,7 @@ export function CopyButton({ value }: { value: string }) {
         }
       }}
     >
-      {copied ? 'Copied!' : 'Copy'}
+      {copied ? 'Copied!' : label}
     </Button>
   );
 }
