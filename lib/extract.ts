@@ -1,8 +1,6 @@
 import { supabaseAdmin } from './supabase';
-import { expandPlaylist } from './extract-youtube';
 import { hostDMCARisk } from './enrich';
 import { recordUsage } from './usage';
-import { detectKind, normalizeUrl } from './url';
 import { extractMetaForKind, enrichExtractedMeta } from './extract-kind';
 
 export async function runExtraction(submissionId: string) {
@@ -15,30 +13,23 @@ export async function runExtraction(submissionId: string) {
   if (error || !sub) return;
 
   try {
-    if (sub.kind === 'youtube_playlist') {
-      const urls = await expandPlaylist(sub.url);
-      for (const u of urls) {
-        await sb.from('submissions').insert({
-          stream_id: sub.stream_id,
-          url: u,
-          normalized_url: normalizeUrl(u),
-          kind: detectKind(u),
-          status: 'pending',
-          submitter_login: sub.submitter_login,
-          mod_notes: 'expanded from playlist',
-        }).then(() => {}, () => {});
-      }
-      await sb.from('submissions').update({
-        status: 'rejected',
-        mod_notes: `expanded into ${urls.length} item(s)`,
-      }).eq('id', sub.id);
-      return;
-    }
-
-    // No dedicated extractor (twitch_clip, twitch_vod, unknown) degrades to
-    // treating the URL as an article — see extractMetaForKind's doc comment
-    // in lib/extract-kind.ts for why that's the right fallback here (and
-    // NOT in list-extract.ts, which skips enrichment entirely instead).
+    // A playlist link posted in chat is NOT expanded here — that used to
+    // fan a single pending submission out into one bare, unenriched pending
+    // row per video (see git history), which is all cost and no benefit for
+    // a link nobody's decided to put on the deck yet: every one of those
+    // rows sat in the queue with no title or thumbnail, since nothing ever
+    // ran extraction on the fanned-out rows themselves. A mod reviewing the
+    // single pending playlist link now sees it enriched like any other link
+    // (title/thumbnail via the article fallback below, since YouTube's
+    // playlist pages carry normal OG tags) and can approve it as one item,
+    // or use "Add to deck" (lib/deck-add.ts's addToDeck) — which still does
+    // the full per-video expansion — if they actually want it split up.
+    //
+    // No dedicated extractor (twitch_clip, twitch_vod, youtube_playlist,
+    // unknown) degrades to treating the URL as an article — see
+    // extractMetaForKind's doc comment in lib/extract-kind.ts for why
+    // that's the right fallback here (and NOT in list-extract.ts, which
+    // skips enrichment entirely instead).
     const meta =
       (await extractMetaForKind(sub.url, sub.kind)) ??
       (await extractMetaForKind(sub.url, 'article'))!;

@@ -9,10 +9,14 @@
 // what two copies of the same block independently drift into. Splitting
 // this out means the two callers can only differ where a comment says so.
 //
-// What stays OUT of here, deliberately: youtube_playlist expansion
-// (submissions-only — a shelf item is always exactly one row, never fanned
-// out) and the actual DB write (the two tables' columns overlap but aren't
-// identical — see list-extract.ts's own file comment).
+// What stays OUT of here, deliberately: youtube_playlist expansion (only
+// lib/deck-add.ts does this, for a mod/streamer explicitly adding a
+// playlist straight to the deck — a chat-submitted playlist link is left
+// as one pending row and enriched via the 'article' fallback below like
+// any other no-dedicated-extractor kind, and a shelf item is always
+// exactly one row, never fanned out either way) and the actual DB write
+// (the two tables' columns overlap but aren't identical — see
+// list-extract.ts's own file comment).
 
 import { extractArticle } from './extract-article';
 import { fetchYouTubeMeta } from './extract-youtube';

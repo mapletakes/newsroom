@@ -342,8 +342,3 @@ async function expandPlaylistViaApi(listId: string): Promise<PlaylistItem[]> {
     return [];
   }
 }
-
-export async function expandPlaylist(url: string): Promise<string[]> {
-  const items = await expandPlaylistWithMeta(url);
-  return items.map((i) => i.url);
-}
