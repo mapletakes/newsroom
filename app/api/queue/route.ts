@@ -175,6 +175,16 @@ export async function PATCH(req: NextRequest) {
     const tw = typeof body.trigger_warning === 'string' ? body.trigger_warning.trim() : '';
     patch.trigger_warning = tw || null;
   }
+  // The deck's takeaway box autosaves here as the streamer types (see
+  // DeckView's savePrepNote) — so notes about what to watch for survive
+  // switching to another item and back, instead of living only in that
+  // component's local state until markPlayed finally persists them as the
+  // show-notes takeaway. Accepts an explicit null, same reasoning as
+  // trigger_warning: clearing a note has to be as possible as writing one.
+  if ('prep_note' in body) {
+    const pn = typeof body.prep_note === 'string' ? body.prep_note.trim() : '';
+    patch.prep_note = pn || null;
+  }
   if (typeof body.duration_on_screen_s === 'number') patch.duration_on_screen_s = body.duration_on_screen_s;
 
   const sb = supabaseAdmin();

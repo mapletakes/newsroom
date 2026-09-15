@@ -736,6 +736,59 @@ export function DeckView({
     [queryClient, queueKey, reconcileAfterWrites],
   );
 
+  // The takeaway box seeds from prep_note (see prepNoteFor above) but used
+  // to live only as local state until markPlayed finally wrote it into
+  // show_notes — so typing notes on an item (e.g. timestamps to watch),
+  // then clicking to another item and back, silently lost everything that
+  // hadn't been played yet. This autosaves back to prep_note instead:
+  // debounced while actively typing, and flushed immediately on blur (which
+  // fires before the click that activates a different item or button, so
+  // switching away never races the debounce window). markPlayed still sends
+  // the current value as `takeaway` for the show_notes row — by then it's
+  // usually already persisted here too, this just guarantees it.
+  const takeawaySaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const savePrepNote = useCallback(
+    (id: string, value: string) => {
+      const trimmed = value.trim() || null;
+      queryClient.setQueryData<QueueData>(queueKey, (prev) =>
+        prev
+          ? { ...prev, submissions: prev.submissions.map((s) => (s.id === id ? { ...s, prep_note: trimmed } : s)) }
+          : prev,
+      );
+      reconcileAfterWrites(
+        fetch('/api/queue', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, prep_note: trimmed }),
+        }),
+      ).catch(() => {});
+    },
+    [queryClient, queueKey, reconcileAfterWrites],
+  );
+
+  const onTakeawayChange = useCallback(
+    (value: string) => {
+      setTakeaway(value);
+      if (takeawaySaveTimer.current) clearTimeout(takeawaySaveTimer.current);
+      if (!activeId) return;
+      const id = activeId;
+      takeawaySaveTimer.current = setTimeout(() => {
+        takeawaySaveTimer.current = null;
+        savePrepNote(id, value);
+      }, 1200);
+    },
+    [activeId, savePrepNote],
+  );
+
+  const onTakeawayBlur = useCallback(() => {
+    if (takeawaySaveTimer.current) {
+      clearTimeout(takeawaySaveTimer.current);
+      takeawaySaveTimer.current = null;
+    }
+    if (activeId) savePrepNote(activeId, takeaway);
+  }, [activeId, takeaway, savePrepNote]);
+
   // --- Segment handlers ---
   const addSegment = () => {
     reconcileAfterWrites(fetch('/api/segments', {
@@ -1256,7 +1309,8 @@ export function DeckView({
             elapsedSeconds={elapsedSeconds}
             curateOnly={curateOnly}
             takeaway={takeaway}
-            onTakeawayChange={setTakeaway}
+            onTakeawayChange={onTakeawayChange}
+            onTakeawayBlur={onTakeawayBlur}
             pinOnAnnounce={pinOnAnnounce}
             onPinOnAnnounceChange={setPinOnAnnounce}
             onMarkPlayed={markPlayed}

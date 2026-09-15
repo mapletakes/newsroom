@@ -279,3 +279,85 @@ describe('DeckView — mod approval marker', () => {
     expect(screen.queryByText(/mod:/)).not.toBeInTheDocument();
   });
 });
+
+// A note typed into the "Notes" box used to live only in local state until
+// markPlayed finally wrote it into show_notes — so switching to another item
+// and back silently dropped anything typed on an item not yet played. See
+// DeckView's savePrepNote/onTakeawayBlur and the queue PATCH route's
+// prep_note handling.
+describe('DeckView — notes autosave', () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  const SUB_A = { ...SUB, id: 'sub-a', title: 'First item', prep_note: null };
+  const SUB_B = { ...SUB, id: 'sub-b', title: 'Second item', prep_note: null };
+
+  function installNotesBackend() {
+    const state = new Map([
+      [SUB_A.id, { ...SUB_A }],
+      [SUB_B.id, { ...SUB_B }],
+    ]);
+    const patches: { id: string; prep_note?: string | null }[] = [];
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const method = init?.method || 'GET';
+
+        if (url.startsWith('/api/queue') && method === 'GET') {
+          return jsonResponse({
+            submissions: [...state.values()],
+            nowPlaying: null,
+            counts: { pending: 0, approved: state.size, played: 0, rejected: 0, total: state.size },
+          });
+        }
+        if (url === '/api/queue' && method === 'PATCH') {
+          const body = JSON.parse(String(init?.body || '{}'));
+          const item = state.get(body.id);
+          if (item && 'prep_note' in body) {
+            item.prep_note = body.prep_note;
+            patches.push({ id: body.id, prep_note: body.prep_note });
+          }
+          return jsonResponse({ submission: item ?? {} });
+        }
+        if (url.startsWith('/api/segments')) return jsonResponse({ segments: [], ungroupedPosition: 0 });
+        if (url.startsWith('/api/twitch/eventsub/status')) return jsonResponse({ connected: true });
+        if (url.startsWith('/api/quick-links')) return jsonResponse({ links: [] });
+        if (url.startsWith('/api/deck/now-playing')) return jsonResponse({ ok: true });
+        return jsonResponse({});
+      }),
+    );
+
+    return { patches };
+  }
+
+  it('persists a typed note on blur, and re-seeds it after switching to another item and back', async () => {
+    const backend = installNotesBackend();
+    const user = userEvent.setup();
+    renderDeck();
+
+    await screen.findByText('First item');
+    await screen.findByText('Second item');
+
+    // Activate the first item and type a note — the exact scenario reported:
+    // jotting a timestamp to watch for, before the item's been played.
+    await user.click(screen.getByText('First item'));
+    const notes = await screen.findByPlaceholderText(/jot what to watch for/i);
+    await user.type(notes, 'watch for the 4:32 mark');
+
+    // Switching to the second item blurs the textarea first (standard DOM
+    // focus order), which flushes the save immediately rather than waiting
+    // out the debounce.
+    await user.click(screen.getByText('Second item'));
+    await waitFor(() =>
+      expect(backend.patches).toContainEqual({ id: 'sub-a', prep_note: 'watch for the 4:32 mark' }),
+    );
+
+    // Coming back to the first item shows the persisted note, not a blank box.
+    await user.click(screen.getByText('First item'));
+    expect(await screen.findByDisplayValue('watch for the 4:32 mark')).toBeInTheDocument();
+  });
+});

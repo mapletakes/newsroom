@@ -25,6 +25,7 @@ export function ActiveItemCard({
   curateOnly,
   takeaway,
   onTakeawayChange,
+  onTakeawayBlur,
   pinOnAnnounce,
   onPinOnAnnounceChange,
   onMarkPlayed,
@@ -38,6 +39,10 @@ export function ActiveItemCard({
   curateOnly: boolean;
   takeaway: string;
   onTakeawayChange: (value: string) => void;
+  /** Flushes an autosave immediately — see DeckView's onTakeawayBlur for why
+   *  this fires before a click elsewhere (activating another item, or an
+   *  action button) ever races the debounced save. */
+  onTakeawayBlur: () => void;
   pinOnAnnounce: boolean;
   onPinOnAnnounceChange: (value: boolean) => void;
   onMarkPlayed: () => void;
@@ -256,14 +261,15 @@ export function ActiveItemCard({
       {!curateOnly && (
         <label className="block max-w-3xl">
           <span className="font-mono text-xs uppercase tracking-widest text-ink/60">
-            Takeaway for show notes (optional)
+            Notes (optional, autosaved)
           </span>
           <Textarea
             value={takeaway}
             onChange={(e) => onTakeawayChange(e.target.value)}
+            onBlur={onTakeawayBlur}
             rows={3}
             className="w-full mt-1"
-            placeholder="Add a one-liner about what you said about this on stream..."
+            placeholder="Jot what to watch for, a timestamp, what you said about this on stream..."
           />
         </label>
       )}
