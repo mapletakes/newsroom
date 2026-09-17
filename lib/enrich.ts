@@ -62,7 +62,12 @@ Output STRICT JSON only, no prose, no markdown fences. Schema:
 
 Be honest about credibility. 'partisan-left' and 'partisan-right' are not insults; they describe the outlet's editorial stance. 'mainstream' means broad-spectrum legacy outlets (Reuters, AP, NYT, BBC, Globe and Mail, etc.) regardless of perceived lean.`;
 
-const MODEL = 'claude-sonnet-5';
+// Haiku, not Sonnet: this runs on every single submission (often with a full
+// web_fetch of the article in context), so the per-call cost difference
+// between models compounds fast across a month of chat volume. Summary/
+// credibility/topics/DMCA-risk/content-warning classification doesn't need
+// Sonnet-level reasoning to be reliable enough for mod triage.
+const MODEL = 'claude-haiku-4-5-20251001';
 
 export async function enrichContent(input: {
   url: string;
