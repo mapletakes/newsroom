@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getSession, getApprovedSession } from '@/lib/session';
 import { sessionCanCurate } from '@/lib/curate';
 import { searchRelatedCoverage } from '@/lib/search-coverage';
+import { runAiEnrichment } from '@/lib/extract';
 import { submitUrlToQueue } from '@/lib/submit-url';
 import { broadcastQueueChange } from '@/lib/realtime';
 
@@ -278,6 +279,16 @@ export async function PATCH(req: NextRequest) {
     .select()
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // The AI summary/credibility/topics call is deferred to here, rather than
+  // running on every pending submission — most links chat posts never get
+  // approved, so running it on all of them (as this app used to) paid for a
+  // summary of every dead-end link, not just the ones that make the deck.
+  // Gated on !summary so a re-approval (Undo, or unapprove/reapprove)
+  // doesn't pay for it twice. See lib/extract.ts's runAiEnrichment.
+  if (body.status === 'approved' && data && !data.summary) {
+    await runAiEnrichment(id);
+  }
 
   // If marked played, create a show_notes entry
   if (body.status === 'played' && data) {

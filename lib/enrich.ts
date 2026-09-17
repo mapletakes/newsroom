@@ -132,7 +132,12 @@ ${input.body!.slice(0, 5500)}`;
         ? {
             tools: [
               {
-                type: 'web_fetch_20260209' as const,
+                // The dynamic-filtering-capable 20260209+ versions lean on
+                // programmatic tool calling, which Haiku doesn't support —
+                // the basic 20250910 fetch has no such dependency and is
+                // all this call ever needed (it just reads the page once,
+                // it never filters/re-fetches).
+                type: 'web_fetch_20250910' as const,
                 name: 'web_fetch' as const,
                 max_uses: 1,
                 max_content_tokens: 8000,

@@ -3,7 +3,7 @@
 
 import { supabaseAdmin } from './supabase';
 import { detectKind, normalizeUrl, stripYouTubePlaylistContext } from './url';
-import { runExtraction } from './extract';
+import { runBasicExtraction } from './extract';
 import { broadcastQueueChange } from './realtime';
 
 export type SubmitUrlParams = {
@@ -125,16 +125,22 @@ export async function submitUrlToQueue(params: SubmitUrlParams): Promise<SubmitU
   // Ping open views so the new row appears immediately (before enrichment).
   if (submission) broadcastQueueChange(streamId);
 
-  // ── AI extraction (title, summary, credibility, etc.) ─────────
+  // ── Basic extraction (title, thumbnail, publisher, etc.) ───────
+  // Title/thumbnail only — NOT the AI summary/credibility/topics call, which
+  // is the actually-billed part. Most pending links never get approved, so
+  // running that on every one of them (as this used to) paid for a summary
+  // of every dead-end link chat posts. It now runs once, only if the item
+  // is approved — see lib/extract.ts's runAiEnrichment and the queue PATCH
+  // route's approval handling.
   if (submission && !(submission as Record<string, unknown>).title) {
-    await runExtraction(submission.id as string);
+    await runBasicExtraction(submission.id as string);
     const { data: enriched } = await sb
       .from('submissions')
       .select('*')
       .eq('id', submission.id)
       .maybeSingle();
     if (enriched) submission = enriched;
-    // Ping again so enriched data (title, summary) refreshes in place.
+    // Ping again so extracted data (title, thumbnail) refreshes in place.
     broadcastQueueChange(streamId);
   }
 
