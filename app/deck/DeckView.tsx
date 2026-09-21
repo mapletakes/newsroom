@@ -736,6 +736,47 @@ export function DeckView({
     [queryClient, queueKey, reconcileAfterWrites],
   );
 
+  // The title viewers see on the overlay and in the "Watching:" chat post,
+  // when the scraped one isn't what the streamer wants on screen. Same
+  // shape as saveTriggerWarning (optimistic cache update, then the PATCH,
+  // reporting `{ ok }` so the editor stays open on failure) and not gated
+  // on curateOnly for the same reason: it's annotation, not reorganizing.
+  const saveTitleOverride = useCallback(
+    (id: string, value: string | null) => {
+      queryClient.setQueryData<QueueData>(queueKey, (prev) =>
+        prev
+          ? {
+              ...prev,
+              submissions: prev.submissions.map((s) =>
+                s.id === id ? { ...s, title_override: value } : s,
+              ),
+            }
+          : prev,
+      );
+      return reconcileAfterWrites(
+        fetch('/api/queue', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, title_override: value }),
+        }),
+      ).then(
+        (r) => {
+          if (!r.ok) {
+            toast.error('Could not save the title');
+            return { ok: false };
+          }
+          toast.success(value ? 'Overlay & chat title saved' : 'Using the original title');
+          return { ok: true };
+        },
+        () => {
+          toast.error('Could not save the title');
+          return { ok: false };
+        },
+      );
+    },
+    [queryClient, queueKey, reconcileAfterWrites],
+  );
+
   // The takeaway box seeds from prep_note (see prepNoteFor above) but used
   // to live only as local state until markPlayed finally wrote it into
   // show_notes — so typing notes on an item (e.g. timestamps to watch),
@@ -1187,6 +1228,7 @@ export function DeckView({
         onAnnounce={announce}
         onPlayNext={playNext}
         onSaveTriggerWarning={saveTriggerWarning}
+        onSaveTitleOverride={saveTitleOverride}
         onAddUrl={addLinkByUrl}
         onPostToDiscord={postToDiscord}
       />
@@ -1318,6 +1360,7 @@ export function DeckView({
             onReject={rejectActive}
             onAnnounce={announce}
             onSaveTriggerWarning={saveTriggerWarning}
+            onSaveTitleOverride={saveTitleOverride}
           />
         </section>
 

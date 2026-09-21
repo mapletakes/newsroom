@@ -98,6 +98,7 @@ const SAMPLE_SUBMISSION: Submission = {
   created_at: PREVIEW_FALLBACK_DATE,
   approved_by_login: null,
   approved_by_display_name: null,
+  title_override: null,
 };
 
 // ── App palette + type ────────────────────────────────────────

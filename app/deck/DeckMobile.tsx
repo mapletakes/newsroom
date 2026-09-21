@@ -11,6 +11,7 @@ import { Icon } from '@/components/ui/icon';
 import { Wordmark } from '@/components/ui/wordmark';
 import { DarkModeToggle } from '@/components/DarkModeToggle';
 import { TriggerWarningBanner, TriggerWarningEditor } from '@/components/TriggerWarning';
+import { TitleOverrideEditor } from '@/components/TitleOverrideEditor';
 import { QuestionsPanel } from '@/components/QuestionsPanel';
 import { ModStatusPanel } from '@/components/ModStatusPanel';
 import { RafflePanel } from '@/components/RafflePanel';
@@ -232,6 +233,7 @@ export function DeckMobile({
   onAnnounce,
   onPlayNext,
   onSaveTriggerWarning,
+  onSaveTitleOverride,
   onAddUrl,
   onPostToDiscord,
 }: {
@@ -259,6 +261,7 @@ export function DeckMobile({
   onAnnounce: () => void;
   onPlayNext: (id: string) => void;
   onSaveTriggerWarning: (id: string, v: string | null) => Promise<{ ok?: boolean } | void> | void;
+  onSaveTitleOverride: (id: string, v: string | null) => Promise<{ ok?: boolean } | void> | void;
   onAddUrl: (url: string) => Promise<boolean>;
   onPostToDiscord: () => void;
 }) {
@@ -410,6 +413,17 @@ export function DeckMobile({
             {meta && (
               <p className="font-mono text-[11px] uppercase tracking-widest text-ink/60 mb-3">{meta}</p>
             )}
+
+            {/* Inline rather than a transport-bar button: that bar is already
+                full, and this is an occasional edit, not a live-show control. */}
+            <div className="mb-3">
+              <TitleOverrideEditor
+                key={`title-${active.id}`}
+                value={active.title_override}
+                originalTitle={active.title}
+                onSave={(v) => onSaveTitleOverride(active.id, v)}
+              />
+            </div>
 
             {active.mod_notes && (
               <div className="mb-3 border-l-4 border-ochre bg-ochre/10 px-3 py-2">

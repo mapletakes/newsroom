@@ -1,0 +1,11 @@
+-- A streamer-authored replacement for an item's title, used ONLY where the
+-- title goes out to viewers: the on-air overlay and the "Watching: <title>
+-- <url>" chat post. The scraped `title` is left alone (it's still what the
+-- deck, the queue, show notes, and the Discord export read) — a page's own
+-- title is often clickbait, truncated, or in the wrong language for what the
+-- streamer actually wants on screen, and overwriting it would lose the
+-- original for everything else.
+--
+-- Null means "no override" — the overlay and chat post fall back to `title`
+-- (then the url), exactly as before. Resolved in lib/title-override.ts.
+alter table public.submissions add column if not exists title_override text;

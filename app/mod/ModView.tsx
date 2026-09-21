@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDuration, sanitizeShareUrl } from '@/lib/url';
+import { resolveTitle } from '@/lib/title-override';
 import { AnnounceButton } from './AnnounceButton';
 import { CopyButton } from './CopyButton';
 import { ModActions } from './ModActions';
@@ -418,7 +419,7 @@ export function ModView({
                 to nothing to make room for the trailing buttons — those wrap
                 to their own line on narrow screens instead. */}
             <span className="flex-1 min-w-[120px] font-display text-sm font-bold truncate">
-              {nowPlaying.title || nowPlaying.url}
+              {resolveTitle(nowPlaying) || nowPlaying.url}
             </span>
             {nowPlaying.trigger_warning && (
               <span className="shrink-0 max-w-full font-mono text-[10px] uppercase tracking-widest bg-rust text-paper px-2 py-1">

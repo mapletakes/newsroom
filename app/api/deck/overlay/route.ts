@@ -7,6 +7,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { checkRateLimit, hashKey } from '@/lib/ratelimit';
 import { computePlayOrder } from '@/lib/play-order';
 import { sanitizeOverlayTheme } from '@/lib/theme';
+import { resolveTitle } from '@/lib/title-override';
 
 export const dynamic = 'force-dynamic';
 
@@ -102,7 +103,7 @@ export async function GET(req: NextRequest) {
   const [{ data: approved }, { data: segments }] = await Promise.all([
     sb
       .from('submissions')
-      .select('id, title, url, kind, publisher, duration_seconds, trigger_warning, segment_id, position, created_at')
+      .select('id, title, title_override, url, kind, publisher, duration_seconds, trigger_warning, segment_id, position, created_at')
       .eq('stream_id', stream.id)
       .eq('status', 'approved'),
     sb.from('segments').select('id, position').eq('stream_id', stream.id),
@@ -118,7 +119,9 @@ export async function GET(req: NextRequest) {
   // warning is the opposite case — written specifically to be read by the
   // audience, so it does belong on the viewer-facing graphic.
   const toPayload = (s: NonNullable<typeof np>) => ({
-    title: s.title || s.url,
+    // The streamer's own override wins over the scraped title — this is the
+    // viewer-facing graphic, the whole reason the override exists.
+    title: resolveTitle(s) || s.url,
     kind: s.kind,
     publisher: s.publisher,
     durationSeconds: s.duration_seconds,

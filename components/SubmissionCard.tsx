@@ -42,6 +42,9 @@ type Submission = {
   // supabase/migrations/20260912052136_add_submission_approver.sql.
   approved_by_login: string | null;
   approved_by_display_name: string | null;
+  // Streamer's replacement for the title shown on the overlay and in the
+  // "Watching:" chat post — see lib/title-override.ts.
+  title_override: string | null;
 };
 
 const KIND_LABELS: Record<string, string> = {

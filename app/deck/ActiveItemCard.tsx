@@ -14,6 +14,7 @@ import { ArchiveButton } from '@/components/ArchiveButton';
 import { Icon } from '@/components/ui/icon';
 import { SaveToListMenu } from '@/components/SaveToListMenu';
 import { TriggerWarningBanner, TriggerWarningEditor } from '@/components/TriggerWarning';
+import { TitleOverrideEditor } from '@/components/TitleOverrideEditor';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/input';
 import { SimpleTooltip } from '@/components/ui/tooltip';
@@ -33,6 +34,7 @@ export function ActiveItemCard({
   onReject,
   onAnnounce,
   onSaveTriggerWarning,
+  onSaveTitleOverride,
 }: {
   active: Submission | null;
   elapsedSeconds: number;
@@ -50,6 +52,7 @@ export function ActiveItemCard({
   onReject: () => void;
   onAnnounce: () => void;
   onSaveTriggerWarning: (id: string, value: string | null) => void;
+  onSaveTitleOverride: (id: string, value: string | null) => Promise<{ ok?: boolean } | void> | void;
 }) {
   if (!active) return null;
 
@@ -108,6 +111,12 @@ export function ActiveItemCard({
           key={active.id}
           value={active.trigger_warning}
           onSave={(v) => onSaveTriggerWarning(active.id, v)}
+        />
+        <TitleOverrideEditor
+          key={`title-${active.id}`}
+          value={active.title_override}
+          originalTitle={active.title}
+          onSave={(v) => onSaveTitleOverride(active.id, v)}
         />
       </div>
 

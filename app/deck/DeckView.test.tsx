@@ -280,6 +280,77 @@ describe('DeckView — mod approval marker', () => {
   });
 });
 
+// The streamer's override for the title shown on the overlay and in the chat
+// post. It's saved via the queue PATCH (which the overlay and announce routes
+// then read server-side), and the deck itself keeps showing the scraped title.
+describe('DeckView — overlay/chat title override', () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  function installOverrideBackend() {
+    const state = { ...SUB, title_override: null as string | null };
+    const patches: { id: string; title_override?: string | null }[] = [];
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const method = init?.method || 'GET';
+
+        if (url.startsWith('/api/queue') && method === 'GET') {
+          return jsonResponse({
+            submissions: [state],
+            nowPlaying: null,
+            counts: { pending: 0, approved: 1, played: 0, rejected: 0, total: 1 },
+          });
+        }
+        if (url === '/api/queue' && method === 'PATCH') {
+          const body = JSON.parse(String(init?.body || '{}'));
+          if ('title_override' in body) {
+            state.title_override = body.title_override;
+            patches.push({ id: body.id, title_override: body.title_override });
+          }
+          return jsonResponse({ submission: state });
+        }
+        if (url.startsWith('/api/segments')) return jsonResponse({ segments: [], ungroupedPosition: 0 });
+        if (url.startsWith('/api/twitch/eventsub/status')) return jsonResponse({ connected: true });
+        if (url.startsWith('/api/quick-links')) return jsonResponse({ links: [] });
+        if (url.startsWith('/api/deck/now-playing')) return jsonResponse({ ok: true });
+        return jsonResponse({});
+      }),
+    );
+
+    return { patches };
+  }
+
+  it('saves an override, shows what viewers see, and can go back to the original', async () => {
+    const backend = installOverrideBackend();
+    const user = userEvent.setup();
+    renderDeck();
+
+    await user.click(await screen.findByText(SUB.title));
+    await user.click(await screen.findByRole('button', { name: /override overlay\/chat title/i }));
+
+    await user.type(screen.getByLabelText(/overlay and chat title/i), 'Senate budget vote, explained');
+    await user.click(screen.getByRole('button', { name: /save title/i }));
+
+    await waitFor(() =>
+      expect(backend.patches).toContainEqual({ id: SUB.id, title_override: 'Senate budget vote, explained' }),
+    );
+    expect(await screen.findByText('Senate budget vote, explained')).toBeInTheDocument();
+    // The deck's own headline is the scraped title, untouched.
+    expect(screen.getAllByText(SUB.title).length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole('button', { name: /edit overlay\/chat title/i }));
+    await user.click(screen.getByRole('button', { name: /use original/i }));
+
+    await waitFor(() => expect(backend.patches).toContainEqual({ id: SUB.id, title_override: null }));
+    expect(screen.queryByText('Senate budget vote, explained')).not.toBeInTheDocument();
+  });
+});
+
 // A note typed into the "Notes" box used to live only in local state until
 // markPlayed finally wrote it into show_notes — so switching to another item
 // and back silently dropped anything typed on an item not yet played. See

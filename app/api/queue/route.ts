@@ -4,6 +4,7 @@ import { getSession, getApprovedSession } from '@/lib/session';
 import { sessionCanCurate } from '@/lib/curate';
 import { searchRelatedCoverage } from '@/lib/search-coverage';
 import { runAiEnrichment } from '@/lib/extract';
+import { normalizeTitleOverride } from '@/lib/title-override';
 import { submitUrlToQueue } from '@/lib/submit-url';
 import { broadcastQueueChange } from '@/lib/realtime';
 
@@ -186,6 +187,12 @@ export async function PATCH(req: NextRequest) {
     const pn = typeof body.prep_note === 'string' ? body.prep_note.trim() : '';
     patch.prep_note = pn || null;
   }
+  // Streamer's replacement for the title shown on the overlay and in the
+  // "Watching:" chat post (the scraped title itself is left alone). Accepts
+  // an explicit null/blank to clear it, same reasoning as trigger_warning —
+  // and like it, not curation-gated: it annotates what viewers see rather
+  // than reorganizing the deck.
+  if ('title_override' in body) patch.title_override = normalizeTitleOverride(body.title_override);
   if (typeof body.duration_on_screen_s === 'number') patch.duration_on_screen_s = body.duration_on_screen_s;
 
   const sb = supabaseAdmin();
