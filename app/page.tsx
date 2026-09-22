@@ -119,7 +119,21 @@ export default async function Home() {
             },
             {
               t: 'Add from anywhere',
-              d: 'A browser extension and a bookmarklet put whatever tab you’re reading straight onto the deck or a Shelf segment — no chat message required.',
+              d: (
+                <>
+                  A browser extension and a bookmarklet put whatever tab you&rsquo;re reading
+                  straight onto the deck or a Shelf segment — no chat message required. Get the{' '}
+                  <a
+                    href="https://chromewebstore.google.com/search/The%20Broadside%20Quick%20Add"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline hover:text-rust"
+                  >
+                    Chrome extension
+                  </a>{' '}
+                  (works on Edge too).
+                </>
+              ),
             },
             {
               t: 'Mods, scoped to what they need',
