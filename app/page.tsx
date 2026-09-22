@@ -124,7 +124,7 @@ export default async function Home() {
                   A browser extension and a bookmarklet put whatever tab you&rsquo;re reading
                   straight onto the deck or a Shelf segment — no chat message required. Get the{' '}
                   <a
-                    href="https://chromewebstore.google.com/search/The%20Broadside%20Quick%20Add"
+                    href="https://chromewebstore.google.com/detail/the-broadside-quick-add/jnbojbaimcbpiaimiopedfcagkdnppmk"
                     target="_blank"
                     rel="noreferrer"
                     className="underline hover:text-rust"

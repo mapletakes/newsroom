@@ -140,7 +140,7 @@ export function QuickAdd({
             <p className="text-xs text-ink/50 mt-2">
               Get the extension from the{' '}
               <a
-                href="https://chromewebstore.google.com/search/The%20Broadside%20Quick%20Add"
+                href="https://chromewebstore.google.com/detail/the-broadside-quick-add/jnbojbaimcbpiaimiopedfcagkdnppmk"
                 target="_blank"
                 rel="noreferrer"
                 className="underline hover:text-rust"
