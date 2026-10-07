@@ -64,6 +64,18 @@ supabase/
 3. `npm run dev` and open http://localhost:3000
 4. **Note:** EventSub webhooks require a publicly reachable HTTPS URL. For local dev, use a tunnel like [ngrok](https://ngrok.com/) or test link submission directly via the mod/deck views.
 
+## Email sign-in (no Twitch)
+
+People can sign in with a magic link instead of Twitch; those accounts get the deck and shelves but none of the chat features. Supabase Auth proves the email address, then the app issues its own session cookie (`app/auth/callback`). Email signup is open to anyone and is not subject to `REQUIRE_APPROVAL`.
+
+Supabase dashboard setup:
+- **Authentication -> Providers -> Email**: enabled.
+- **Authentication -> URL Configuration**: add `{NEXT_PUBLIC_APP_URL}/**` (and `http://localhost:3000/**`) to Redirect URLs.
+- **Authentication -> Emails -> Templates**: in BOTH "Magic Link" and "Confirm signup", make the link `{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=email`.
+- Optional but recommended: custom SMTP (e.g. Resend, `smtp.resend.com`, port 465, user `resend`, password = API key) and a higher email rate limit.
+
+No new environment variables.
+
 ## Deploying to Vercel
 
 1. Push to your repo and import in Vercel.

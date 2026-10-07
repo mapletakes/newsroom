@@ -18,6 +18,8 @@ export type ChannelRow = {
   approved: boolean;
   modules: Record<ChannelModuleKey, boolean>;
   chatEnabled: boolean;
+  /** False for email-only accounts, which have no chat to be unhealthy. */
+  hasTwitch: boolean;
   eventsub: string;
   total: number;
   pending: number;
@@ -32,7 +34,7 @@ export type ChannelRow = {
 // thing an admin opens the dashboard to find: everything else here is just
 // context for it.
 function needsAttention(row: ChannelRow): boolean {
-  return row.approved && (!row.chatEnabled || row.eventsub !== 'enabled');
+  return row.approved && row.hasTwitch && (!row.chatEnabled || row.eventsub !== 'enabled');
 }
 
 /** Chat + EventSub folded into one badge — a channel with no chat token at
@@ -40,6 +42,9 @@ function needsAttention(row: ChannelRow): boolean {
  *  is merely unconfirmed, so it gets its own label rather than reading as
  *  just another EventSub state. */
 function healthBadge(row: ChannelRow) {
+  if (!row.hasTwitch) {
+    return <span className="font-mono text-[11px] uppercase tracking-widest whitespace-nowrap text-ink/50">email only</span>;
+  }
   if (!row.chatEnabled) {
     return <span className="font-mono text-[11px] uppercase tracking-widest whitespace-nowrap text-rust">no chat</span>;
   }
@@ -198,10 +203,10 @@ export function AdminChannels({ initial }: { initial: ChannelRow[] }) {
               return (
                 <tr key={row.id} className="border-b border-ink/15 align-middle">
                   <td className="py-2 pr-4">
-                    <Link href={`/admin/${row.login}`} className="font-bold hover:underline">
+                    <Link href={`/admin/${row.id}`} className="font-bold hover:underline">
                       {row.displayName || row.login}
                     </Link>
-                    <div className="font-mono text-[11px] text-ink/50">#{row.login}</div>
+                    <div className="font-mono text-[11px] text-ink/50">{row.hasTwitch ? `#${row.login}` : row.login}</div>
                   </td>
                   <td className="py-2 pr-4 font-mono text-[11px] text-ink/60 whitespace-nowrap">
                     {formatDateTime(row.createdAt)}

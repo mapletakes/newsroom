@@ -35,13 +35,15 @@ export function hashKey(raw: string): string {
   return crypto.createHash('sha256').update(raw).digest('hex').slice(0, 32);
 }
 
-type Kind = 'write' | 'read' | 'poll' | 'question' | 'raffle';
+type Kind = 'write' | 'read' | 'poll' | 'question' | 'raffle' | 'auth-email' | 'auth-ip';
 
 let writeLimiter: Ratelimit | undefined;
 let readLimiter: Ratelimit | undefined;
 let pollLimiter: Ratelimit | undefined;
 let questionLimiter: Ratelimit | undefined;
 let raffleLimiter: Ratelimit | undefined;
+let authEmailLimiter: Ratelimit | undefined;
+let authIpLimiter: Ratelimit | undefined;
 
 function limiterFor(kind: Kind): Ratelimit | null {
   const r = getRedis();
@@ -74,6 +76,26 @@ function limiterFor(kind: Kind): Ratelimit | null {
       redis: r,
       limiter: Ratelimit.slidingWindow(10, '10 s'),
       prefix: 'rl:poll',
+    }));
+  }
+  if (kind === 'auth-email') {
+    // Sign-in link requests, per address: each one sends a real email, so this
+    // is what stops the form being used to spam someone's inbox (and burns
+    // the Supabase/Resend send quota).
+    return (authEmailLimiter ??= new Ratelimit({
+      redis: r,
+      limiter: Ratelimit.slidingWindow(3, '10 m'),
+      prefix: 'rl:auth-email',
+    }));
+  }
+  if (kind === 'auth-ip') {
+    // Same endpoint, per client IP - catches one source cycling addresses.
+    // Looser than per-email because shared networks (a school, a stream
+    // house) legitimately put several people behind one IP.
+    return (authIpLimiter ??= new Ratelimit({
+      redis: r,
+      limiter: Ratelimit.slidingWindow(15, '10 m'),
+      prefix: 'rl:auth-ip',
     }));
   }
   if (kind === 'raffle') {

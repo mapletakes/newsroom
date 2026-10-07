@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
   const sb = supabaseAdmin();
   const { data: stream } = await sb
     .from('streams')
-    .select('id, twitch_login')
+    .select('id, twitch_login, display_name')
     .eq('add_token', token)
     .maybeSingle();
   if (!stream) {
@@ -58,6 +58,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'invalid shelf' }, { status: 400, headers: CORS });
   }
 
-  const result = await addUrlToList(list.id, stream.id, url, stream.twitch_login);
+  const result = await addUrlToList(list.id, stream.id, url, stream.twitch_login || stream.display_name || 'quick-add');
   return NextResponse.json(result, { status: result.ok ? 200 : 400, headers: CORS });
 }

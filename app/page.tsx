@@ -59,9 +59,14 @@ export default async function Home() {
               </Link>
             </div>
           ) : (
-            <a href="/api/twitch/oauth" className={buttonVariants({ size: 'lg' })}>
-              Connect Twitch →
-            </a>
+            <div className="flex flex-wrap items-center gap-4">
+              <a href="/api/twitch/oauth" className={buttonVariants({ size: 'lg' })}>
+                Connect Twitch →
+              </a>
+              <Link href="/login" className="font-mono text-xs uppercase tracking-widest underline hover:text-rust">
+                or use email, no Twitch needed
+              </Link>
+            </div>
           )}
         </div>
 

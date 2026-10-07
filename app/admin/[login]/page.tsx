@@ -15,11 +15,17 @@ export default async function AdminChannelPage({ params }: { params: Promise<{ l
   if (!session) redirect('/login');
   if (!isAdmin(session.twitchUserId)) redirect('/');
 
-  // Twitch logins are already lowercase at the source (app/api/twitch/callback),
-  // but the URL is user-typed/pasted, so normalise before the lookup.
-  const login = rawLogin.toLowerCase();
+  // The segment is a stream id (what the list links to, and the only thing
+  // email-only accounts have) or, for old bookmarks, a Twitch login. Logins are
+  // lowercase at the source (app/api/twitch/callback), but the URL is
+  // user-typed/pasted, so normalise before the lookup.
+  const isId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawLogin);
   const sb = supabaseAdmin();
-  const { data: stream } = await sb.from('streams').select('*').eq('twitch_login', login).maybeSingle();
+  const { data: stream } = await sb
+    .from('streams')
+    .select('*')
+    .eq(isId ? 'id' : 'twitch_login', isId ? rawLogin : rawLogin.toLowerCase())
+    .maybeSingle();
   if (!stream) notFound();
 
   const [total, pending, last, summaries, searches, recent, actions] = await Promise.all([
@@ -60,7 +66,7 @@ export default async function AdminChannelPage({ params }: { params: Promise<{ l
 
   const initial: ChannelDetail = {
     id: stream.id,
-    login: stream.twitch_login,
+    login: stream.twitch_login || stream.email || stream.display_name || stream.id,
     displayName: stream.display_name,
     createdAt: stream.created_at,
     approved: stream.approved !== false,

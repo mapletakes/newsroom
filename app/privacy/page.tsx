@@ -39,6 +39,14 @@ export default function PrivacyPage() {
             action on your behalf.
           </li>
         </ul>
+        <p><strong>From email sign-in, if you use it instead of Twitch:</strong></p>
+        <ul>
+          <li>
+            Your email address, used only to send you a one-time sign-in link and to identify
+            your account. Email accounts have no Twitch connection, so nothing from any chat is
+            read or posted.
+          </li>
+        </ul>
         <p><strong>From your chat, once connected:</strong></p>
         <ul>
           <li>
@@ -79,6 +87,7 @@ export default function PrivacyPage() {
         </p>
         <ul>
           <li><strong>Twitch</strong> — authentication and chat access.</li>
+          <li><strong>Resend</strong> — delivering sign-in emails, for accounts that use email.</li>
           <li><strong>Anthropic (Claude)</strong> — AI summaries, credibility, and risk tagging.</li>
           <li><strong>Google (YouTube Data API)</strong> — video metadata.</li>
           <li><strong>Brave Search</strong> — related-coverage lookups.</li>

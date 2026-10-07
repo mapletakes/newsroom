@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { EmailSignIn } from './EmailSignIn';
 
 export default async function Login({
   searchParams,
@@ -10,7 +11,8 @@ export default async function Login({
   const sp = await searchParams;
   const errorMap: Record<string, string> = {
     state: 'OAuth state mismatch — please try again.',
-    oauth: 'Twitch sign-in failed.',
+    oauth: 'Sign-in failed.',
+    link: 'That sign-in link has expired or was already used. Request a new one.',
   };
   const errMsg = sp.error && (errorMap[sp.error] || sp.error);
   const detail = sp.detail;
@@ -21,8 +23,8 @@ export default async function Login({
         <h1 className="font-display text-4xl font-bold mb-2">Sign in</h1>
         <div className="rule-double mb-6" />
         <p className="mb-8 leading-relaxed">
-          The Broadside connects to your Twitch chat to capture links. We request
-          read-only access — we can&apos;t post, ban, or change anything.
+          Connect Twitch to capture links from your chat and post &ldquo;Watching:&rdquo; updates
+          to it, or skip Twitch and use just the deck and shelves with an email address.
         </p>
         {errMsg && (
           <div className="border-2 border-rust text-rust px-4 py-3 mb-6 font-mono text-sm">
@@ -33,6 +35,10 @@ export default async function Login({
         <a href="/api/twitch/oauth" className={cn(buttonVariants({ size: 'lg' }), 'w-full')}>
           Continue with Twitch
         </a>
+        <div className="flex items-center gap-3 my-6 font-mono text-xs uppercase tracking-widest text-ink/40">
+          <div className="flex-1 border-t border-ink/20" /> or <div className="flex-1 border-t border-ink/20" />
+        </div>
+        <EmailSignIn />
         <p className="mt-4 font-mono text-xs text-ink/50 leading-relaxed">
           By continuing, you agree to the{' '}
           <Link href="/terms" className="underline hover:text-rust">Terms of Service</Link> and{' '}

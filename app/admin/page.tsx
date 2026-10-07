@@ -59,7 +59,8 @@ export default async function AdminPage({
     const searchCount = s?.searches ?? 0;
     return {
       id: st.id,
-      login: st.twitch_login,
+      login: st.twitch_login || st.email || st.display_name || st.id,
+      hasTwitch: !!st.twitch_user_id,
       displayName: st.display_name,
       createdAt: st.created_at,
       approved: st.approved !== false,

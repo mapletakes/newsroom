@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
   const sb = supabaseAdmin();
   const { data: stream } = await sb
     .from('streams')
-    .select('id, twitch_login')
+    .select('id, twitch_login, display_name')
     .eq('add_token', token)
     .maybeSingle();
 
@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const result = await addToDeck(stream.id, url, stream.twitch_login);
+  const result = await addToDeck(stream.id, url, stream.twitch_login || stream.display_name || 'quick-add');
   if (!result.ok) {
     return page(
       `<h2 style="margin:0 0 8px">Couldn't add</h2><p style="opacity:.6;font-size:14px">${escapeHtml(result.error || 'Please try again.')}</p>`,
