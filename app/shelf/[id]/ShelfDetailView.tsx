@@ -58,6 +58,7 @@ export function ShelfDetailView({
   streamId,
   displayName,
   isAdmin = false,
+  chatEnabled = true,
   isMod = false,
   canCurate = false,
 }: {
@@ -65,6 +66,8 @@ export function ShelfDetailView({
   streamId: string;
   displayName: string;
   isAdmin?: boolean;
+  /** False for accounts with no linked Twitch channel — hides the Mod View link. */
+  chatEnabled?: boolean;
   isMod?: boolean;
   canCurate?: boolean;
 }) {
@@ -569,7 +572,7 @@ export function ShelfDetailView({
           <>
             <Link href="/shelf" className="underline hover:text-rust">← The Shelf</Link>
             {!isMod && <Link href="/deck" className="underline hover:text-rust">Streamer Deck</Link>}
-            <Link href="/mod" className="underline hover:text-rust">Mod View</Link>
+            {chatEnabled && <Link href="/mod" className="underline hover:text-rust">Mod View</Link>}
             {isAdmin && <Link href="/admin" className="underline hover:text-rust">Admin</Link>}
             <span>{displayName}</span>
           </>

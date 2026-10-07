@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSession } from '@/lib/session';
 import { isAdmin, isChannelModuleKey } from '@/lib/admin';
+import { streamHasChat } from '@/lib/chat';
 import { logAdminAction } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
@@ -23,6 +24,10 @@ export async function POST(req: NextRequest) {
   const enabled = !!body.enabled;
   if (!streamId) return NextResponse.json({ error: 'missing streamId' }, { status: 400 });
   if (!isChannelModuleKey(flag)) return NextResponse.json({ error: 'unknown flag' }, { status: 400 });
+
+  if (enabled && !(await streamHasChat(streamId))) {
+    return NextResponse.json({ error: 'This channel has no linked Twitch account; chat modules need one.' }, { status: 409 });
+  }
 
   const sb = supabaseAdmin();
   const { error } = await sb.from('streams').update({ [flag]: enabled }).eq('id', streamId);

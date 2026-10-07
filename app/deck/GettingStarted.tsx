@@ -10,8 +10,10 @@ const DISMISSED_KEY = 'broadside_onboarding_dismissed';
 // A dismiss-once "getting started" panel for the streamer deck. Not tied to
 // account age or activity — simpler and more honest to just let the user
 // dismiss it than to guess "is this a new account" from imperfect signals.
-export function GettingStarted() {
-  const { status } = useEventSubStatus();
+export function GettingStarted({ chatEnabled = true }: { chatEnabled?: boolean }) {
+  // Skips the status fetch entirely for accounts with no Twitch channel (the
+  // route would just 409).
+  const { status } = useEventSubStatus(chatEnabled);
   const [dismissed, setDismissed] = useState(true); // default hidden until we check storage (avoids flash)
 
   useEffect(() => {
@@ -36,6 +38,7 @@ export function GettingStarted() {
       </button>
       <h3 className="font-display text-lg font-bold mb-3">Getting started</h3>
       <ul className="space-y-2 text-sm">
+        {chatEnabled && (
         <li className="flex items-center gap-2">
           <span className={status === 'connected' ? 'text-moss' : 'text-ink/30'}>
             <Icon name={status === 'connected' ? 'radioChecked' : 'radioUnchecked'} className="text-base align-middle" />
@@ -45,6 +48,8 @@ export function GettingStarted() {
             <Link href="/setup" className="underline hover:text-rust ml-1">Fix in Settings →</Link>
           )}
         </li>
+        )}
+        {chatEnabled && (
         <li className="flex items-start gap-2">
           <span className="text-ink/30">
             <Icon name="radioUnchecked" className="text-base align-middle" />
@@ -55,6 +60,18 @@ export function GettingStarted() {
             for you to grant deck access.
           </span>
         </li>
+        )}
+        {!chatEnabled && (
+        <li className="flex items-start gap-2">
+          <span className="text-ink/30">
+            <Icon name="radioUnchecked" className="text-base align-middle" />
+          </span>
+          <span>
+            Build reusable rundowns on <Link href="/shelf" className="underline hover:text-rust">the Shelf</Link>{' '}
+            and send them to the deck when you&apos;re ready.
+          </span>
+        </li>
+        )}
         <li className="flex items-start gap-2">
           <span className="text-ink/30">
             <Icon name="radioUnchecked" className="text-base align-middle" />

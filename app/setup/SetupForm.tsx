@@ -56,6 +56,7 @@ export function SetupForm({
   questionCommand,
   questionsOpen = true,
   isAdmin = false,
+  chatEnabled = true,
   moderators,
 }: {
   streamId: string;
@@ -74,6 +75,9 @@ export function SetupForm({
   questionCommand: string;
   questionsOpen?: boolean;
   isAdmin?: boolean;
+  /** False for accounts with no linked Twitch channel: drops the Chat tab,
+   *  the Curators section and the Mod View link. */
+  chatEnabled?: boolean;
   moderators: { twitchUserId: string; login: string; canCurate: boolean; canSetNowPlaying: boolean }[];
 }) {
   const [cmd, setCmd] = useState(submitCommand);
@@ -96,7 +100,7 @@ export function SetupForm({
   const [token, setToken] = useState<string | null>(addToken);
   const [discordConfigured, setDiscordConfigured] = useState(discordWebhookConfigured);
 
-  const [tab, setTab] = useState<TabId>('chat');
+  const [tab, setTab] = useState<TabId>(chatEnabled ? 'chat' : 'deck');
   // Deep-linkable and refresh-proof via the hash, which needs no router round
   // trip. Read in an effect rather than at init so the server and the first
   // client render agree. The hashchange listener is what makes an edited URL
@@ -108,12 +112,16 @@ export function SetupForm({
       // A #questions hash saved from before the account had this enabled (or
       // after an admin later disabled it) shouldn't select a tab that isn't
       // being rendered — falls back to whatever's already selected.
-      if (isTabId(fromHash) && (fromHash !== 'questions' || questionsEnabled)) setTab(fromHash);
+      if (
+        isTabId(fromHash) &&
+        (fromHash !== 'questions' || questionsEnabled) &&
+        (fromHash !== 'chat' || chatEnabled)
+      ) setTab(fromHash);
     };
     apply();
     window.addEventListener('hashchange', apply);
     return () => window.removeEventListener('hashchange', apply);
-  }, [questionsEnabled]);
+  }, [questionsEnabled, chatEnabled]);
   // pushState, not replaceState, so each tab is a back-button step — landing
   // on Settings and pressing back should return you to the deck, but stepping
   // through five tabs and pressing back should go back one tab.
@@ -166,7 +174,7 @@ export function SetupForm({
         right={
           <>
             <Link href="/deck" className="underline hover:text-rust">Streamer Deck</Link>
-            <Link href="/mod" className="underline hover:text-rust">Mod View</Link>
+            {chatEnabled && <Link href="/mod" className="underline hover:text-rust">Mod View</Link>}
             <Link href="/shelf" className="underline hover:text-rust">Shelf</Link>
             {isAdmin && <Link href="/admin" className="underline hover:text-rust">Admin</Link>}
           </>
@@ -183,7 +191,7 @@ export function SetupForm({
         className="gap-0 border-b-2 border-ink/20 mb-8"
         aria-label="Settings section"
       >
-        {TABS.filter(([id]) => id !== 'questions' || questionsEnabled).map(([id, label]) => (
+        {TABS.filter(([id]) => (id !== 'questions' || questionsEnabled) && (id !== 'chat' || chatEnabled)).map(([id, label]) => (
           <ToggleGroupItem key={id} value={id} variant="tab" className="text-xs">
             {label}
           </ToggleGroupItem>
@@ -397,10 +405,23 @@ export function SetupForm({
         {saveError && <span className="ml-3 font-mono text-xs text-rust">{saveError}</span>}
       </section>
 
+      {chatEnabled && (
       <section className="mb-10">
         <h2 className="font-display text-2xl font-bold mb-4">Deck curators</h2>
         <Curators initial={moderators} />
       </section>
+      )}
+
+      {!chatEnabled && (
+      <section className="mb-10 border-2 border-ink/20 p-4">
+        <h2 className="font-display text-xl font-bold mb-1">Twitch chat</h2>
+        <p className="text-sm text-ink/70 leading-relaxed">
+          This account isn&apos;t linked to a Twitch channel, so chat capture, posting to chat,
+          questions, raffles and mod curators are switched off. Everything else — the deck,
+          shelves, overlay and quick add — works as normal.
+        </p>
+      </section>
+      )}
       </>
       )}
 

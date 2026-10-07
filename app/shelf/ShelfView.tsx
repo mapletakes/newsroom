@@ -108,11 +108,14 @@ function SortableShelfRow({
 export function ShelfView({
   displayName,
   isAdmin = false,
+  chatEnabled = true,
   isMod = false,
   canCurate = false,
 }: {
   displayName: string;
   isAdmin?: boolean;
+  /** False for accounts with no linked Twitch channel — hides the Mod View link. */
+  chatEnabled?: boolean;
   isMod?: boolean;
   canCurate?: boolean;
 }) {
@@ -210,7 +213,7 @@ export function ShelfView({
         right={
           <>
             {!isMod && <Link href="/deck" className="underline hover:text-rust">Streamer Deck</Link>}
-            <Link href="/mod" className="underline hover:text-rust">Mod View</Link>
+            {chatEnabled && <Link href="/mod" className="underline hover:text-rust">Mod View</Link>}
             {!isMod && <Link href="/setup" className="underline hover:text-rust">Settings</Link>}
             {isAdmin && <Link href="/admin" className="underline hover:text-rust">Admin</Link>}
             <span>{displayName}</span>

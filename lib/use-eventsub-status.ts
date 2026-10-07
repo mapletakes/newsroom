@@ -9,7 +9,7 @@ export type EventSubStatus = 'loading' | 'connected' | 'disconnected' | 'error';
  * Shared by the Settings status widget and the deck's "chat not connected"
  * banner, so there's one source of truth for what "connected" means.
  */
-export function useEventSubStatus() {
+export function useEventSubStatus(enabled = true) {
   const [status, setStatus] = useState<EventSubStatus>('loading');
   const [detail, setDetail] = useState<string | null>(null);
   const [reconnecting, setReconnecting] = useState(false);
@@ -30,7 +30,7 @@ export function useEventSubStatus() {
     }
   };
 
-  useEffect(() => { check(); }, []);
+  useEffect(() => { if (enabled) check(); }, [enabled]);
 
   const reconnect = async () => {
     setReconnecting(true);

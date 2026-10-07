@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireChat } from '@/lib/chat';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSession, getApprovedSession } from '@/lib/session';
 import { sanitizeModStatus, sanitizeStatusNote, STATUS_RESET_AFTER_MS, isRosterInactive } from '@/lib/mod-status';
@@ -86,6 +87,8 @@ export async function GET() {
 export async function PATCH(req: Request) {
   const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
+  const blocked = await requireChat(session.streamId);
+  if (blocked) return blocked;
   if (!(await modStatusEnabledFor(session.streamId))) {
     return NextResponse.json({ error: 'mod status not enabled' }, { status: 403 });
   }

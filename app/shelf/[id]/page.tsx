@@ -14,7 +14,7 @@ export default async function ShelfDetailPage({ params }: { params: Promise<{ id
   if (!session) redirect('/login');
 
   const sb = supabaseAdmin();
-  const { data: stream } = await sb.from('streams').select('approved').eq('id', session.streamId).maybeSingle();
+  const { data: stream } = await sb.from('streams').select('approved, twitch_user_id').eq('id', session.streamId).maybeSingle();
   if (stream?.approved === false) redirect('/blocked');
 
   const { data: shelf } = await sb
@@ -35,6 +35,7 @@ export default async function ShelfDetailPage({ params }: { params: Promise<{ id
         streamId={session.streamId}
         displayName={session.displayName}
         isAdmin={isAdmin(session.twitchUserId)}
+        chatEnabled={!!stream?.twitch_user_id}
         isMod={session.role === 'mod'}
         canCurate={canCurate}
       />

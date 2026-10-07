@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireChat } from '@/lib/chat';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSession, getApprovedSession, sessionLogin } from '@/lib/session';
 import {
@@ -94,6 +95,8 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
+  const blocked = await requireChat(session.streamId);
+  if (blocked) return blocked;
   if (!(await raffleEnabledFor(session.streamId))) {
     return NextResponse.json({ error: 'raffle not enabled' }, { status: 403 });
   }

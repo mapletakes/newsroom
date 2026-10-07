@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireChat } from '@/lib/chat';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getApprovedSession } from '@/lib/session';
 
@@ -17,6 +18,8 @@ export async function POST(req: NextRequest) {
   if (!session || session.role !== 'streamer') {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
+  const blocked = await requireChat(session.streamId);
+  if (blocked) return blocked;
 
   const body = await req.json().catch(() => ({}));
   const twitchUserId = String(body.twitchUserId || '');

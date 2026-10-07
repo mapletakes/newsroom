@@ -13,7 +13,7 @@ export default async function ShelfPage() {
   if (!session) redirect('/login');
 
   const sb = supabaseAdmin();
-  const { data: stream } = await sb.from('streams').select('approved').eq('id', session.streamId).maybeSingle();
+  const { data: stream } = await sb.from('streams').select('approved, twitch_user_id').eq('id', session.streamId).maybeSingle();
   if (stream?.approved === false) redirect('/blocked');
 
   const canCurate = session.role === 'streamer' || (await canMemberCurate(session.streamId, session.twitchUserId));
@@ -24,6 +24,7 @@ export default async function ShelfPage() {
       <ShelfView
         displayName={session.displayName}
         isAdmin={isAdmin(session.twitchUserId)}
+        chatEnabled={!!stream?.twitch_user_id}
         isMod={session.role === 'mod'}
         canCurate={canCurate}
       />

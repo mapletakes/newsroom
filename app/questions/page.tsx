@@ -21,6 +21,7 @@ export default async function QuestionsPage() {
     .maybeSingle();
 
   if (stream?.approved === false) redirect('/blocked');
+  if (!stream?.twitch_login) redirect('/deck'); // questions arrive via Twitch chat
 
   // Not a redirect: a mod/streamer with a bookmarked link here after a super
   // admin turns the feature off should get an explanation, not get silently

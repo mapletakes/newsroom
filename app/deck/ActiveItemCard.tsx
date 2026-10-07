@@ -33,6 +33,7 @@ export function ActiveItemCard({
   onSkip,
   onReject,
   onAnnounce,
+  chatEnabled = true,
   onSaveTriggerWarning,
   onSaveTitleOverride,
 }: {
@@ -51,6 +52,8 @@ export function ActiveItemCard({
   onSkip: () => void;
   onReject: () => void;
   onAnnounce: () => void;
+  /** No linked Twitch channel → no chat to post to. */
+  chatEnabled?: boolean;
   onSaveTriggerWarning: (id: string, value: string | null) => void;
   onSaveTitleOverride: (id: string, value: string | null) => Promise<{ ok?: boolean } | void> | void;
 }) {
@@ -220,7 +223,7 @@ export function ActiveItemCard({
           <Icon name="remove" className="text-base" />
           Remove
         </Button>
-        {!curateOnly && (
+        {!curateOnly && chatEnabled && (
           <>
             <Button
               variant="outline"

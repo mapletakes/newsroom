@@ -67,6 +67,7 @@ export function DeckView({
   streamId,
   isAdmin = false,
   curateOnly = false,
+  chatEnabled = true,
   canSetNowPlaying = true,
   questionsEnabled = false,
   questionsOpen = true,
@@ -78,6 +79,9 @@ export function DeckView({
   streamId: string;
   isAdmin?: boolean;
   curateOnly?: boolean;
+  /** False when the stream has no linked Twitch channel: hides everything
+   *  that reads or posts to chat (status banner, Post to chat, Mod View). */
+  chatEnabled?: boolean;
   /** Only meaningful when curateOnly — the streamer always may. A curate mod
    *  granted this can correct what's on air (a misclick, a forgotten
    *  advance) without the rest of live playback control. */
@@ -1213,6 +1217,7 @@ export function DeckView({
         elapsedSeconds={elapsedSeconds}
         loaded={loaded}
         curateOnly={curateOnly}
+        chatEnabled={chatEnabled}
         displayName={displayName}
         isAdmin={isAdmin}
         streamId={streamId}
@@ -1260,9 +1265,11 @@ export function DeckView({
         right={
           <>
             <span className="uppercase tracking-widest">{queue.length} approved</span>
-            <Link href="/mod" className="underline hover:text-rust">
-              Mod View &rarr;
-            </Link>
+            {chatEnabled && (
+              <Link href="/mod" className="underline hover:text-rust">
+                Mod View &rarr;
+              </Link>
+            )}
             <Link href="/shelf" className="underline hover:text-rust">
               Shelf
             </Link>
@@ -1297,7 +1304,7 @@ export function DeckView({
           </>
         }
       />
-      {!curateOnly && <ChatStatusBanner />}
+      {!curateOnly && chatEnabled && <ChatStatusBanner />}
 
       <main className="flex-1 grid lg:grid-cols-2 gap-0 pl-3">
         {/* Active card */}
@@ -1325,11 +1332,17 @@ export function DeckView({
                 <>
                   <p className="font-display text-3xl mb-3">No approved items yet.</p>
                   <p className="text-ink/60 font-mono text-sm mb-6">
-                    Your mods need to approve submissions in the
-                    <Link href="/mod" className="underline ml-1">
-                      Mod View
-                    </Link>
-                    , or add links directly from the sidebar.
+                    {chatEnabled ? (
+                      <>
+                        Your mods need to approve submissions in the
+                        <Link href="/mod" className="underline ml-1">
+                          Mod View
+                        </Link>
+                        , or add links directly from the sidebar.
+                      </>
+                    ) : (
+                      <>Add links from the sidebar, or send a shelf to the deck.</>
+                    )}
                   </p>
                 </>
               ) : (
@@ -1359,6 +1372,7 @@ export function DeckView({
             onSkip={skip}
             onReject={rejectActive}
             onAnnounce={announce}
+            chatEnabled={chatEnabled}
             onSaveTriggerWarning={saveTriggerWarning}
             onSaveTitleOverride={saveTitleOverride}
           />
@@ -1366,7 +1380,7 @@ export function DeckView({
 
         {/* Sidebar */}
         <aside className="p-4 bg-ink/5 flex flex-col">
-          {!curateOnly && <GettingStarted />}
+          {!curateOnly && <GettingStarted chatEnabled={chatEnabled} />}
           {/* Add link */}
           <form onSubmit={handleAddLink} className="mb-4">
             <div className="flex gap-1">

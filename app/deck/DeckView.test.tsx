@@ -116,12 +116,12 @@ function installMockBackend() {
   };
 }
 
-function renderDeck() {
+function renderDeck(props: { chatEnabled?: boolean } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const view = render(
     <QueryClientProvider client={client}>
       <TooltipProvider>
-        <DeckView displayName="Some Streamer" streamId="mock-stream" isAdmin={false} curateOnly={false} />
+        <DeckView displayName="Some Streamer" streamId="mock-stream" isAdmin={false} curateOnly={false} {...props} />
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>,
@@ -430,5 +430,50 @@ describe('DeckView — notes autosave', () => {
     // Coming back to the first item shows the persisted note, not a blank box.
     await user.click(screen.getByText('First item'));
     expect(await screen.findByDisplayValue('watch for the 4:32 mark')).toBeInTheDocument();
+  });
+});
+
+// Accounts with no linked Twitch channel use the deck purely as an organizer:
+// nothing that reads or posts to chat should be offered.
+describe('DeckView — no linked Twitch channel', () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  function install() {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/queue')) {
+        return jsonResponse({
+          submissions: [SUB],
+          nowPlaying: { id: SUB.id },
+          counts: { pending: 0, approved: 1, played: 0, rejected: 0, total: 1 },
+        });
+      }
+      if (url.startsWith('/api/segments')) return jsonResponse({ segments: [], ungroupedPosition: 0 });
+      if (url.startsWith('/api/quick-links')) return jsonResponse({ links: [] });
+      return jsonResponse({});
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  it('hides chat posting, the Mod View link and the chat status banner, and never polls EventSub', async () => {
+    const fetchMock = install();
+    renderDeck({ chatEnabled: false });
+
+    await screen.findAllByText(SUB.title);
+    expect(screen.queryByText('Post to chat')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Mod View/)).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([u]) => String(u).includes('/api/twitch/eventsub'))).toBe(false);
+  });
+
+  it('still offers chat posting when a Twitch channel is linked', async () => {
+    install();
+    renderDeck();
+
+    await screen.findAllByText(SUB.title);
+    expect(await screen.findByText('Post to chat')).toBeInTheDocument();
   });
 });

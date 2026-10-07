@@ -59,6 +59,7 @@ function QueueSheet({
   onPlayNow,
   onPlayNext,
   onRemove,
+  chatEnabled = true,
 }: {
   items: Submission[];
   activeId: string | null;
@@ -68,6 +69,7 @@ function QueueSheet({
   onPlayNow: (id: string) => void;
   onPlayNext: (id: string) => void;
   onRemove: (id: string) => void;
+  chatEnabled?: boolean;
 }) {
   const [drag, setDrag] = useState(0); // live finger offset, px (+ = downward)
   const startY = useRef<number | null>(null);
@@ -149,7 +151,7 @@ function QueueSheet({
         <div className="flex-1 overflow-y-auto overscroll-contain px-3 pb-[env(safe-area-inset-bottom)]">
           {items.length === 0 && (
             <p className="py-10 text-center font-mono text-xs text-ink/50">
-              Nothing approved yet — your mods fill this from the Mod View.
+              {chatEnabled ? 'Nothing approved yet — your mods fill this from the Mod View.' : 'Nothing on the deck yet.'}
             </p>
           )}
           {items.map((s) => {
@@ -217,6 +219,7 @@ export function DeckMobile({
   elapsedSeconds,
   loaded,
   curateOnly,
+  chatEnabled = true,
   displayName,
   isAdmin,
   streamId,
@@ -243,6 +246,7 @@ export function DeckMobile({
   elapsedSeconds: number;
   loaded: boolean;
   curateOnly: boolean;
+  chatEnabled?: boolean;
   displayName: string;
   isAdmin: boolean;
   streamId: string;
@@ -341,7 +345,7 @@ export function DeckMobile({
                   Raffle
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem asChild><Link href="/mod">Mod View</Link></DropdownMenuItem>
+              {chatEnabled && <DropdownMenuItem asChild><Link href="/mod">Mod View</Link></DropdownMenuItem>}
               <DropdownMenuItem asChild><Link href="/shelf">Shelf</Link></DropdownMenuItem>
               {!curateOnly && (
                 <DropdownMenuItem asChild><Link href="/setup">Settings</Link></DropdownMenuItem>
@@ -388,8 +392,12 @@ export function DeckMobile({
           <div className="py-16 text-center">
             <p className="font-display text-2xl mb-2">Nothing on the deck.</p>
             <p className="font-mono text-xs text-ink/60">
-              Approve links in the <Link href="/mod" className="underline">Mod View</Link>, or add
-              one below.
+              {chatEnabled ? (
+                <>Approve links in the <Link href="/mod" className="underline">Mod View</Link>, or add
+                one below.</>
+              ) : (
+                <>Add a link below, or send a shelf to the deck.</>
+              )}
             </p>
           </div>
         ) : (
@@ -518,7 +526,7 @@ export function DeckMobile({
               Skip
             </Button>
           )}
-          {!curateOnly && (
+          {!curateOnly && chatEnabled && (
             <Button
               variant="outline"
               onClick={onAnnounce}
@@ -572,6 +580,7 @@ export function DeckMobile({
         onPlayNow={onSelect}
         onPlayNext={onPlayNext}
         onRemove={onRemove}
+        chatEnabled={chatEnabled}
       />
     </div>
   );

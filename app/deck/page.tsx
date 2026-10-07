@@ -15,7 +15,7 @@ export default async function DeckPage() {
   const sb = supabaseAdmin();
   const { data: stream } = await sb
     .from('streams')
-    .select('approved, questions_enabled, questions_open, mod_status_enabled, raffle_enabled, discord_webhook_url')
+    .select('approved, twitch_user_id, questions_enabled, questions_open, mod_status_enabled, raffle_enabled, discord_webhook_url')
     .eq('id', session.streamId)
     .maybeSingle();
   if (stream?.approved === false) redirect('/blocked');
@@ -32,6 +32,10 @@ export default async function DeckPage() {
     ? await canMemberSetNowPlaying(session.streamId, session.twitchUserId)
     : true;
 
+  // No linked Twitch channel → no chat to read from or post to, so the chat
+  // features (and the admin-gated modules built on them) are off entirely.
+  const chatEnabled = !!stream?.twitch_user_id;
+
   return (
     <>
       <StreamTheme />
@@ -40,11 +44,12 @@ export default async function DeckPage() {
         streamId={session.streamId}
         isAdmin={isAdmin(session.twitchUserId)}
         curateOnly={curateOnly}
+        chatEnabled={chatEnabled}
         canSetNowPlaying={canSetNowPlaying}
-        questionsEnabled={stream?.questions_enabled === true}
+        questionsEnabled={chatEnabled && stream?.questions_enabled === true}
         questionsOpen={stream?.questions_open !== false}
-        modStatusEnabled={stream?.mod_status_enabled === true}
-        raffleEnabled={stream?.raffle_enabled === true}
+        modStatusEnabled={chatEnabled && stream?.mod_status_enabled === true}
+        raffleEnabled={chatEnabled && stream?.raffle_enabled === true}
         discordWebhookConfigured={!!stream?.discord_webhook_url}
       />
     </>

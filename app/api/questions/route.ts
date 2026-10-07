@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireChat } from '@/lib/chat';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSession, getApprovedSession } from '@/lib/session';
 import { broadcastQueueChange, broadcastQuestionsChange } from '@/lib/realtime';
@@ -82,6 +83,8 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
+  const blocked = await requireChat(session.streamId);
+  if (blocked) return blocked;
   if (!(await questionsEnabledFor(session.streamId))) {
     return NextResponse.json({ error: 'questions not enabled' }, { status: 403 });
   }

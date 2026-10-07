@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireChat } from '@/lib/chat';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getApprovedSession } from '@/lib/session';
 import { buildWinnersMessage } from '@/lib/raffle';
@@ -18,6 +19,8 @@ export const dynamic = 'force-dynamic';
 export async function POST() {
   const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
+  const blocked = await requireChat(session.streamId);
+  if (blocked) return blocked;
 
   const sb = supabaseAdmin();
   const { data: raffle } = await sb

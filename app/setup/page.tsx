@@ -50,10 +50,11 @@ export default async function SetupPage() {
         discordWebhookConfigured={!!stream?.discord_webhook_url}
         appTheme={sanitizeAppTheme(stream?.app_theme)}
         overlayTheme={sanitizeOverlayTheme(stream?.overlay_theme)}
-        questionsEnabled={stream?.questions_enabled === true}
+        questionsEnabled={!!stream?.twitch_user_id && stream?.questions_enabled === true}
         questionCommand={stream?.question_command ?? ''}
         questionsOpen={stream?.questions_open !== false}
         isAdmin={isAdmin(session.twitchUserId)}
+        chatEnabled={!!stream?.twitch_user_id}
         moderators={(mods ?? []).map((m) => ({
           twitchUserId: m.twitch_user_id,
           login: m.twitch_login,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getApprovedSession } from '@/lib/session';
+import { noChatResponse } from '@/lib/chat';
 import { announceSubmission } from '@/lib/announce';
 import { resolveTitle } from '@/lib/title-override';
 
@@ -27,6 +28,7 @@ export async function POST(req: NextRequest) {
     .eq('id', session.streamId)
     .single();
   if (!channel) return NextResponse.json({ error: 'stream not found' }, { status: 404 });
+  if (!channel.twitch_user_id) return noChatResponse();
 
   // The sender = the logged-in user, posting from their own account. Their
   // tokens live on their own stream row (keyed by their twitch_user_id).

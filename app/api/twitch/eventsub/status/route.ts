@@ -1,6 +1,7 @@
 // Check and manage EventSub subscription status for the logged-in streamer.
 
 import { NextResponse } from 'next/server';
+import { requireChat } from '@/lib/chat';
 import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase';
 import { listSubscriptions, createChatSubscription } from '@/lib/twitch-eventsub';
@@ -11,6 +12,8 @@ export async function GET() {
   if (!session || session.role !== 'streamer') {
     return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   }
+  const blocked = await requireChat(session.streamId);
+  if (blocked) return blocked;
 
   const sb = supabaseAdmin();
   const { data: stream } = await sb
@@ -46,6 +49,8 @@ export async function POST() {
   if (!session || session.role !== 'streamer') {
     return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   }
+  const blocked = await requireChat(session.streamId);
+  if (blocked) return blocked;
 
   // Pre-flight: check required env vars
   const missing: string[] = [];

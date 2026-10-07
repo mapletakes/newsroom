@@ -20,6 +20,9 @@ export default async function ModPage() {
     .single();
 
   if (stream?.approved === false) redirect('/blocked');
+  // The mod view is the chat-submission triage queue; with no Twitch channel
+  // there's nothing to triage.
+  if (!stream?.twitch_user_id) redirect('/deck');
 
   const isModRole = session.role === 'mod';
   // Streamers always reach the deck; mods only if authorized to curate.
