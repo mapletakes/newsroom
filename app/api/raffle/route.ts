@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getSession, getApprovedSession } from '@/lib/session';
+import { getSession, getApprovedSession, sessionLogin } from '@/lib/session';
 import {
   closeIfExpired,
   sanitizeDurationSeconds,
@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
       winner_count: winnerCount,
       status: 'open',
       closes_at: closesAt,
-      started_by_login: session.twitchLogin,
+      started_by_login: sessionLogin(session),
       subs_vips_only: subsVipsOnly,
     })
     .select('id')

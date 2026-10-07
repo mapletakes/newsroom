@@ -131,6 +131,7 @@ export async function GET(req: NextRequest) {
     // Default session: logged in as streamer on their own channel
     const session = buildSessionCookie({
       streamId: stream.id,
+      accountId: user.id,
       twitchUserId: user.id,
       twitchLogin: user.login,
       displayName: user.display_name,

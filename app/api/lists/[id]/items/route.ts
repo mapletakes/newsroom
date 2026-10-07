@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getApprovedSession } from '@/lib/session';
+import { getApprovedSession, sessionLogin } from '@/lib/session';
 import { sessionCanCurate } from '@/lib/curate';
 import { addUrlToList } from '@/lib/list-add';
 
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           dmca_risk: sub.dmca_risk,
           content_warning: sub.content_warning,
           note: sub.mod_notes || null,
-          added_by: session.twitchLogin,
+          added_by: sessionLogin(session),
           position: nextPos++,
         })
         .select('id')
@@ -95,7 +95,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (inserted) { added++; firstAddedId = firstAddedId || inserted.id; }
     }
   } else {
-    const result = await addUrlToList(list.id, session.streamId, url, session.twitchLogin);
+    const result = await addUrlToList(list.id, session.streamId, url, sessionLogin(session));
     if (!result.ok) return NextResponse.json({ error: result.error || 'insert failed' }, { status: 500 });
     added = result.added;
     skipped = result.skipped;

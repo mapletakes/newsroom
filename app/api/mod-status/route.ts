@@ -108,7 +108,7 @@ export async function PATCH(req: Request) {
       status_via_mobile: viaMobile,
     })
     .eq('stream_id', session.streamId)
-    .eq('twitch_user_id', session.twitchUserId)
+    .eq('twitch_user_id', session.twitchUserId ?? '')
     .select('twitch_user_id')
     .maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

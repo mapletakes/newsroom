@@ -11,6 +11,7 @@ export const dynamic = 'force-dynamic';
 export default async function ModStatusPage() {
   const session = await getSession();
   if (!session) redirect('/login');
+  if (!session.twitchUserId) redirect('/deck'); // mod roster is Twitch-moderator based
 
   const sb = supabaseAdmin();
   const { data: stream } = await sb

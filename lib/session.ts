@@ -16,11 +16,25 @@ function sign(payload: string): string {
 
 export type Session = {
   streamId: string;
-  twitchUserId: string;
-  twitchLogin: string;
+  /** Stable id for the signed-in person, whatever they signed in with: the
+   *  Twitch user id for Twitch accounts, the auth user id for email ones.
+   *  Key per-person data (user_prefs) on this, never on twitchUserId. */
+  accountId: string;
+  /** Present only when the account has a linked Twitch identity. Anything that
+   *  talks to Twitch (chat, EventSub, moderator lookups) must handle its
+   *  absence; everything else should use accountId. */
+  twitchUserId?: string;
+  twitchLogin?: string;
   displayName: string;
   role: 'streamer' | 'mod';
 };
+
+/** What to record as "who did this" on rows that predate non-Twitch accounts
+ *  (submitter_login, added_by, …): the Twitch login if there is one, else the
+ *  display name. */
+export function sessionLogin(s: Pick<Session, 'twitchLogin' | 'displayName'>): string {
+  return s.twitchLogin || s.displayName;
+}
 
 export function buildSessionCookie(s: Session) {
   const payload = Buffer.from(JSON.stringify(s)).toString('base64url');
@@ -46,7 +60,12 @@ export function parseSessionCookie(value: string | undefined): Session | null {
   if (!payload || !sig) return null;
   if (sign(payload) !== sig) return null;
   try {
-    return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    const s = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    // Cookies minted before accountId existed are Twitch-only sessions, where
+    // the account id IS the Twitch user id — fill it in so nobody is logged out.
+    if (!s.accountId && s.twitchUserId) s.accountId = s.twitchUserId;
+    if (!s.accountId) return null;
+    return s;
   } catch { return null; }
 }
 

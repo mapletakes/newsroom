@@ -33,7 +33,7 @@ export default async function PreferencesPage() {
   const { data: prefs } = await sb
     .from('user_prefs')
     .select('app_theme')
-    .eq('twitch_user_id', session.twitchUserId)
+    .eq('account_id', session.accountId)
     .maybeSingle();
 
   return (

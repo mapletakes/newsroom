@@ -6,6 +6,12 @@ export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
 
+  // Streamer/mod switching is built on Twitch moderator rows; accounts without
+  // a linked Twitch identity only ever have their own stream.
+  if (!session.twitchUserId) {
+    return NextResponse.json({ error: 'no linked Twitch account' }, { status: 400 });
+  }
+
   const body = await req.json();
   const streamId = String(body.streamId || '');
   const role = body.role === 'mod' ? 'mod' as const : 'streamer' as const;
@@ -42,6 +48,7 @@ export async function POST(req: NextRequest) {
 
   const newSession = buildSessionCookie({
     streamId,
+    accountId: session.accountId,
     twitchUserId: session.twitchUserId,
     twitchLogin: session.twitchLogin,
     displayName: session.displayName,

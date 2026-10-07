@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getApprovedSession } from '@/lib/session';
+import { getApprovedSession, sessionLogin } from '@/lib/session';
 import { sessionCanCurate } from '@/lib/curate';
 import { broadcastQueueChange } from '@/lib/realtime';
 
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       content_warning: item.content_warning,
       prep_note: item.note,
       position,
-      submitter_login: session.twitchLogin,
+      submitter_login: sessionLogin(session),
     });
     return !error;
   };

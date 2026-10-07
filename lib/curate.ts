@@ -4,8 +4,9 @@ import type { Session } from './session';
 // Whether a moderator is authorized to curate (organize) a stream's deck.
 export async function canMemberCurate(
   streamId: string,
-  twitchUserId: string,
+  twitchUserId: string | undefined,
 ): Promise<boolean> {
+  if (!twitchUserId) return false; // no Twitch identity → can't be a moderator
   const sb = supabaseAdmin();
   const { data } = await sb
     .from('moderators')
@@ -31,8 +32,9 @@ export async function sessionCanCurate(session: Session): Promise<boolean> {
 // deck (segments, reorder) never puts anything on screen, but this does.
 export async function canMemberSetNowPlaying(
   streamId: string,
-  twitchUserId: string,
+  twitchUserId: string | undefined,
 ): Promise<boolean> {
+  if (!twitchUserId) return false; // no Twitch identity → can't be a moderator
   const sb = supabaseAdmin();
   const { data } = await sb
     .from('moderators')

@@ -8,6 +8,9 @@ export const dynamic = 'force-dynamic';
 export default async function ChoosePage() {
   const session = await getSession();
   if (!session) redirect('/login');
+  // The picker exists to choose between Twitch channels; accounts without a
+  // linked Twitch identity only have their own deck.
+  if (!session.twitchUserId) redirect('/deck');
 
   const sb = supabaseAdmin();
 

@@ -12,6 +12,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   }
 
+  // Posting to chat needs a linked Twitch identity (and its stored token).
+  if (!session.twitchUserId) {
+    return NextResponse.json({ error: 'no-twitch', detail: 'Connect Twitch to post to chat.' }, { status: 409 });
+  }
+  const twitchUserId = session.twitchUserId;
+
   const sb = supabaseAdmin();
 
   // The channel we're posting to (the broadcaster).
@@ -27,7 +33,7 @@ export async function POST(req: NextRequest) {
   const { data: sender } = await sb
     .from('streams')
     .select('id')
-    .eq('twitch_user_id', session.twitchUserId)
+    .eq('twitch_user_id', twitchUserId)
     .maybeSingle();
   if (!sender) {
     return NextResponse.json(
@@ -56,7 +62,7 @@ export async function POST(req: NextRequest) {
   const result = await announceSubmission(
     sender.id,
     channel.twitch_user_id,
-    session.twitchUserId,
+    twitchUserId,
     { title: resolveTitle(sub), url: sub.url, trigger_warning: sub.trigger_warning },
     pin,
   );

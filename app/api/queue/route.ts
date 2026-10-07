@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getSession, getApprovedSession } from '@/lib/session';
+import { getSession, getApprovedSession, sessionLogin } from '@/lib/session';
 import { sessionCanCurate } from '@/lib/curate';
 import { searchRelatedCoverage } from '@/lib/search-coverage';
 import { runAiEnrichment } from '@/lib/extract';
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   const result = await submitUrlToQueue({
     streamId: session.streamId,
     url,
-    submitter: body.submitter || session.twitchLogin,
+    submitter: body.submitter || sessionLogin(session),
     isSub: !!body.isSub,
     isMod: !!body.isMod,
     isVip: !!body.isVip,
@@ -156,7 +156,7 @@ export async function PATCH(req: NextRequest) {
       // Only recorded for a mod's approval — the streamer approving their
       // own queue isn't "approved by a mod", so leave both null in that
       // case (the deck badge just won't render).
-      patch.approved_by_login = session.role === 'mod' ? session.twitchLogin : null;
+      patch.approved_by_login = session.role === 'mod' ? sessionLogin(session) : null;
       patch.approved_by_display_name = session.role === 'mod' ? session.displayName : null;
     } else if (body.status !== 'played') {
       // Leaving 'approved' for anything other than 'played' (unapprove back

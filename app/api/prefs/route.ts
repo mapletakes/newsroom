@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 //
 // Open to any approved session, mod or streamer, with no role check — and
 // that's safe for the reason /api/setup isn't: the row is always located by
-// the session's own twitch id, never by one from the body, so there is no
+// the session's own account id, never by one from the body, so there is no
 // request shape that writes anyone else's preferences. The blast radius of
 // this endpoint is "what I see", by construction.
 export async function GET() {
@@ -20,7 +20,7 @@ export async function GET() {
   const { data, error } = await sb
     .from('user_prefs')
     .select('app_theme')
-    .eq('twitch_user_id', session.twitchUserId)
+    .eq('account_id', session.accountId)
     .maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -45,11 +45,11 @@ export async function POST(req: NextRequest) {
   const sb = supabaseAdmin();
   const { error } = await sb.from('user_prefs').upsert(
     {
-      twitch_user_id: session.twitchUserId,
+      account_id: session.accountId,
       app_theme: appTheme,
       updated_at: new Date().toISOString(),
     },
-    { onConflict: 'twitch_user_id' },
+    { onConflict: 'account_id' },
   );
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   buildSessionCookie,
   parseSessionCookie,
+  sessionLogin,
   signOAuthState,
   verifyOAuthState,
   verifyOAuthStateDetailed,
@@ -10,11 +11,39 @@ import {
 
 const SESSION: Session = {
   streamId: 'stream-1',
+  accountId: '12345',
   twitchUserId: '12345',
   twitchLogin: 'someuser',
   displayName: 'SomeUser',
   role: 'streamer',
 };
+
+describe('session identity', () => {
+  const mint = (obj: object) => {
+    // Sign an arbitrary payload the way buildSessionCookie does.
+    const { value } = buildSessionCookie(obj as Session);
+    return value;
+  };
+
+  it('upgrades a pre-accountId cookie by using the Twitch user id', () => {
+    const legacy = { streamId: 's', twitchUserId: '99', twitchLogin: 'old', displayName: 'Old', role: 'streamer' };
+    expect(parseSessionCookie(mint(legacy))?.accountId).toBe('99');
+  });
+
+  it('round-trips a session with no Twitch identity', () => {
+    const s: Session = { streamId: 's', accountId: 'auth-1', displayName: 'Em', role: 'streamer' };
+    expect(parseSessionCookie(mint(s))).toEqual(s);
+  });
+
+  it('rejects a payload with no identity at all', () => {
+    expect(parseSessionCookie(mint({ streamId: 's', displayName: 'x', role: 'streamer' }))).toBeNull();
+  });
+
+  it('sessionLogin prefers the Twitch login, falls back to display name', () => {
+    expect(sessionLogin({ twitchLogin: 'abc', displayName: 'Abc' })).toBe('abc');
+    expect(sessionLogin({ displayName: 'Em' })).toBe('Em');
+  });
+});
 
 describe('session cookie sign/verify', () => {
   it('round-trips a valid session', () => {

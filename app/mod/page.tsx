@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { getSession } from '@/lib/session';
+import { getSession, sessionLogin } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase';
 import { isAdmin } from '@/lib/admin';
 import { canMemberCurate } from '@/lib/curate';
@@ -29,7 +29,7 @@ export default async function ModPage() {
     <>
       <StreamTheme />
       <ModView
-        channel={stream?.twitch_login || session.twitchLogin}
+        channel={stream?.twitch_login || sessionLogin(session)}
         displayName={session.displayName}
         streamDisplayName={stream?.display_name || session.displayName}
         submitCommand={stream?.submit_command || null}

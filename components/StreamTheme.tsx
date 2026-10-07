@@ -62,7 +62,7 @@ export async function StreamTheme() {
   const sb = supabaseAdmin();
   const [{ data: stream }, { data: prefs }] = await Promise.all([
     sb.from('streams').select('app_theme').eq('id', session.streamId).maybeSingle(),
-    sb.from('user_prefs').select('app_theme').eq('twitch_user_id', session.twitchUserId).maybeSingle(),
+    sb.from('user_prefs').select('app_theme').eq('account_id', session.accountId).maybeSingle(),
   ]);
 
   const brand = stream?.app_theme ? sanitizeAppTheme(stream.app_theme) : null;

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getApprovedSession } from '@/lib/session';
+import { getApprovedSession, sessionLogin } from '@/lib/session';
 import { addToDeck } from '@/lib/deck-add';
 import { sessionCanCurate } from '@/lib/curate';
 
@@ -17,8 +17,8 @@ export async function POST(req: NextRequest) {
   const url = String(body.url || '').trim();
   if (!url) return NextResponse.json({ error: 'missing url' }, { status: 400 });
 
-  const approvedBy = session.role === 'mod' ? { login: session.twitchLogin, displayName: session.displayName } : null;
-  const result = await addToDeck(session.streamId, url, session.twitchLogin, undefined, approvedBy);
+  const approvedBy = session.role === 'mod' ? { login: sessionLogin(session), displayName: session.displayName } : null;
+  const result = await addToDeck(session.streamId, url, sessionLogin(session), undefined, approvedBy);
   if (!result.ok) {
     return NextResponse.json({ error: result.error || 'failed to add' }, { status: 400 });
   }
