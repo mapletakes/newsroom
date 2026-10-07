@@ -8,7 +8,12 @@ import { SetupForm } from './SetupForm';
 
 export const dynamic = 'force-dynamic';
 
-export default async function SetupPage() {
+export default async function SetupPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ twitch?: string }>;
+}) {
+  const { twitch } = await searchParams;
   const session = await getSession();
   if (!session) redirect('/login');
 
@@ -55,6 +60,7 @@ export default async function SetupPage() {
         questionsOpen={stream?.questions_open !== false}
         isAdmin={isAdmin(session.twitchUserId)}
         chatEnabled={!!stream?.twitch_user_id}
+        twitchLinkStatus={twitch}
         moderators={(mods ?? []).map((m) => ({
           twitchUserId: m.twitch_user_id,
           login: m.twitch_login,

@@ -54,7 +54,13 @@ export async function verifyMagicLink(
   return { id: user.id, email: user.email.toLowerCase() };
 }
 
-export type EmailStream = { id: string; display_name: string | null };
+export type EmailStream = {
+  id: string;
+  display_name: string | null;
+  /** Set once the person has linked Twitch to this account. */
+  twitch_user_id: string | null;
+  twitch_login: string | null;
+};
 
 /** The stream for this auth user, created on first sign-in. Deliberately NOT
  *  subject to REQUIRE_APPROVAL (which gates new Twitch streamers): email
@@ -67,7 +73,7 @@ export async function findOrCreateEmailStream(user: {
 
   const { data: existing } = await sb
     .from('streams')
-    .select('id, display_name')
+    .select('id, display_name, twitch_user_id, twitch_login')
     .eq('auth_user_id', user.id)
     .maybeSingle();
   if (existing) return { stream: existing, isNew: false };
@@ -83,7 +89,7 @@ export async function findOrCreateEmailStream(user: {
   const { data: created, error } = await sb
     .from('streams')
     .upsert(row, { onConflict: 'auth_user_id' })
-    .select('id, display_name')
+    .select('id, display_name, twitch_user_id, twitch_login')
     .single();
   if (error || !created) throw error || new Error('No stream row');
   return { stream: created, isNew: true };

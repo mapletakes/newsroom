@@ -4,6 +4,7 @@ import {
   parseSessionCookie,
   sessionLogin,
   signOAuthState,
+  isLinkState,
   verifyOAuthState,
   verifyOAuthStateDetailed,
   type Session,
@@ -146,5 +147,23 @@ describe('OAuth state sign/verify', () => {
 
     vi.setSystemTime(new Date('2026-01-01T00:00:00Z')); // 20s of skew
     expect(verifyOAuthStateDetailed(state)).toMatchObject({ valid: true, reason: 'ok' });
+  });
+});
+
+describe('link-flavoured OAuth state', () => {
+  it('a plain state is not a link state, a link state is, and both still verify', () => {
+    const plain = signOAuthState();
+    const link = signOAuthState({ link: true });
+    expect(verifyOAuthState(plain)).toBe(true);
+    expect(verifyOAuthState(link)).toBe(true);
+    expect(isLinkState(plain)).toBe(false);
+    expect(isLinkState(link)).toBe(true);
+  });
+
+  it('flipping a plain state into a link state invalidates the signature', () => {
+    const [ts, nonce, sig] = signOAuthState().split('.');
+    const forged = [ts, nonce.slice(0, -1) + 'L', sig].join('.');
+    expect(isLinkState(forged)).toBe(true); // isLinkState alone doesn't check the signature...
+    expect(verifyOAuthState(forged)).toBe(false); // ...which is why the callback verifies first
   });
 });

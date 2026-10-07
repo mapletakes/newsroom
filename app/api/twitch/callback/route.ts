@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { exchangeCode, fetchTwitchUser, fetchModeratedChannels } from '@/lib/twitch-oauth';
+import { exchangeCode, fetchTwitchUser } from '@/lib/twitch-oauth';
 import { createChatSubscription } from '@/lib/twitch-eventsub';
 import { supabaseAdmin } from '@/lib/supabase';
-import { buildSessionCookie, verifyOAuthStateDetailed } from '@/lib/session';
+import { buildSessionCookie, getSession, isLinkState, verifyOAuthStateDetailed } from '@/lib/session';
+import { linkTwitchToStream, syncModeratorRows } from '@/lib/twitch-link';
 import { requireApproval } from '@/lib/admin';
 import { encryptSecret } from '@/lib/crypto';
 
@@ -42,6 +43,16 @@ export async function GET(req: NextRequest) {
     const user = await fetchTwitchUser(tokens.access_token);
 
     const sb = supabaseAdmin();
+
+    // Linking Twitch onto an email account the person is already signed in to.
+    // Needs BOTH the link-flavoured (signed) state and a live email session;
+    // otherwise this is an ordinary Twitch sign-in and falls through.
+    if (isLinkState(state)) {
+      const current = await getSession();
+      if (current && current.role === 'streamer' && !current.twitchUserId) {
+        return await handleLink(req, sb, current, tokens, user);
+      }
+    }
 
     // Is this a brand-new streamer? (for optional approval gating)
     const { data: existing } = await sb
@@ -83,31 +94,8 @@ export async function GET(req: NextRequest) {
       })
       .eq('id', stream.id);
 
-    // Check which Twitch channels this user mods for
-    const modChannels = await fetchModeratedChannels(tokens.access_token, user.id);
-
-    // Find which of those channels are registered Newsroom streamers
-    if (modChannels.length > 0) {
-      const modTwitchIds = modChannels.map((c) => c.broadcaster_id);
-      const { data: matchedStreams } = await sb
-        .from('streams')
-        .select('id, twitch_user_id, twitch_login, display_name')
-        .in('twitch_user_id', modTwitchIds);
-
-      // Upsert moderator rows for each match
-      if (matchedStreams && matchedStreams.length > 0) {
-        for (const ms of matchedStreams) {
-          await sb.from('moderators').upsert(
-            {
-              stream_id: ms.id,
-              twitch_user_id: user.id,
-              twitch_login: user.login,
-            },
-            { onConflict: 'stream_id,twitch_user_id' },
-          );
-        }
-      }
-    }
+    // Record which Newsroom channels this user moderates
+    await syncModeratorRows(sb, tokens.access_token, user);
 
     // Check if this user is a mod for any Newsroom streams
     const { data: modRows } = await sb
@@ -153,4 +141,48 @@ export async function GET(req: NextRequest) {
       headers: { Location: new URL('/login?error=oauth', req.url).toString() },
     });
   }
+}
+
+// Link flow: attach this Twitch account to the signed-in email account's own
+// stream, keeping its deck and shelves, then land back in Settings.
+async function handleLink(
+  req: NextRequest,
+  sb: ReturnType<typeof supabaseAdmin>,
+  current: NonNullable<Awaited<ReturnType<typeof getSession>>>,
+  tokens: Awaited<ReturnType<typeof exchangeCode>>,
+  user: Awaited<ReturnType<typeof fetchTwitchUser>>,
+) {
+  const result = await linkTwitchToStream({
+    sb,
+    streamId: current.streamId,
+    accountId: current.accountId,
+    tokens,
+    user,
+  });
+  const back = (qs: string) =>
+    new NextResponse(null, {
+      status: 302,
+      headers: { Location: new URL(`/setup?${qs}`, req.url).toString() },
+    });
+  if (!result.ok) return back(`twitch=${result.reason}`);
+
+  await syncModeratorRows(sb, tokens.access_token, user);
+
+  if ((tokens.scope || []).includes('user:read:chat')) {
+    createChatSubscription(user.id).catch((err) =>
+      console.error('EventSub subscription failed:', err),
+    );
+  }
+
+  const session = buildSessionCookie({
+    streamId: current.streamId,
+    accountId: user.id, // canonical id is the Twitch id once linked
+    twitchUserId: user.id,
+    twitchLogin: user.login,
+    displayName: user.display_name,
+    role: 'streamer',
+  });
+  const response = back('twitch=linked');
+  response.cookies.set(session.name, session.value, session.options);
+  return response;
 }

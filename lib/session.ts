@@ -95,12 +95,22 @@ export async function getApprovedSession(): Promise<Session | null> {
   return session;
 }
 
-export function signOAuthState(): string {
+/** `link` marks the state as "attach this Twitch account to the signed-in
+ *  email account" rather than "sign in with Twitch". The flag rides in the
+ *  nonce so the existing signature covers it (it can't be flipped in transit),
+ *  and the callback only honours it after verifying the state. */
+export function signOAuthState(opts: { link?: boolean } = {}): string {
   const ts = Date.now().toString(36);
-  const nonce = crypto.randomBytes(8).toString('hex');
+  const nonce = crypto.randomBytes(8).toString('hex') + (opts.link ? 'L' : 'N');
   const payload = `${ts}.${nonce}`;
   const sig = sign(payload);
   return `${payload}.${sig}`;
+}
+
+/** Whether a state was minted for linking. Only meaningful AFTER the state has
+ *  passed verifyOAuthState — it doesn't check the signature itself. */
+export function isLinkState(state: string): boolean {
+  return state.split('.')[1]?.endsWith('L') ?? false;
 }
 
 export function verifyOAuthState(state: string): boolean {

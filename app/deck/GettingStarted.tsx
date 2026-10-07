@@ -72,6 +72,17 @@ export function GettingStarted({ chatEnabled = true }: { chatEnabled?: boolean }
           </span>
         </li>
         )}
+        {!chatEnabled && (
+        <li className="flex items-start gap-2">
+          <span className="text-ink/30">
+            <Icon name="radioUnchecked" className="text-base align-middle" />
+          </span>
+          <span>
+            Stream on Twitch? <Link href="/setup" className="underline hover:text-rust">Connect it in Settings</Link>{' '}
+            to capture links from chat.
+          </span>
+        </li>
+        )}
         <li className="flex items-start gap-2">
           <span className="text-ink/30">
             <Icon name="radioUnchecked" className="text-base align-middle" />

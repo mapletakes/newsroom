@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { AppHeader } from '@/components/AppHeader';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { AppThemeSettings, OverlayThemeSettings } from './ThemeSettings';
@@ -35,6 +36,13 @@ const TABS = [
 ] as const;
 type TabId = (typeof TABS)[number][0];
 
+const TWITCH_LINK_MESSAGES: Record<string, string> = {
+  taken:
+    'That Twitch account already has its own Broadside account, so it can\'t be linked here. Sign in with Twitch to use it, or connect a different one.',
+  'already-linked': 'This account is already connected to Twitch.',
+  error: 'Could not connect Twitch. Please try again.',
+};
+
 function isTabId(v: string): v is TabId {
   return (TABS as readonly (readonly [string, string])[]).some(([id]) => id === v);
 }
@@ -57,6 +65,7 @@ export function SetupForm({
   questionsOpen = true,
   isAdmin = false,
   chatEnabled = true,
+  twitchLinkStatus,
   moderators,
 }: {
   streamId: string;
@@ -78,6 +87,8 @@ export function SetupForm({
   /** False for accounts with no linked Twitch channel: drops the Chat tab,
    *  the Curators section and the Mod View link. */
   chatEnabled?: boolean;
+  /** Outcome of a just-finished Connect Twitch round trip (?twitch=...). */
+  twitchLinkStatus?: string;
   moderators: { twitchUserId: string; login: string; canCurate: boolean; canSetNowPlaying: boolean }[];
 }) {
   const [cmd, setCmd] = useState(submitCommand);
@@ -419,6 +430,16 @@ export function SetupForm({
           This account isn&apos;t linked to a Twitch channel, so chat capture, posting to chat,
           questions, raffles and mod curators are switched off. Everything else — the deck,
           shelves, overlay and quick add — works as normal.
+        </p>
+        {twitchLinkStatus && TWITCH_LINK_MESSAGES[twitchLinkStatus] && (
+          <p className="mt-3 font-mono text-xs text-rust">{TWITCH_LINK_MESSAGES[twitchLinkStatus]}</p>
+        )}
+        <a href="/api/twitch/oauth?link=1" className={cn(buttonVariants({ variant: 'outline' }), 'mt-4')}>
+          Connect Twitch
+        </a>
+        <p className="mt-2 text-xs text-ink/60 leading-relaxed">
+          Keeps your deck and shelves. Connecting lets The Broadside read your chat for links and
+          post &ldquo;Watching:&rdquo; messages when you click the button.
         </p>
       </section>
       )}

@@ -22,9 +22,15 @@ export async function GET(req: NextRequest) {
 
     const { stream } = await findOrCreateEmailStream(user);
 
+    // Once Twitch has been linked, signing in by email must give the same
+    // identity as signing in with Twitch (same account id, same chat access) —
+    // otherwise the two entrances would behave like two different accounts.
     const session = buildSessionCookie({
       streamId: stream.id,
-      accountId: user.id,
+      accountId: stream.twitch_user_id ?? user.id,
+      ...(stream.twitch_user_id
+        ? { twitchUserId: stream.twitch_user_id, twitchLogin: stream.twitch_login ?? undefined }
+        : {}),
       displayName: stream.display_name || user.email.split('@')[0],
       role: 'streamer',
     });
