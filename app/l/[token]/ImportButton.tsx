@@ -9,8 +9,8 @@ export function ImportButton({ token, loggedIn }: { token: string; loggedIn: boo
 
   if (!loggedIn) {
     return (
-      <a href="/api/twitch/oauth" className={buttonVariants()}>
-        Connect Twitch to import →
+      <a href="/login" className={buttonVariants()}>
+        Sign in to import →
       </a>
     );
   }

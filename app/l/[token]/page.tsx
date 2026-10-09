@@ -6,6 +6,7 @@ import { Wordmark } from '@/components/ui/wordmark';
 import { Badge } from '@/components/ui/badge';
 import { formatDuration, formatDate, kindTint } from '@/lib/url';
 import { cn } from '@/lib/utils';
+import { groupShelfBlocks } from '@/lib/shelf-blocks';
 import { ImportButton } from './ImportButton';
 
 export const dynamic = 'force-dynamic';
@@ -22,22 +23,31 @@ export default async function SharedListPage({ params }: { params: Promise<{ tok
   const sb = supabaseAdmin();
   const { data: list } = await sb
     .from('lists')
-    .select('id, name, updated_at, stream_id')
+    .select('id, name, updated_at, stream_id, ungrouped_position')
     .eq('share_token', token)
     .maybeSingle();
   if (!list) notFound();
 
-  const [{ data: stream }, { data: items }, session] = await Promise.all([
+  const [{ data: stream }, { data: items }, { data: segments }, session] = await Promise.all([
     sb.from('streams').select('display_name, twitch_login').eq('id', list.stream_id).maybeSingle(),
     sb
       .from('list_items')
-      .select('id, url, kind, title, description, thumbnail_url, publisher, duration_seconds, published_at, summary, credibility_tag, topics, dmca_risk, content_warning, note')
+      .select('id, url, kind, title, description, thumbnail_url, publisher, duration_seconds, published_at, summary, credibility_tag, topics, dmca_risk, content_warning, note, position, segment_id, created_at')
+      .eq('list_id', list.id)
+      .order('position', { ascending: true })
+      .order('created_at', { ascending: true }),
+    sb
+      .from('list_segments')
+      .select('id, name, position')
       .eq('list_id', list.id)
       .order('position', { ascending: true })
       .order('created_at', { ascending: true }),
     getSession(),
   ]);
   const streamerName = stream?.display_name || stream?.twitch_login || 'A streamer';
+  const blocks = groupShelfBlocks(items || [], segments || [], list.ungrouped_position);
+  // Only label the unsegmented bucket when there are segments to tell it apart from.
+  const hasSegments = blocks.some((b) => b.name !== null);
 
   return (
     <main className="min-h-screen px-6 py-10 max-w-3xl mx-auto">
@@ -54,7 +64,7 @@ export default async function SharedListPage({ params }: { params: Promise<{ tok
       </p>
       <h1 className="font-display text-4xl font-bold mb-2">{list.name}</h1>
       <p className="font-mono text-xs text-ink/50 mb-6">
-        {(items || []).length} item{(items || []).length === 1 ? '' : 's'} · read-only — this is a snapshot,
+        {(items || []).length} item{(items || []).length === 1 ? '' : 's'}{hasSegments ? ` in ${blocks.filter((b) => b.name !== null).length} segment${blocks.filter((b) => b.name !== null).length === 1 ? '' : 's'}` : ''} · read-only — this is a snapshot,
         not a live view of {streamerName}&apos;s shelf
       </p>
 
@@ -67,8 +77,17 @@ export default async function SharedListPage({ params }: { params: Promise<{ tok
       {(items || []).length === 0 ? (
         <p className="text-ink/60 font-mono text-sm py-8 text-center">This shelf is empty.</p>
       ) : (
-        <div className="space-y-3">
-          {(items || []).map((item) => (
+        <div className="space-y-8">
+          {blocks.map((block) => (
+            <section key={block.id} aria-label={block.name ?? 'Other items'}>
+              {(block.name !== null || hasSegments) && (
+                <h2 className="font-mono text-xs uppercase tracking-widest text-ink/60 border-b border-ink/20 pb-1 mb-3">
+                  {block.name ?? 'Other items'}
+                  <span className="ml-2 text-ink/40">{block.items.length}</span>
+                </h2>
+              )}
+              <div className="space-y-3">
+          {block.items.map((item) => (
             <article key={item.id} className={cn(kindTint(item.kind), 'card-paper p-4 flex gap-3')}>
               {item.thumbnail_url && (
                 <img
@@ -100,6 +119,9 @@ export default async function SharedListPage({ params }: { params: Promise<{ tok
                 )}
               </div>
             </article>
+          ))}
+              </div>
+            </section>
           ))}
         </div>
       )}

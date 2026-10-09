@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getApprovedSession } from '@/lib/session';
 import { sessionCanCurate } from '@/lib/curate';
+import { renumberForCopy } from '@/lib/shelf-blocks';
 
 // POST { token } — import a shared shelf as a new, independent one on the
 // importer's own stream. A copy, not a live subscription: the two shelves
@@ -22,7 +23,7 @@ export async function POST(req: Request) {
   const sb = supabaseAdmin();
   const { data: source } = await sb
     .from('lists')
-    .select('id, name, stream_id')
+    .select('id, name, stream_id, ungrouped_position')
     .eq('share_token', token)
     .maybeSingle();
   if (!source) return NextResponse.json({ error: 'not found' }, { status: 404 });
@@ -45,7 +46,13 @@ export async function POST(req: Request) {
 
   const { data: newList, error } = await sb
     .from('lists')
-    .insert({ stream_id: session.streamId, name: source.name, position })
+    .insert({
+      stream_id: session.streamId,
+      name: source.name,
+      position,
+      // The ungrouped bucket's place among the segments is part of the layout.
+      ungrouped_position: source.ungrouped_position ?? 0,
+    })
     .select('id, name')
     .single();
   if (error || !newList) return NextResponse.json({ error: error?.message || 'import failed' }, { status: 500 });
@@ -54,12 +61,37 @@ export async function POST(req: Request) {
     .from('list_items')
     .select('*')
     .eq('list_id', source.id)
-    .order('position', { ascending: true });
+    .order('position', { ascending: true })
+    .order('created_at', { ascending: true });
+
+  // Copy the shelf's segments first, remembering old id -> new id so each
+  // item can be re-pointed at its copy. Fresh rows on purpose: the two shelves
+  // are independent from here on, so they must not share segment rows.
+  const { data: sourceSegments } = await sb
+    .from('list_segments')
+    .select('id, name, position')
+    .eq('list_id', source.id)
+    .order('position', { ascending: true })
+    .order('created_at', { ascending: true });
+
+  const segmentIdMap = new Map<string, string>();
+  for (const seg of sourceSegments ?? []) {
+    const { data: copy } = await sb
+      .from('list_segments')
+      .insert({ list_id: newList.id, name: seg.name, position: seg.position })
+      .select('id')
+      .single();
+    if (copy) segmentIdMap.set(seg.id, copy.id);
+  }
 
   if (items && items.length > 0) {
+    // Only segments that actually copied count as known, so an item can never
+    // be left pointing at the SOURCE shelf's segment.
+    const copied = (sourceSegments ?? []).filter((s) => segmentIdMap.has(s.id));
     await sb.from('list_items').insert(
-      items.map((item, i) => ({
+      renumberForCopy(items, copied).map((item) => ({
         list_id: newList.id,
+        segment_id: item.segment_id ? segmentIdMap.get(item.segment_id)! : null,
         url: item.url,
         normalized_url: item.normalized_url,
         kind: item.kind,
@@ -77,7 +109,7 @@ export async function POST(req: Request) {
         content_warning: item.content_warning,
         note: item.note,
         added_by: attribution,
-        position: i + 1,
+        position: item.position,
       })),
     );
   }

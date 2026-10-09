@@ -22,7 +22,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
   const sb = supabaseAdmin();
   const { data: list } = await sb
     .from('lists')
-    .select('id, name, updated_at, stream_id')
+    .select('id, name, updated_at, stream_id, ungrouped_position')
     .eq('share_token', token)
     .maybeSingle();
   if (!list) return NextResponse.json({ error: 'not found' }, { status: 404 });
@@ -35,13 +35,21 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
 
   const { data: items } = await sb
     .from('list_items')
-    .select('id, url, kind, title, description, thumbnail_url, publisher, author, duration_seconds, published_at, summary, credibility_tag, topics, dmca_risk, content_warning, note, added_by, position, created_at')
+    .select('id, url, kind, title, description, thumbnail_url, publisher, author, duration_seconds, published_at, summary, credibility_tag, topics, dmca_risk, content_warning, note, added_by, position, segment_id, created_at')
+    .eq('list_id', list.id)
+    .order('position', { ascending: true })
+    .order('created_at', { ascending: true });
+
+  const { data: segments } = await sb
+    .from('list_segments')
+    .select('id, name, position')
     .eq('list_id', list.id)
     .order('position', { ascending: true })
     .order('created_at', { ascending: true });
 
   return NextResponse.json({
-    list: { name: list.name, updated_at: list.updated_at },
+    list: { name: list.name, updated_at: list.updated_at, ungrouped_position: list.ungrouped_position ?? 0 },
+    segments: segments || [],
     streamer: { displayName: stream?.display_name || stream?.twitch_login || 'A streamer', login: stream?.twitch_login || null },
     items: items || [],
   });
