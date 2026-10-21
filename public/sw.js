@@ -10,7 +10,7 @@
 // blipped mid-navigation, most commonly right when switching channels. So:
 // navigations are always network-only, falling back to a static, genuinely
 // non-personalized offline page — never a cached copy of a real page.
-const CACHE = 'broadside-shell-v2';
+const CACHE = 'broadside-shell-v3';
 const OFFLINE_URL = '/offline.html';
 
 self.addEventListener('install', (event) => {
@@ -39,17 +39,24 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Everything else here is a build-versioned static asset (JS/CSS/fonts/
-  // icons under /_next/static and friends) — content-hashed and identical
-  // for every user, so caching it carries none of the cross-session risk
-  // above and is what actually makes the installed app usable offline.
+  // Only content-hashed build assets are safe to cache: identical for every
+  // user and never reused across builds. Everything else passes straight
+  // through — in particular client-side route changes, which are NOT
+  // navigations but fetch()es of the per-session RSC payload (`?_rsc=…`,
+  // `RSC: 1` header). Caching those and replaying one on a network blip or
+  // aborted request handed the router a stale payload from another build or
+  // session, which crashed into the global error page mid-navigation.
+  if (!url.pathname.startsWith('/_next/static/') && !url.pathname.startsWith('/icons/')) return;
+
   event.respondWith(
     fetch(event.request)
       .then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((cache) => cache.put(event.request, copy)).catch(() => {});
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then((cache) => cache.put(event.request, copy)).catch(() => {});
+        }
         return res;
       })
-      .catch(() => caches.match(event.request)),
+      .catch(() => caches.match(event.request).then((hit) => hit || Response.error())),
   );
 });
