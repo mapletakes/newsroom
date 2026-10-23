@@ -9,12 +9,14 @@ export type MediaKind =
   | 'twitch_vod'
   | 'twitter'
   | 'tiktok'
+  | 'instagram'
   | 'unknown';
 
 const TRACKING_PARAMS = new Set([
   'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
   'fbclid', 'gclid', 'mc_cid', 'mc_eid', 'ref', 'ref_src', 'ref_url',
   's', 'si', 'feature', // youtube share params
+  'igsh', 'igshid', 'img_index', // instagram share params / carousel position
 ]);
 
 export function normalizeUrl(raw: string): string {
@@ -73,6 +75,7 @@ export function detectKind(url: string): MediaKind {
   }
   if (h === 'twitter.com' || h === 'x.com' || h === 'nitter.net') return 'twitter';
   if (h === 'tiktok.com' || h === 'vm.tiktok.com' || h === 'vt.tiktok.com') return 'tiktok';
+  if (h === 'instagram.com' || h === 'm.instagram.com' || h === 'instagr.am') return 'instagram';
   // Everything else is treated as an article candidate
   return 'article';
 }
@@ -113,6 +116,7 @@ export function kindCategory(kind: string): KindCategory {
       return 'video';
     case 'twitter':
     case 'tiktok':
+    case 'instagram':
       return 'social';
     case 'article':
       return 'article';
@@ -137,6 +141,8 @@ export function kindTint(kind: string): string {
       return 'tint-twitch';
     case 'tiktok':
       return 'tint-tiktok';
+    case 'instagram':
+      return 'tint-instagram';
     default:
       return 'tint-unknown';
   }

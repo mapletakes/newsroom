@@ -231,6 +231,7 @@ html, body {
 .tint-article { --card-tint: rgb(202 138 4 / 0.13); }   /* yellow */
 .tint-twitch  { --card-tint: rgb(147 51 234 / 0.10); }  /* purple */
 .tint-tiktok  { --card-tint: rgb(13 148 136 / 0.11); }  /* teal */
+.tint-instagram { --card-tint: rgb(219 39 119 / 0.10); } /* pink */
 .tint-unknown { --card-tint: rgb(100 116 139 / 0.08); } /* slate */
 
 /* Stronger tints in dark mode so the colour still reads over a dark card. */
@@ -239,6 +240,7 @@ html, body {
 .dark .tint-article { --card-tint: rgb(250 204 21 / 0.15); }
 .dark .tint-twitch  { --card-tint: rgb(192 132 252 / 0.15); }
 .dark .tint-tiktok  { --card-tint: rgb(45 212 191 / 0.15); }
+.dark .tint-instagram { --card-tint: rgb(244 114 182 / 0.15); }
 .dark .tint-unknown { --card-tint: rgb(148 163 184 / 0.12); }
 
 .card-paper:hover {

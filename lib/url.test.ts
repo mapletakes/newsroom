@@ -124,6 +124,18 @@ describe('detectKind', () => {
     expect(detectKind('https://www.tiktok.com/@user/video/123')).toBe('tiktok');
   });
 
+  it('classifies Instagram posts, reels, and short links', () => {
+    expect(detectKind('https://www.instagram.com/p/De05Eaho7nD/')).toBe('instagram');
+    expect(detectKind('https://www.instagram.com/reel/abc123/')).toBe('instagram');
+    expect(detectKind('https://instagr.am/p/abc123/')).toBe('instagram');
+  });
+
+  it('strips Instagram share params so the same post dedupes', () => {
+    expect(normalizeUrl('https://www.instagram.com/p/De05Eaho7nD/?img_index=1&igsh=xyz')).toBe(
+      'https://www.instagram.com/p/De05Eaho7nD',
+    );
+  });
+
   it('falls back to article for everything else, and unknown for unparseable input', () => {
     expect(detectKind('https://example.com/some-article')).toBe('article');
     expect(detectKind('not a url')).toBe('unknown');

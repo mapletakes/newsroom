@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { metaTag, titleTag } from './html-meta';
+import { decodeHtmlEntities, metaTag, titleTag } from './html-meta';
 
 describe('metaTag', () => {
   it('matches property="x" content="y" order', () => {
@@ -20,6 +20,11 @@ describe('metaTag', () => {
   it('handles single quotes', () => {
     const html = "<meta property='og:title' content='Single quoted'>";
     expect(metaTag(html, 'og:title')).toBe('Single quoted');
+  });
+
+  it('keeps the other quote character inside the value', () => {
+    expect(metaTag(`<meta property="og:title" content="it's here">`, 'og:title')).toBe("it's here");
+    expect(metaTag(`<meta content='say "hi"' property='og:title'>`, 'og:title')).toBe('say "hi"');
   });
 
   it('returns null when the tag is absent', () => {
@@ -52,5 +57,15 @@ describe('titleTag', () => {
 
   it('returns null for an empty title (whitespace-only trims to nothing)', () => {
     expect(titleTag('<title>   </title>')).toBeNull();
+  });
+});
+
+describe('decodeHtmlEntities', () => {
+  it('decodes named, decimal and hex entities', () => {
+    expect(decodeHtmlEntities('a &amp; b &quot;c&quot; &#064;d &#x2022; &#039;e')).toBe('a & b "c" @d • \'e');
+  });
+
+  it('leaves unknown or malformed entities untouched', () => {
+    expect(decodeHtmlEntities('&bogus; &#xZZ; 5 & 6')).toBe('&bogus; &#xZZ; 5 & 6');
   });
 });

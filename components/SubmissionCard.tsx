@@ -56,6 +56,7 @@ const KIND_LABELS: Record<string, string> = {
   twitch_vod: 'Twitch VOD',
   twitter: 'X / Twitter',
   tiktok: 'TikTok',
+  instagram: 'Instagram',
   unknown: 'Link',
 };
 

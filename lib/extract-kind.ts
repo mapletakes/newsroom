@@ -22,6 +22,7 @@ import { extractArticle } from './extract-article';
 import { fetchYouTubeMeta } from './extract-youtube';
 import { extractTwitter } from './extract-twitter';
 import { extractTikTok } from './extract-tiktok';
+import { extractInstagram } from './extract-instagram';
 import { enrichContent, hostDMCARisk } from './enrich';
 import { scanContentWarning } from './content-warning';
 
@@ -38,7 +39,7 @@ export type ExtractedMeta = {
 
 /**
  * Fetches metadata for one of the kinds with a dedicated extractor
- * (youtube, youtube_short, twitter, tiktok, article). Returns null for
+ * (youtube, youtube_short, twitter, tiktok, instagram, article). Returns null for
  * anything else (twitch_clip, twitch_vod, unknown, or a future kind with no
  * case here yet) — deliberately does NOT guess at a fallback itself. What
  * "no dedicated extractor" means is a real product decision each caller
@@ -88,6 +89,19 @@ export async function extractMetaForKind(url: string, kind: string): Promise<Ext
         author: meta.author,
         publishedAt: meta.publishedAt,
         duration: meta.durationSeconds,
+        bodyText: meta.description,
+      };
+    }
+    case 'instagram': {
+      const meta = await extractInstagram(url);
+      return {
+        title: meta.title,
+        description: meta.description,
+        thumbnail: meta.thumbnail,
+        publisher: meta.publisher,
+        author: meta.author,
+        publishedAt: meta.publishedAt,
+        duration: null,
         bodyText: meta.description,
       };
     }
