@@ -7,12 +7,15 @@ export type EnrichmentResult = {
   topics: string[];
   dmcaRisk: 'low' | 'medium' | 'high' | null;
   contentWarning: boolean;
+  failureReason?: string;
 };
 
 function getClient(): Anthropic | null {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return null;
-  return new Anthropic({ apiKey: key });
+  // The caller runs within a 60-second serverless invocation. SDK retries
+  // and its default timeout must not keep a lease alive past that window.
+  return new Anthropic({ apiKey: key, timeout: 20_000, maxRetries: 0 });
 }
 
 // Quick host-based DMCA pre-screen. Not legal advice; just a heuristic.
@@ -96,6 +99,7 @@ export async function enrichContent(input: {
       topics: [],
       dmcaRisk: hostRisk,
       contentWarning: false,
+      failureReason: !client ? 'AI is not configured.' : 'No source content is available for a summary.',
     };
   }
 
@@ -153,7 +157,7 @@ ${input.body!.slice(0, 5500)}`;
     // than trying to parse content that may not be JSON.
     if (resp.stop_reason === 'refusal') {
       console.warn('enrichContent refused for', input.url);
-      return { summary: null, credibility: null, topics: [], dmcaRisk: hostRisk, contentWarning: false };
+      return { summary: null, credibility: null, topics: [], dmcaRisk: hostRisk, contentWarning: false, failureReason: 'The AI provider declined this content.' };
     }
 
     // Record the AI cost as soon as the call returns — the tokens are billed
@@ -176,6 +180,9 @@ ${input.body!.slice(0, 5500)}`;
       .join('');
     const clean = text.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(clean);
+    if (typeof parsed.summary !== 'string' || !parsed.summary.trim()) {
+      throw new Error('Missing summary in AI response');
+    }
     // Combine model-suggested DMCA risk with host heuristic — take the higher
     const modelRisk = (parsed.dmca_risk as 'low' | 'medium' | 'high' | undefined) || 'low';
     const order = { low: 0, medium: 1, high: 2 };
@@ -189,6 +196,6 @@ ${input.body!.slice(0, 5500)}`;
     };
   } catch (err) {
     console.error('enrichContent failed', err);
-    return { summary: null, credibility: null, topics: [], dmcaRisk: hostRisk, contentWarning: false };
+    return { summary: null, credibility: null, topics: [], dmcaRisk: hostRisk, contentWarning: false, failureReason: 'AI enrichment failed. You can retry it.' };
   }
 }

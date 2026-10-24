@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSession, getApprovedSession, sessionLogin } from '@/lib/session';
 import { sessionCanCurate } from '@/lib/curate';
-import { searchRelatedCoverage } from '@/lib/search-coverage';
-import { runAiEnrichment } from '@/lib/extract';
+import { waitUntil } from '@vercel/functions';
+import { processSubmissionEnrichment, recoverSubmissionEnrichment } from '@/lib/submission-enrichment';
 import { normalizeTitleOverride } from '@/lib/title-override';
 import { submitUrlToQueue } from '@/lib/submit-url';
 import { broadcastQueueChange } from '@/lib/realtime';
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   const session = await getApprovedSession();
@@ -120,6 +120,8 @@ export async function GET(req: NextRequest) {
     ? (ov.data as QueueOverviewRow)
     : await legacyOverview(sb, session.streamId);
 
+  waitUntil(recoverSubmissionEnrichment(session.streamId));
+
   return NextResponse.json({
     submissions: data || [],
     nowPlaying: overview.now_playing,
@@ -166,7 +168,6 @@ export async function PATCH(req: NextRequest) {
       patch.approved_by_login = null;
       patch.approved_by_display_name = null;
     }
-    if (body.status === 'played') patch.played_at = new Date().toISOString();
   }
   if (typeof body.position === 'number') patch.position = body.position;
   if (typeof body.mod_notes === 'string') patch.mod_notes = body.mod_notes;
@@ -186,6 +187,11 @@ export async function PATCH(req: NextRequest) {
   if ('prep_note' in body) {
     const pn = typeof body.prep_note === 'string' ? body.prep_note.trim() : '';
     patch.prep_note = pn || null;
+  }
+  // The database snapshots this takeaway into show_notes atomically with
+  // the play transition. It also cancels that note when Played is undone.
+  if (body.status === 'played' && 'takeaway' in body) {
+    patch.prep_note = typeof body.takeaway === 'string' ? body.takeaway.trim() || null : null;
   }
   // Streamer's replacement for the title shown on the overlay and in the
   // "Watching:" chat post (the scraped title itself is left alone). Accepts
@@ -227,14 +233,14 @@ export async function PATCH(req: NextRequest) {
     patch.position = (last?.position ?? 0) + 1;
   }
 
-  // On approval, fetch related coverage before writing — but only for news
-  // articles. YouTube, socials, clips, etc. don't have "other coverage" to
-  // find, so searching for them just wastes the search quota.
+  // Keep duplicate checks on the approval path; paid enrichment and related
+  // coverage run in the background after the approval has been saved.
   if (body.status === 'approved') {
     const { data: sub } = await sb
       .from('submissions')
-      .select('title, publisher, url, kind, normalized_url, related_coverage')
+      .select('normalized_url')
       .eq('id', id)
+      .eq('stream_id', session.streamId)
       .single();
 
     // The deck must never contain duplicates, regardless of the stream's
@@ -260,22 +266,6 @@ export async function PATCH(req: NextRequest) {
         );
       }
     }
-
-    if (sub && sub.kind === 'article' && !sub.related_coverage && sub.title) {
-      const { data: streamSettings } = await sb
-        .from('streams')
-        .select('preferred_sources')
-        .eq('id', session.streamId)
-        .single();
-      const coverage = await searchRelatedCoverage({
-        title: sub.title,
-        publisher: sub.publisher,
-        url: sub.url,
-        preferredSources: streamSettings?.preferred_sources ?? [],
-        streamId: session.streamId,
-      });
-      if (coverage.length > 0) patch.related_coverage = coverage;
-    }
   }
 
   const { data, error } = await sb
@@ -287,28 +277,11 @@ export async function PATCH(req: NextRequest) {
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // The AI summary/credibility/topics call is deferred to here, rather than
-  // running on every pending submission — most links chat posts never get
-  // approved, so running it on all of them (as this app used to) paid for a
-  // summary of every dead-end link, not just the ones that make the deck.
-  // Gated on !summary so a re-approval (Undo, or unapprove/reapprove)
-  // doesn't pay for it twice. See lib/extract.ts's runAiEnrichment.
-  if (body.status === 'approved' && data && !data.summary) {
-    await runAiEnrichment(id);
-  }
-
-  // If marked played, create a show_notes entry
-  if (body.status === 'played' && data) {
-    await sb.from('show_notes').insert({
-      stream_id: session.streamId,
-      submission_id: data.id,
-      played_at: data.played_at,
-      title: data.title,
-      url: data.url,
-      summary: data.summary,
-      archive_url: data.archive_url,
-      takeaway: body.takeaway || null,
-    });
+  // The trigger persists queued work atomically with approval. External
+  // providers run after the response, under a database lease; queue reads
+  // recover work left queued or interrupted by a function timeout.
+  if (body.status === 'approved' && data) {
+    waitUntil(processSubmissionEnrichment(id, session.streamId));
   }
 
   broadcastQueueChange(session.streamId);

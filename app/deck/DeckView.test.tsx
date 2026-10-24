@@ -66,8 +66,9 @@ function jsonResponse(body: unknown, status = 200) {
  * legitimately still show the item, which is the whole point of holdNextPatch.
  */
 function installMockBackend() {
-  const state = { status: 'approved' as string, patchCalls: 0 };
+  const state = { status: 'approved' as string, patchCalls: 0, requests: [] as string[] };
   let patchGate: Promise<void> | null = null;
+  let failNext = false;
 
   vi.stubGlobal(
     'fetch',
@@ -84,9 +85,11 @@ function installMockBackend() {
         });
       }
       if (url === '/api/queue' && method === 'PATCH') {
+        const body = JSON.parse(String(init?.body || '{}'));
+        state.requests.push(body.status);
         if (patchGate) await patchGate;
         state.patchCalls++;
-        const body = JSON.parse(String(init?.body || '{}'));
+        if (failNext) { failNext = false; return jsonResponse({ error: 'Play could not be saved' }, 500); }
         state.status = body.status;
         return jsonResponse({ submission: {} });
       }
@@ -100,6 +103,7 @@ function installMockBackend() {
 
   return {
     state,
+    failNextPatch() { failNext = true; },
     // Delays the NEXT PATCH's resolution until the returned function is
     // called — lets a test force a refetch attempt while a write is
     // genuinely still in flight, the real-world race this file exists to
@@ -201,6 +205,46 @@ describe('DeckView — mark played / undo', () => {
     await waitFor(() => expect(backend.state.patchCalls).toBe(1));
     expect(backend.state.status).toBe('played');
     expect(screen.queryByText(SUB.title)).not.toBeInTheDocument();
+  });
+
+  it('sends rapid play, Undo, and replay in click order while the first write is still pending', async () => {
+    const backend = installMockBackend();
+    const user = userEvent.setup();
+    renderDeck();
+    await user.click(await screen.findByText(SUB.title));
+    const release = backend.holdNextPatch();
+    await user.click(screen.getByRole('button', { name: /played — next/i }));
+    await user.click(await screen.findByRole('button', { name: /undo/i }));
+    await user.click(await screen.findByText(SUB.title));
+    await user.click(screen.getByRole('button', { name: /played — next/i }));
+    expect(backend.state.requests).toEqual(['played']);
+    release();
+    await waitFor(() => expect(backend.state.patchCalls).toBe(3));
+    expect(backend.state.requests).toEqual(['played', 'approved', 'played']);
+    expect(backend.state.status).toBe('played');
+    expect(screen.queryByText(SUB.title)).not.toBeInTheDocument();
+  });
+
+  it('reports a failed play and reconciles the item back from server state', async () => {
+    const backend = installMockBackend();
+    const user = userEvent.setup();
+    renderDeck();
+    await user.click(await screen.findByText(SUB.title));
+    backend.failNextPatch();
+    await user.click(screen.getByRole('button', { name: /played — next/i }));
+    expect(await screen.findByText('Play could not be saved')).toBeInTheDocument();
+    expect(await screen.findByText(SUB.title)).toBeInTheDocument();
+    expect(backend.state.status).toBe('approved');
+  });
+
+  it('offers separate new-note and repeatable full-history downloads', async () => {
+    installMockBackend();
+    const user = userEvent.setup();
+    renderDeck();
+    await screen.findByText(SUB.title);
+    await user.click(screen.getByRole('button', { name: /export notes/i }));
+    expect(screen.getByRole('menuitem', { name: 'Export new notes' })).toHaveAttribute('href', '/api/notes?format=markdown&commit=1');
+    expect(screen.getByRole('menuitem', { name: 'Download all history' })).toHaveAttribute('href', '/api/notes?format=markdown&scope=all');
   });
 
   it('middle-clicking a queue card opens its source link in a new tab without activating or selecting it', async () => {
