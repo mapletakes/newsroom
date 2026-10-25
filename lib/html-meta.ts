@@ -1,15 +1,20 @@
 // Regex-based <meta>/<title> extraction, shared by every extractor that
-// falls back to scraping a page's own HTML (extract-article.ts, and
-// extract-tiktok.ts for the pages TikTok's embedded JSON doesn't cover —
-// hashtag pages, music pages, anything that isn't a single video). Split out
+// falls back to scraping a page's own HTML (extract-article.ts,
+// extract-instagram.ts, and extract-tiktok.ts for the pages TikTok's embedded
+// JSON doesn't cover — hashtag pages, music pages, anything that isn't a
+// single video). Split out
 // once a second extractor needed the identical parsing rather than a second
 // hand-rolled copy of the same regex.
+//
+// Both readers return values with HTML entities already decoded, so no caller
+// decodes again: a title like "Q&amp;A" reads as "Q&A", and an og:image URL
+// whose query string is written as "?w=1&amp;h=2" (as it must be inside an
+// attribute) comes out as the real URL "?w=1&h=2" instead of a broken one.
 
 /** <meta property="name" content="..."> or <meta name="name" content="...">,
  *  property/name order and quote style both handled. The content value runs
  *  to its own closing quote, so the other quote character inside it survives
- *  (content="it's here" is "it's here", not "it"). Returned raw — entities
- *  like &amp; are left as-is; see decodeHtmlEntities. */
+ *  (content="it's here" is "it's here", not "it"). Entities are decoded. */
 export function metaTag(html: string, name: string): string | null {
   const value = `content=(?:"([^"]*)"|'([^']*)')`;
   const re = new RegExp(
@@ -18,16 +23,21 @@ export function metaTag(html: string, name: string): string | null {
     'i',
   );
   const m = html.match(re);
-  return m?.[1] || m?.[2] || m?.[3] || m?.[4] || null;
+  const raw = m?.[1] || m?.[2] || m?.[3] || m?.[4];
+  return raw ? decodeHtmlEntities(raw) || null : null;
 }
 
 const NAMED_ENTITIES: Record<string, string> = {
   amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
+  // The typographic ones publishers' CMSes emit in headlines.
+  lsquo: '\u2018', rsquo: '\u2019', ldquo: '\u201c', rdquo: '\u201d',
+  ndash: '\u2013', mdash: '\u2014', hellip: '\u2026',
 };
 
-/** Decodes the HTML entities a meta tag's content attribute can carry —
- *  named (&amp; &quot; …) and numeric (&#064; &#x2022;). Unknown named
- *  entities are left untouched rather than guessed at. */
+/** Decodes the HTML entities a meta tag's content attribute or a <title> can
+ *  carry — named (&amp; &quot; &rsquo; …) and numeric (&#064; &#x2022;).
+ *  Unknown named entities are left untouched rather than guessed at. Single
+ *  pass, so "&amp;lt;" becomes the literal text "&lt;", not "<". */
 export function decodeHtmlEntities(raw: string): string {
   return raw.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (whole, ent: string) => {
     if (ent[0] === '#') {
@@ -38,7 +48,8 @@ export function decodeHtmlEntities(raw: string): string {
   });
 }
 
+/** <title> text, trimmed, entities decoded. */
 export function titleTag(html: string): string | null {
   const m = html.match(/<title[^>]*>([^<]*)<\/title>/i);
-  return m?.[1]?.trim() || null;
+  return m?.[1] ? decodeHtmlEntities(m[1]).trim() || null : null;
 }

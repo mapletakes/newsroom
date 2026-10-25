@@ -1,3 +1,5 @@
+import { decodeHtmlEntities } from './html-meta';
+
 export type TwitterMeta = {
   title: string | null;
   description: string | null;
@@ -6,15 +8,13 @@ export type TwitterMeta = {
   thumbnail: string | null;
 };
 
-function stripHtml(html: string): string {
-  return html
+// Tags are stripped before entities are decoded, so tweet text that reads
+// "&lt;b&gt;" survives as a literal "<b>" instead of being removed as markup.
+export function stripHtml(html: string): string {
+  const text = html
     .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
+    .replace(/<[^>]+>/g, '');
+  return decodeHtmlEntities(text)
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }

@@ -17,7 +17,7 @@
 // A post with no caption drops the `: "…"` tail from both. Everything below
 // is best-effort against that shape and degrades to whatever matched — never
 // to a fabricated value.
-import { decodeHtmlEntities, metaTag } from './html-meta';
+import { metaTag } from './html-meta';
 import { safeFetchText } from './safe-fetch';
 import { stripHashtags } from './extract-tiktok';
 
@@ -67,10 +67,8 @@ export function captionTitle(caption: string): string | null {
 /** Pure parsing of a fetched Instagram page — split out from the fetch so it
  *  can be tested against real captured markup. */
 export function parseInstagramHtml(html: string): InstagramMeta {
-  const tag = (name: string) => {
-    const v = metaTag(html, name);
-    return v ? decodeHtmlEntities(v).trim() || null : null;
-  };
+  // metaTag has already decoded entities.
+  const tag = (name: string) => metaTag(html, name)?.trim() || null;
   const ogTitle = tag('og:title');
   const ogDescription = tag('og:description') || tag('description');
   const ogUrl = tag('og:url');

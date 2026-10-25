@@ -1,8 +1,7 @@
 // Only the pure parsing logic is unit-tested here — extractTikTok() itself
 // is a thin network I/O wrapper, same as every other extractor in this
-// codebase (none of extract-article.ts/extract-youtube.ts/extract-twitter.ts
-// have a test file either). What's worth pinning down is the JSON traversal
-// and text cleanup, which is where the real bugs live.
+// codebase. What's worth pinning down is the JSON traversal and text
+// cleanup, which is where the real bugs live.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -142,6 +141,29 @@ describe('extractTikTok — the actual regression this was rewritten over', () =
     expect(meta.thumbnail).toBe('https://example.com/thumb.jpg');
     expect(meta.durationSeconds).toBeNull(); // honestly unknown, not 0
     expect(meta.publishedAt).toBeNull(); // honestly unknown, not "now"
+  });
+
+  it('decodes entities in OG-tag fallbacks, including the thumbnail URL', async () => {
+    const html = `
+      <html><head>
+        <meta property="og:title" content="Q&amp;A with the mayor&#8230; #news">
+        <meta property="og:image" content="https://p16.tiktokcdn.com/obj/cover.jpg?x-expires=1&amp;x-signature=abc">
+      </head></html>
+    `;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes('/oembed')) return Promise.resolve(new Response('{}', { status: 404 }));
+        return Promise.resolve(new Response(html, { status: 200, headers: { 'content-type': 'text/html' } }));
+      }),
+    );
+
+    const meta = await extractTikTok('https://www.tiktok.com/tag/news');
+
+    expect(meta.title).toBe('Q&A with the mayor\u2026');
+    expect(meta.description).toBe('Q&A with the mayor\u2026 #news');
+    expect(meta.thumbnail).toBe('https://p16.tiktokcdn.com/obj/cover.jpg?x-expires=1&x-signature=abc');
   });
 
   it('returns the empty shape rather than throwing when the fetch itself fails', async () => {
