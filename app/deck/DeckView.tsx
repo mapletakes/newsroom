@@ -105,6 +105,7 @@ export function DeckView({
   // state — replaces the old suppressRefreshUntil timestamp with the same
   // guarantee, enforced at the fetch boundary instead of a time window.
   const pendingWrites = useRef(0);
+  const statusWrites = useRef(new Map<string, Promise<void>>());
 
   const fetchQueue = useCallback(async (): Promise<QueueData> => {
     if (pendingWrites.current > 0) {
@@ -239,6 +240,31 @@ export function DeckView({
     p.then(settlePendingWrite, settlePendingWrite);
     return p;
   }, [beginPendingWrite, settlePendingWrite]);
+
+  // Play, Undo, and replay must reach the server in click order for this
+  // item, even when an earlier request is slow. Different items stay independent.
+  const writeDeckStatus = useCallback((id: string, patch: Record<string, unknown>) => {
+    const send = async () => {
+      const response = await fetch('/api/queue', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...patch }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail || body.error || 'The change could not be saved.');
+      }
+    };
+    const previous = statusWrites.current.get(id);
+    const write = previous ? previous.catch(() => {}).then(send) : send();
+    statusWrites.current.set(id, write);
+    const forget = () => {
+      if (statusWrites.current.get(id) === write) statusWrites.current.delete(id);
+    };
+    write.then(forget, forget);
+    return reconcileAfterWrites(write).catch((error) => {
+      toast.error(error instanceof Error ? error.message : 'The change could not be saved.');
+    });
+  }, [reconcileAfterWrites]);
 
   // Refetch instantly when the server broadcasts a queue change — one
   // subscription invalidating both queries, since they were always
@@ -487,18 +513,9 @@ export function DeckView({
     queryClient.setQueryData<QueueData>(queueKey, (prev) =>
       prev ? { ...prev, submissions: prev.submissions.filter((s) => s.id !== playedId) } : prev); // optimistic
 
-    reconcileAfterWrites(
-      fetch('/api/queue', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: playedId,
-          status: 'played',
-          takeaway: tk,
-          duration_on_screen_s: duration,
-        }),
-      }),
-    );
+    writeDeckStatus(playedId, {
+      status: 'played', takeaway: tk, duration_on_screen_s: duration,
+    });
 
     toast('Marked played', {
       duration: 5000,
@@ -507,13 +524,7 @@ export function DeckView({
         onClick: () => {
           queryClient.setQueryData<QueueData>(queueKey, (prev) =>
             prev ? { ...prev, submissions: [played, ...prev.submissions] } : prev);
-          reconcileAfterWrites(
-            fetch('/api/queue', {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ id: playedId, status: 'approved' }),
-            }),
-          );
+          writeDeckStatus(playedId, { status: 'approved' });
         },
       },
     });
@@ -537,13 +548,7 @@ export function DeckView({
     queryClient.setQueryData<QueueData>(queueKey, (prev) =>
       prev ? { ...prev, submissions: prev.submissions.filter((s) => s.id !== id) } : prev);
 
-    reconcileAfterWrites(
-      fetch('/api/queue', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, status: 'rejected' }),
-      }),
-    );
+    writeDeckStatus(id, { status: 'rejected' });
 
     toast('Removed from deck', {
       duration: 5000,
@@ -552,13 +557,7 @@ export function DeckView({
         onClick: () => {
           queryClient.setQueryData<QueueData>(queueKey, (prev) =>
             prev ? { ...prev, submissions: [removed, ...prev.submissions] } : prev);
-          reconcileAfterWrites(
-            fetch('/api/queue', {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ id, status: 'approved' }),
-            }),
-          );
+          writeDeckStatus(id, { status: 'approved' });
         },
       },
     });
@@ -1274,9 +1273,17 @@ export function DeckView({
               Shelf
             </Link>
             {!curateOnly && (
-              <a href="/api/notes?format=markdown&commit=1" className="underline hover:text-rust">
-                Export Notes
-              </a>
+              <DropdownMenu>
+                <DropdownMenuTrigger className="underline hover:text-rust">Export Notes</DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem asChild>
+                    <a href="/api/notes?format=markdown&commit=1">Export new notes</a>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <a href="/api/notes?format=markdown&scope=all">Download all history</a>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
             {!curateOnly && discordWebhookConfigured && (
               <button type="button" onClick={postToDiscord} className="underline hover:text-rust">

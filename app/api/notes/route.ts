@@ -1,42 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase';
-import { getSession } from '@/lib/session';
+import { acknowledgeShowNotes, readShowNotes } from '@/lib/show-notes';
+import { getApprovedSession, getSession } from '@/lib/session';
 
 export async function GET(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
-
   const format = req.nextUrl.searchParams.get('format') || 'json';
-  const commit = req.nextUrl.searchParams.get('commit') === '1';
   const isExport = format === 'markdown';
-  const sb = supabaseAdmin();
-
-  // For the markdown export, only include notes since the last export boundary,
-  // so a broadcast that runs past midnight is exported as one continuous set.
-  let lastExport: string | null = null;
-  if (isExport) {
-    const { data: streamRow, error: srErr } = await sb
-      .from('streams')
-      .select('notes_exported_at')
-      .eq('id', session.streamId)
-      .maybeSingle();
-    if (!srErr && streamRow?.notes_exported_at) lastExport = streamRow.notes_exported_at;
+  const allHistory = isExport && req.nextUrl.searchParams.get('scope') === 'all';
+  // A full-history download is a recovery/read operation, not consumption of
+  // new notes. Keep it repeatable even if commit=1 was added to the URL.
+  const commit = !allHistory && req.nextUrl.searchParams.get('commit') === '1';
+  const session = await (isExport && commit ? getApprovedSession() : getSession());
+  if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
+  let data;
+  try {
+    data = await readShowNotes(session.streamId, isExport && !allHistory ? 'markdown' : 'history');
+  } catch {
+    return NextResponse.json({ error: 'could not load show notes' }, { status: 500 });
   }
-
-  let q = sb
-    .from('show_notes')
-    // Pull the submission's archive_url too, as a fallback if the note was
-    // created before archiving finished.
-    .select('*, submission:submissions(archive_url)')
-    .eq('stream_id', session.streamId)
-    .order('played_at', { ascending: true });
-  if (isExport && lastExport) q = q.gt('played_at', lastExport);
-
-  const { data, error } = await q;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  const archiveOf = (n: { archive_url?: string | null; submission?: { archive_url?: string | null } | null }) =>
-    n.archive_url || n.submission?.archive_url || null;
 
   if (isExport) {
     const fmt = (iso: string) =>
@@ -45,13 +25,12 @@ export async function GET(req: NextRequest) {
     const lines: string[] = [];
     lines.push(`# Show Notes — ${session.displayName}`);
     lines.push('');
-    const range = lastExport ? `since ${fmt(lastExport)}` : 'all items';
-    lines.push(`_${data?.length || 0} items · ${range}_`);
+    lines.push(`_${data.length} items · ${allHistory ? 'all played items' : 'not previously exported'}_`);
     lines.push('');
     for (const n of data || []) {
       lines.push(`## [${n.title || n.url}](${n.url})`);
       lines.push('');
-      const archive = archiveOf(n);
+      const archive = n.archive_url;
       const meta = `*Played ${fmt(n.played_at)}*` + (archive ? ` · [Archived snapshot](${archive})` : '');
       lines.push(meta);
       lines.push('');
@@ -60,13 +39,14 @@ export async function GET(req: NextRequest) {
       lines.push('---'); lines.push('');
     }
 
-    // Advance the export boundary so the next export starts from here.
-    // Only when explicitly committing and there was something to export.
-    if (commit && (data?.length || 0) > 0) {
-      await sb
-        .from('streams')
-        .update({ notes_exported_at: new Date().toISOString() })
-        .eq('id', session.streamId);
+    // Acknowledge only this snapshot's IDs. Later commits and replayed notes
+    // stay pending even if their played_at is before the current wall clock.
+    if (commit && data.length > 0) {
+      try {
+        await acknowledgeShowNotes(session.streamId, 'markdown', data.map((note) => note.id));
+      } catch {
+        return NextResponse.json({ error: 'could not save export receipts' }, { status: 500 });
+      }
     }
 
     return new NextResponse(lines.join('\n'), {

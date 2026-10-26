@@ -27,3 +27,50 @@ jobs:
 
       - name: Test
         run: npm test
+
+      - name: Production build
+        run: npm run build
+
+  database:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: local-fixture-only
+          POSTGRES_DB: newsroom_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: local-fixture-only
+      PGDATABASE: newsroom_ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create fixture roles
+        run: |
+          psql -v ON_ERROR_STOP=1 -c "CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;"
+
+      - name: Apply every migration in order
+        run: |
+          set -euo pipefail
+          for file in supabase/migrations/*.sql; do
+            echo "Applying $file"
+            psql -v ON_ERROR_STOP=1 -f "$file"
+          done
+
+      - name: Run database contracts
+        run: |
+          set -euo pipefail
+          for file in supabase/tests/*.sql; do
+            echo "Checking $file"
+            psql -v ON_ERROR_STOP=1 -f "$file"
+          done

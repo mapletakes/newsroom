@@ -129,6 +129,7 @@ export type EnrichedFields = {
   topics: string[] | null;
   dmcaRisk: 'low' | 'medium' | 'high';
   contentWarning: string | null; // human-readable reason, or null
+  failureReason?: string;
 };
 
 /**
@@ -150,7 +151,7 @@ export async function enrichExtractedMeta(input: {
   // and just keep the tweet text (stored as `description`).
   const enriched =
     input.kind === 'twitter'
-      ? { summary: null, credibility: null, topics: null as string[] | null, dmcaRisk: null, contentWarning: false }
+      ? { summary: null, credibility: null, topics: null as string[] | null, dmcaRisk: null, contentWarning: false, failureReason: undefined }
       : await enrichContent({
           url: input.url,
           title: input.meta.title,
@@ -172,5 +173,6 @@ export async function enrichExtractedMeta(input: {
     topics: enriched.topics,
     dmcaRisk: enriched.dmcaRisk || hostDMCARisk(input.url),
     contentWarning,
+    failureReason: enriched.failureReason,
   };
 }

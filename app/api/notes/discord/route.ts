@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getApprovedSession } from '@/lib/session';
 import { buildPlayedMessages, getPendingPlayedNotes, postPlayedList } from '@/lib/discord';
 
+export const maxDuration = 60;
+
 // Streamer-only, same as /api/setup: the webhook posts to a channel the
 // streamer configured, and the "since last post" boundary is channel-wide
 // state, not something a mod should be able to advance on their behalf.
@@ -16,7 +18,12 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   if (session.role !== 'streamer') return NextResponse.json({ error: 'forbidden' }, { status: 403 });
 
-  const pending = await getPendingPlayedNotes(session.streamId);
+  let pending;
+  try {
+    pending = await getPendingPlayedNotes(session.streamId);
+  } catch {
+    return NextResponse.json({ error: 'could not load export notes' }, { status: 500 });
+  }
   if (!pending) return NextResponse.json({ error: 'not-found' }, { status: 404 });
   const messages = buildPlayedMessages(pending.displayName, pending.notes);
   return NextResponse.json({ count: pending.notes.length, messages });
@@ -30,7 +37,8 @@ export async function POST() {
 
   const result = await postPlayedList(session.streamId);
   if (!result.ok) {
-    const status = result.error === 'no-webhook' || result.error === 'nothing-to-post' ? 400 : 502;
+    const status = result.error === 'export-in-progress' ? 409
+      : result.error === 'no-webhook' || result.error === 'nothing-to-post' ? 400 : 502;
     return NextResponse.json({ error: result.error }, { status });
   }
   return NextResponse.json({ ok: true, count: result.count });

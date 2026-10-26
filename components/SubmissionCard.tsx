@@ -7,6 +7,7 @@ import { Badge } from './ui/badge';
 import { SimpleTooltip } from './ui/tooltip';
 import { ArchiveButton } from './ArchiveButton';
 import { TriggerWarningBanner } from './TriggerWarning';
+import { EnrichmentStatus, type EnrichmentState } from './EnrichmentStatus';
 
 type Submission = {
   id: string;
@@ -45,6 +46,7 @@ type Submission = {
   // Streamer's replacement for the title shown on the overlay and in the
   // "Watching:" chat post — see lib/title-override.ts.
   title_override: string | null;
+  enrichment_state?: EnrichmentState;
 };
 
 const KIND_LABELS: Record<string, string> = {
@@ -160,6 +162,7 @@ export function SubmissionCard({
             {s.summary || s.description}
           </p>
         )}
+        <EnrichmentStatus key={`${s.id}:${s.enrichment_state}`} id={s.id} state={s.enrichment_state} retryable={s.status === 'approved'} />
         {!compact && s.topics && s.topics.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-2">
             {s.topics.map((t) => (

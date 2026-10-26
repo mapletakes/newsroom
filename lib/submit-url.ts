@@ -130,7 +130,7 @@ export async function submitUrlToQueue(params: SubmitUrlParams): Promise<SubmitU
   // is the actually-billed part. Most pending links never get approved, so
   // running that on every one of them (as this used to) paid for a summary
   // of every dead-end link chat posts. It now runs once, only if the item
-  // is approved — see lib/extract.ts's runAiEnrichment and the queue PATCH
+  // is approved — see lib/submission-enrichment.ts and the queue PATCH
   // route's approval handling.
   if (submission && !(submission as Record<string, unknown>).title) {
     await runBasicExtraction(submission.id as string);

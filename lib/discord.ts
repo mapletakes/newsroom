@@ -6,7 +6,9 @@
 // a bot if a future feature needs to read the channel back or pick among
 // several.
 
+import { randomUUID } from 'crypto';
 import { supabaseAdmin } from './supabase';
+import { acknowledgeShowNotes, readShowNotes, type ShowNote } from './show-notes';
 import { decryptSecret } from './crypto';
 
 const DISCORD_MAX_CHARS = 2000;
@@ -49,6 +51,7 @@ export function validateWebhookUrl(raw: string): WebhookValidation {
 }
 
 export type PlayedNote = {
+  id?: string;
   title: string | null;
   url: string;
   played_at: string;
@@ -83,7 +86,9 @@ function formatElapsed(ms: number): string {
  * 2000-character content cap — split between items, never mid-item, so a
  * message boundary never lands inside a link or a takeaway.
  */
-export function buildPlayedMessages(displayName: string, notes: PlayedNote[]): string[] {
+export type PlayedMessageBatch = { content: string; noteIds: string[] };
+
+export function buildPlayedBatches(displayName: string, notes: PlayedNote[]): PlayedMessageBatch[] {
   if (notes.length === 0) return [];
 
   const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -101,59 +106,44 @@ export function buildPlayedMessages(displayName: string, notes: PlayedNote[]): s
     // takeaway) gets truncated rather than sent as its own oversized
     // message that Discord would reject outright.
     if (block.length > DISCORD_MAX_CHARS - 1) block = block.slice(0, DISCORD_MAX_CHARS - 2) + '…';
-    return block;
+    return { content: block, noteIds: n.id ? [n.id] : [] };
   });
 
-  const messages: string[] = [];
-  let current = header;
+  const messages: PlayedMessageBatch[] = [];
+  let current: PlayedMessageBatch = { content: header, noteIds: [] };
   for (const block of blocks) {
-    const candidate = `${current}\n${block}`;
+    const candidate = `${current.content}\n${block.content}`;
     if (candidate.length > DISCORD_MAX_CHARS) {
       messages.push(current);
       current = block;
     } else {
-      current = candidate;
+      current = { content: candidate, noteIds: [...current.noteIds, ...block.noteIds] };
     }
   }
   messages.push(current);
   return messages;
 }
 
-/**
- * Loads whatever's played since the last Discord post (or all of it, on the
- * first post ever) for previewing or sending. Returns null only when the
- * stream row itself can't be found — an empty pending list is a valid,
- * non-null result ("nothing new to post").
- */
+export function buildPlayedMessages(displayName: string, notes: PlayedNote[]): string[] {
+  return buildPlayedBatches(displayName, notes).map((batch) => batch.content);
+}
+
+/** Load active notes without Discord receipts; preview does not acknowledge. */
 export async function getPendingPlayedNotes(
   streamId: string,
-): Promise<{ displayName: string; notes: PlayedNote[]; webhookUrl: string | null } | null> {
-  const sb = supabaseAdmin();
-  const { data: stream } = await sb
-    .from('streams')
-    .select('display_name, discord_webhook_url, discord_posted_at')
-    .eq('id', streamId)
-    .maybeSingle();
+): Promise<{ displayName: string; notes: ShowNote[]; webhookUrl: string | null } | null> {
+  const { data: stream, error } = await supabaseAdmin()
+    .from('streams').select('display_name, discord_webhook_url').eq('id', streamId).maybeSingle();
+  if (error) throw new Error('Could not load Discord configuration.', { cause: error });
   if (!stream) return null;
-
-  let q = sb
-    .from('show_notes')
-    .select('title, url, played_at, takeaway')
-    .eq('stream_id', streamId)
-    .order('played_at', { ascending: true });
-  if (stream.discord_posted_at) q = q.gt('played_at', stream.discord_posted_at);
-  const { data: notes } = await q;
-
-  return {
-    displayName: stream.display_name || 'stream',
-    notes: notes || [],
-    webhookUrl: decryptSecret(stream.discord_webhook_url),
-  };
+  const notes = await readShowNotes(streamId, 'discord');
+  return { displayName: stream.display_name || 'stream', notes, webhookUrl: decryptSecret(stream.discord_webhook_url) };
 }
 
 async function sendWebhookMessage(
   webhookUrl: string,
   content: string,
+  deadline: number,
   attempt = 0,
 ): Promise<{ ok: boolean; error?: string }> {
   // A direct fetch, not lib/safe-fetch.ts's safeFetchText: that helper is
@@ -162,20 +152,23 @@ async function sendWebhookMessage(
   // by validateWebhookUrl at save time, and it's a POST of JSON we composed
   // ourselves, not a page body being read.
   let res: Response;
+  const remainingMs = deadline - Date.now();
+  if (remainingMs <= 0) return { ok: false, error: 'export timed out — retry to post the remaining notes' };
   try {
     res = await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(Math.min(10_000, remainingMs)),
       body: JSON.stringify({ content, flags: 4 }), // SUPPRESS_EMBEDS — a batch of links shouldn't each unfurl into a card
     });
   } catch {
-    return { ok: false, error: 'could not reach discord' };
+    return { ok: false, error: 'could not confirm Discord delivery — retry may duplicate the message' };
   }
   if (res.status === 429 && attempt < 3) {
     const body = await res.json().catch(() => ({}) as { retry_after?: number });
     const waitMs = Math.min(Math.ceil((body.retry_after ?? 1) * 1000), 5000);
     await new Promise((r) => setTimeout(r, waitMs));
-    return sendWebhookMessage(webhookUrl, content, attempt + 1);
+    return sendWebhookMessage(webhookUrl, content, deadline, attempt + 1);
   }
   if (res.status === 404) return { ok: false, error: 'webhook not found — it may have been deleted in Discord' };
   if (!res.ok) return { ok: false, error: `discord responded ${res.status}` };
@@ -186,26 +179,46 @@ export type PostPlayedListResult =
   | { ok: true; count: number }
   | { ok: false; error: 'not-found' | 'no-webhook' | 'nothing-to-post' | string };
 
-/**
- * Sends everything played since the last Discord post to the stream's
- * configured webhook, then advances discord_posted_at — but only once every
- * message in the batch has sent successfully, so a mid-batch failure (rate
- * limit exhausted, webhook deleted) can be retried from the same starting
- * point rather than silently skipping whatever didn't make it.
- */
+/** Send under a channel lease and acknowledge each successful message's IDs. */
 export async function postPlayedList(streamId: string): Promise<PostPlayedListResult> {
-  const pending = await getPendingPlayedNotes(streamId);
-  if (!pending) return { ok: false, error: 'not-found' };
-  if (!pending.webhookUrl) return { ok: false, error: 'no-webhook' };
-  if (pending.notes.length === 0) return { ok: false, error: 'nothing-to-post' };
-
-  const messages = buildPlayedMessages(pending.displayName, pending.notes);
-  for (const content of messages) {
-    const sent = await sendWebhookMessage(pending.webhookUrl, content);
-    if (!sent.ok) return { ok: false, error: sent.error || 'failed' };
-  }
-
   const sb = supabaseAdmin();
-  await sb.from('streams').update({ discord_posted_at: new Date().toISOString() }).eq('id', streamId);
-  return { ok: true, count: pending.notes.length };
+  const token = randomUUID();
+  const deadline = Date.now() + 45_000;
+  const { data: claimed, error: claimError } = await sb.rpc('claim_discord_export', {
+    p_stream_id: streamId, p_token: token,
+  });
+  if (claimError) return { ok: false, error: 'could not start export' };
+  if (!claimed) return { ok: false, error: 'export-in-progress' };
+
+  try {
+    const pending = await getPendingPlayedNotes(streamId);
+    if (!pending) return { ok: false, error: 'not-found' };
+    if (!pending.webhookUrl) return { ok: false, error: 'no-webhook' };
+    if (pending.notes.length === 0) return { ok: false, error: 'nothing-to-post' };
+
+    const messages = buildPlayedBatches(pending.displayName, pending.notes);
+    for (const batch of messages) {
+      const sent = await sendWebhookMessage(pending.webhookUrl, batch.content, deadline);
+      if (!sent.ok) return { ok: false, error: sent.error || 'failed' };
+      try {
+        await acknowledgeShowNotes(streamId, 'discord', batch.noteIds, token);
+      } catch {
+        // Discord and PostgreSQL cannot commit atomically. Report uncertainty
+        // rather than pretending a successful send has a durable receipt.
+        return { ok: false, error: 'Discord accepted the message, but its receipt could not be saved. Retrying may duplicate it.' };
+      }
+    }
+    return { ok: true, count: pending.notes.length };
+  } catch {
+    return { ok: false, error: 'could not load export notes' };
+  } finally {
+    try {
+      const { error } = await sb.from('streams').update({
+        discord_export_token: null, discord_export_started_at: null,
+      }).eq('id', streamId).eq('discord_export_token', token);
+      if (error) throw error;
+    } catch {
+      console.error('Could not release Discord export lease:', streamId);
+    }
+  }
 }

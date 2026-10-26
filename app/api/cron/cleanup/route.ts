@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { STATUS_RESET_AFTER_MS } from '@/lib/mod-status';
+import { waitUntil } from '@vercel/functions';
+import { recoverSubmissionEnrichment } from '@/lib/submission-enrichment';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -24,6 +26,9 @@ export async function GET(req: NextRequest) {
   }
 
   const sb = supabaseAdmin();
+  // Recovery can invoke paid providers; require the authenticated cron even
+  // on installations that have not configured a secret for housekeeping.
+  if (secret) waitUntil(recoverSubmissionEnrichment());
   const now = Date.now();
 
   const eventsCutoff = new Date(now - 2 * 24 * 60 * 60 * 1000).toISOString();
