@@ -64,7 +64,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .eq('stream_id', session.streamId)
       .in('id', submissionIds);
 
-    for (const sub of subs || []) {
+    // .in() returns rows in arbitrary order — re-sort to the request's order
+    // so a saved segment or selection lands on the shelf in rundown order.
+    const order = new Map(submissionIds.map((id, i) => [id, i]));
+    const ordered = (subs || []).sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+
+    for (const sub of ordered) {
       if (already.has(sub.normalized_url)) { skipped++; continue; }
       already.add(sub.normalized_url);
       const { data: inserted } = await sb

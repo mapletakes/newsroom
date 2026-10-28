@@ -21,9 +21,10 @@ export type SaveResult = { ok: boolean; added?: number; skipped?: number; error?
 // state — this menu pops up rarely enough that a fresh fetch each time is
 // simpler than cache invalidation, and it means a shelf created moments ago
 // in another tab always shows up.
-export function SaveToListMenu({ trigger, onSave }: {
+export function SaveToListMenu({ trigger, onSave, defaultNewName = '' }: {
   trigger: React.ReactElement;
   onSave: (listId: string) => Promise<SaveResult>;
+  defaultNewName?: string; // prefills "+ New shelf…" (e.g. a segment's name)
 }) {
   const [open, setOpen] = useState(false);
   const [shelves, setShelves] = useState<ShelfSummary[] | null>(null);
@@ -92,7 +93,7 @@ export function SaveToListMenu({ trigger, onSave }: {
             />
           </div>
         ) : (
-          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setCreating(true); }}>
+          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setNewName(defaultNewName); setCreating(true); }}>
             + New shelf…
           </DropdownMenuItem>
         )}

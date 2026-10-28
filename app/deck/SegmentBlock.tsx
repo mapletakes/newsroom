@@ -13,6 +13,7 @@ import { Icon } from '@/components/ui/icon';
 import { SimpleTooltip } from '@/components/ui/tooltip';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { SortableQueueItem } from './SortableQueueItem';
+import { SaveToListMenu, type SaveResult } from '@/components/SaveToListMenu';
 
 export type Segment = { id: string; name: string; position: number; collapsed: boolean };
 
@@ -36,6 +37,7 @@ export function SegmentBlock({
   onToggleCollapse,
   onDelete,
   onClearItems,
+  onSaveToShelf,
 }: {
   containerId: string; // 'ungrouped' or a segment id — the drop target id
   title: string | null; // null → no header (render items flat)
@@ -56,6 +58,7 @@ export function SegmentBlock({
   onToggleCollapse?: () => void;
   onDelete?: () => void;
   onClearItems?: () => void;
+  onSaveToShelf?: (listId: string) => Promise<SaveResult>; // copies every item in the block
 }) {
   // The block is a sortable: draggable by its header grip to reorder blocks,
   // and a drop target so items can be dragged into it (even when collapsed).
@@ -131,6 +134,21 @@ export function SegmentBlock({
           <span className="mr-auto shrink-0 font-mono text-xs font-semibold text-ink/60">
             ({items.length}{totalSeconds > 0 ? ` · ${formatDuration(totalSeconds)}` : ''})
           </span>
+          {onSaveToShelf && items.length > 0 && (
+            <SaveToListMenu
+              defaultNewName={title}
+              onSave={onSaveToShelf}
+              trigger={
+                <button
+                  className="shrink-0 w-5 flex items-center justify-center text-ink/30 hover:text-ink"
+                  aria-label="Save all items in this block to a shelf"
+                  title="Save all items here to a shelf"
+                >
+                  <Icon name="bookmark" className="text-sm" />
+                </button>
+              }
+            />
+          )}
           {onClearItems && items.length > 0 && (
             <SimpleTooltip content="Reject all items here (clears the block)">
               <button

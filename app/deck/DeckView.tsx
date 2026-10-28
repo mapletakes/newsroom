@@ -20,7 +20,7 @@ import { GettingStarted } from './GettingStarted';
 import { ShortcutsModal } from './ShortcutsModal';
 import { AppHeader } from '@/components/AppHeader';
 import { Icon } from '@/components/ui/icon';
-import { SaveToListMenu } from '@/components/SaveToListMenu';
+import { SaveToListMenu, type SaveResult } from '@/components/SaveToListMenu';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -935,6 +935,19 @@ export function DeckView({
     queryClient.invalidateQueries({ queryKey: queueKey });
   };
 
+  // Copy queue items onto a shelf, in the order given (multi-select bar and
+  // the per-segment "save to shelf" header button both go through here).
+  const saveToShelf = async (listId: string, submissionIds: string[]): Promise<SaveResult> => {
+    const r = await fetch(`/api/lists/${listId}/items`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ submissionIds }),
+    });
+    if (!r.ok) return { ok: false };
+    const data = await r.json();
+    return { ok: true, added: data.added, skipped: data.skipped };
+  };
+
   // Reject every item in one block (a segment, or ungrouped) — end-of-day cleanup.
   const clearBlock = async (containerId: string, label: string) => {
     const inBlock = (s: Submission) =>
@@ -1472,17 +1485,9 @@ export function DeckView({
                     Save to…
                   </button>
                 }
-                onSave={async (listId) => {
-                  const submissionIds = orderedQueue.filter((s) => selectedIds.has(s.id)).map((s) => s.id);
-                  const r = await fetch(`/api/lists/${listId}/items`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ submissionIds }),
-                  });
-                  if (!r.ok) return { ok: false };
-                  const data = await r.json();
-                  return { ok: true, added: data.added, skipped: data.skipped };
-                }}
+                onSave={(listId) =>
+                  saveToShelf(listId, orderedQueue.filter((s) => selectedIds.has(s.id)).map((s) => s.id))
+                }
               />
               <button onClick={clearSelection} className="ml-auto underline hover:opacity-70">
                 Clear
@@ -1528,6 +1533,9 @@ export function DeckView({
                         onToggleSelect={toggleSelect}
                         onToggleCollapse={hasSegments ? () => setUngroupedCollapsed((c) => !c) : undefined}
                         onClearItems={hasSegments ? () => clearBlock('ungrouped', 'the Ungrouped list') : undefined}
+                        onSaveToShelf={hasSegments
+                          ? (listId) => saveToShelf(listId, containerItems('ungrouped').map((s) => s.id))
+                          : undefined}
                       />
                     );
                   }
@@ -1557,6 +1565,7 @@ export function DeckView({
                       onToggleCollapse={() => toggleCollapse(seg)}
                       onDelete={() => deleteSegment(seg.id)}
                       onClearItems={() => clearBlock(seg.id, `“${seg.name}”`)}
+                      onSaveToShelf={(listId) => saveToShelf(listId, containerItems(seg.id).map((s) => s.id))}
                     />
                   );
                 })}
