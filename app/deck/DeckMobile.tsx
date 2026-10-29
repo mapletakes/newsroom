@@ -347,6 +347,7 @@ export function DeckMobile({
               )}
               {chatEnabled && <DropdownMenuItem asChild><Link href="/mod">Mod View</Link></DropdownMenuItem>}
               <DropdownMenuItem asChild><Link href="/shelf">Shelf</Link></DropdownMenuItem>
+              <DropdownMenuItem asChild><Link href="/archives">Archives</Link></DropdownMenuItem>
               {!curateOnly && (
                 <DropdownMenuItem asChild><Link href="/setup">Settings</Link></DropdownMenuItem>
               )}

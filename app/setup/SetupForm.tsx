@@ -187,6 +187,7 @@ export function SetupForm({
             <Link href="/deck" className="underline hover:text-rust">Streamer Deck</Link>
             {chatEnabled && <Link href="/mod" className="underline hover:text-rust">Mod View</Link>}
             <Link href="/shelf" className="underline hover:text-rust">Shelf</Link>
+            <Link href="/archives" className="underline hover:text-rust">Archives</Link>
             {isAdmin && <Link href="/admin" className="underline hover:text-rust">Admin</Link>}
           </>
         }

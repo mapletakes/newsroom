@@ -1286,6 +1286,9 @@ export function DeckView({
             <Link href="/shelf" className="underline hover:text-rust">
               Shelf
             </Link>
+            <Link href="/archives" className="underline hover:text-rust">
+              Archives
+            </Link>
             {!curateOnly && (
               <a href="/api/notes?format=markdown&commit=1" className="underline hover:text-rust">
                 Export Notes

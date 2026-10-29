@@ -47,7 +47,7 @@ type Submission = {
   title_override: string | null;
 };
 
-const KIND_LABELS: Record<string, string> = {
+export const KIND_LABELS: Record<string, string> = {
   article: 'Article',
   youtube: 'YouTube',
   youtube_short: 'YT Short',

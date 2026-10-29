@@ -573,6 +573,7 @@ export function ShelfDetailView({
             <Link href="/shelf" className="underline hover:text-rust">← The Shelf</Link>
             {!isMod && <Link href="/deck" className="underline hover:text-rust">Streamer Deck</Link>}
             {chatEnabled && <Link href="/mod" className="underline hover:text-rust">Mod View</Link>}
+            <Link href="/archives" className="underline hover:text-rust">Archives</Link>
             {isAdmin && <Link href="/admin" className="underline hover:text-rust">Admin</Link>}
             <span>{displayName}</span>
           </>

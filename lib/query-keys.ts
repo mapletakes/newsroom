@@ -12,4 +12,5 @@ export const queryKeys = {
   quickLinks: () => ['quick-links'] as const,
   shelves: () => ['shelves'] as const,
   shelf: (shelfId: string) => ['shelf', shelfId] as const,
+  archives: () => ['archives'] as const,
 };

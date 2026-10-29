@@ -387,6 +387,7 @@ export function ModView({
             {!isMod && <Link href="/deck" className="underline hover:text-rust">Streamer Deck →</Link>}
             {isMod && canCurate && <Link href="/deck" className="underline hover:text-rust">Curate Deck →</Link>}
             <Link href="/shelf" className="underline hover:text-rust">Shelf</Link>
+            <Link href="/archives" className="underline hover:text-rust">Archives</Link>
             {/* Questions and Mod status are reached via the rail above, not a
                 header link — see the DeckRail block's comment. */}
             {/* Two different pages, deliberately: /setup is the channel and is
