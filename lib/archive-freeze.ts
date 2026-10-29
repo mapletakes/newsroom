@@ -14,20 +14,25 @@
 //    from the network.
 //
 // Removing scripts also defeats most "soft" paywalls for free: the full text
-// is in the HTML and a script hides it, and that script never runs. Hard
-// paywalls (text only sent to subscribers) need the browser-extension capture
-// planned as phase 2, which will hand its rendered DOM to freezeHtml().
+// is in the HTML and a script hides it, and that script never runs. Text a
+// page ships as data but only draws with scripts (JSON-LD, Next.js page data)
+// is put back by lib/archive-recover.ts. Hard paywalls (text only sent to
+// subscribers) need the browser-extension capture planned as phase 2, which
+// will hand its rendered DOM to freezeHtml().
 //
 // Size: the frozen page is served through a Vercel function, whose response
-// body is capped at 4.5 MB, so inlined assets share a byte budget. Stylesheets
-// go first (layout), then content images in document order, then CSS
-// backgrounds and fonts. Whatever doesn't fit is dropped rather than left
-// pointing at the original — the CSP would block it anyway, and a remote
-// image would leak every viewer's IP to the publisher.
+// body is capped at 4.5 MB, so inlined assets share a byte budget. CSS the
+// page can't use is dropped first (lib/archive-css.ts — on news sites that's
+// most of it, fonts especially). Then content images go in document order,
+// then CSS images, then fonts. Whatever doesn't fit is dropped rather than
+// left pointing at the original — the CSP would block it anyway, and a
+// remote image would leak every viewer's IP to the publisher.
 
 import * as cheerio from 'cheerio';
 import type { Element } from 'domhandler';
 import { safeFetchBytes, type SafeFetchBytesResult, type SafeFetchOptions } from './safe-fetch';
+import { documentTokens, fontFaceUrls, pruneStylesheets } from './archive-css';
+import { findEmbeddedArticle, injectRecovered, isArticlePage, paywalledSelectors } from './archive-recover';
 
 export type FetchBytes = (url: string, options?: SafeFetchOptions) => Promise<SafeFetchBytesResult>;
 
@@ -45,6 +50,7 @@ export type FreezeResult = {
   bytes: number;
   assetsInlined: number;
   assetsDropped: number;
+  recoveredParagraphs: number; // article text restored from embedded data
 };
 
 const UA =
@@ -106,6 +112,11 @@ export async function freezeHtml(html: string, pageUrl: string, options: FreezeO
     $('title').first().text().trim() ||
     null;
 
+  // Read embedded article text and paywall markup now: both live in
+  // <script> tags, which are about to go.
+  const recovered = isArticlePage($) ? findEmbeddedArticle($) : null;
+  const paywalled = paywalledSelectors($);
+
   unwrapNoscript($);
 
   // Stylesheets are fetched before the rest of the DOM is stripped, since
@@ -119,7 +130,10 @@ export async function freezeHtml(html: string, pageUrl: string, options: FreezeO
   sheets.forEach((el, i) => {
     const css = cssTexts[i];
     if (css == null) return;
-    const media = $(el).attr('media');
+    // The async-CSS trick — media="print" that an onload handler flips to
+    // "all" — never flips without scripts, so apply the sheet as it would be.
+    const onload = $(el).attr('onload') ?? '';
+    const media = /media\s*=/.test(onload) ? undefined : $(el).attr('media');
     const style = $('<style></style>').text(css.text);
     style.attr('data-href', css.url);
     if (media && media !== 'all') style.attr('media', media);
@@ -130,6 +144,7 @@ export async function freezeHtml(html: string, pageUrl: string, options: FreezeO
     $(el).replaceWith($('<img>').attr('src', $(el).attr('poster')!).attr('alt', ''));
   });
   $('video').remove();
+  replaceEmbeds($, resolve);
   $(REMOVE_SELECTORS).remove();
   $('form').each((_, el) => {
     $(el).replaceWith($(el).contents());
@@ -146,6 +161,13 @@ export async function freezeHtml(html: string, pageUrl: string, options: FreezeO
     else img.removeAttr('src');
   });
   $('picture source').remove();
+  // Tracking pixels: nothing to see, and fetching them reports a visit.
+  $('img').each((_, el) => {
+    const { width, height, src } = el.attribs;
+    if ((Number(width) <= 1 && Number(height) <= 1 && width != null && height != null) || /\/akam\/\d+\/pixel_/.test(src ?? '')) {
+      $(el).remove();
+    }
+  });
 
   sanitizeAttributes($);
 
@@ -164,6 +186,28 @@ export async function freezeHtml(html: string, pageUrl: string, options: FreezeO
       const v = $(el).attr(attr);
       if (v && !v.startsWith('#')) $(el).removeAttr(attr);
     }
+  });
+
+  const recoveredParagraphs = recovered ? injectRecovered($, recovered) : 0;
+  // Content Google's paywall markup flags as subscriber-only is sometimes
+  // already in the page and only hidden by CSS (a height clamp, a fade, a
+  // blur); undo those on exactly the flagged elements.
+  if (paywalled.length) {
+    $('head').append(
+      `<style>${paywalled.join(',')}{max-height:none!important;overflow:visible!important;` +
+        'visibility:visible!important;opacity:1!important;filter:none!important;' +
+        '-webkit-mask-image:none!important;mask-image:none!important}</style>',
+    );
+  }
+
+  // Drop the CSS this page can't use before measuring anything against the
+  // byte budget (see lib/archive-css.ts).
+  const tokens = documentTokens($);
+  const inlineStyles = $('[style]').toArray().map((el) => $(el).attr('style') ?? '');
+  const styleEls = $('style').toArray();
+  const pruned = pruneStylesheets(styleEls.map((el) => $(el).text()), tokens, inlineStyles);
+  styleEls.forEach((el, i) => {
+    $(el).text(pruned[i]);
   });
 
   // --- Inline assets, highest priority first, within the byte budget. ---
@@ -190,23 +234,38 @@ export async function freezeHtml(html: string, pageUrl: string, options: FreezeO
   });
 
   // CSS url()s: in <style> blocks (each with its own base URL) and style="".
+  // Each reference costs a full copy of the data, so references are counted.
   const styleBlocks = $('style').toArray();
   const styleAttrs = $('[style]').toArray();
-  const cssUrls = new Set<string>();
+  const refs = new Map<string, number>();
+  const fonts = new Set<string>();
+  const countRefs = (css: string, base: string) => {
+    for (const u of cssUrlRefs(css, base)) refs.set(u, (refs.get(u) ?? 0) + 1);
+  };
   for (const el of styleBlocks) {
     const base = $(el).attr('data-href') ?? baseUrl;
-    for (const u of cssUrlRefs($(el).text(), base)) cssUrls.add(u);
+    const css = $(el).text();
+    countRefs(css, base);
+    for (const f of fontFaceUrls(css)) {
+      const abs = resolveUrl(f, base);
+      if (abs) fonts.add(abs);
+    }
   }
-  for (const el of styleAttrs) {
-    for (const u of cssUrlRefs($(el).attr('style') ?? '', baseUrl)) cssUrls.add(u);
+  for (const el of styleAttrs) countRefs($(el).attr('style') ?? '', baseUrl);
+  await inliner.prefetch([...refs.keys()]);
+  // CSS images (logos, icons, backgrounds) before fonts: without its web
+  // fonts a page still reads fine in fallback type, but it loses meaning
+  // without its pictures.
+  const plan = new Map<string, string | null>();
+  for (const fontPass of [false, true]) {
+    for (const [u, n] of refs) {
+      if (fonts.has(u) !== fontPass) continue;
+      const data = inliner.take(u, maxBytes - used, n);
+      if (data) used += data.length * n;
+      plan.set(u, data);
+    }
   }
-  await inliner.prefetch([...cssUrls]);
-  const rewriteCss = (css: string, base: string) =>
-    rewriteCssUrls(css, base, (abs) => {
-      const data = inliner.take(abs, maxBytes - used);
-      if (data) used += data.length;
-      return data;
-    });
+  const rewriteCss = (css: string, base: string) => rewriteCssUrls(css, base, (abs) => plan.get(abs) ?? null);
   for (const el of styleBlocks) {
     const base = $(el).attr('data-href') ?? baseUrl;
     $(el).text(rewriteCss($(el).text(), base)).removeAttr('data-href');
@@ -232,6 +291,7 @@ export async function freezeHtml(html: string, pageUrl: string, options: FreezeO
     bytes: Buffer.byteLength(out, 'utf8'),
     assetsInlined: inliner.inlined,
     assetsDropped: inliner.dropped,
+    recoveredParagraphs,
   };
 }
 
@@ -292,8 +352,21 @@ function pickImageSrc(img: cheerio.Cheerio<Element>): string | undefined {
     const v = img.attr(a);
     if (v && placeholder) return v;
   }
-  const fromSrcset = bestFromSrcset(img.attr('srcset')) ?? bestFromSrcset(img.parent('picture').find('source[srcset]').first().attr('srcset'));
-  return fromSrcset ?? src;
+  const own = bestFromSrcset(img.attr('srcset'));
+  if (own) return own;
+  if (!placeholder) return src;
+  // A <picture> with no usable <img> source: take the <source> with no media
+  // query (the default), else one for wide screens, rather than whichever is
+  // first — that's usually the small mobile crop.
+  const sources = img
+    .parent('picture')
+    .find('source')
+    .toArray()
+    .map((el) => ({ media: el.attribs.media ?? '', srcset: el.attribs.srcset ?? el.attribs['data-srcset'] }))
+    .filter((x) => x.srcset);
+  const pick =
+    sources.find((x) => !x.media) ?? sources.find((x) => /min-width/i.test(x.media)) ?? sources[sources.length - 1];
+  return bestFromSrcset(pick?.srcset) ?? src;
 }
 
 export function bestFromSrcset(srcset: string | undefined): string | undefined {
@@ -362,6 +435,8 @@ const CSS_URL = /url\(\s*(["']?)([^"')]+)\1\s*\)/gi;
 function cssUrlRefs(css: string, base: string): string[] {
   const out: string[] = [];
   for (const m of css.matchAll(CSS_URL)) {
+    // url(#id) points at an SVG element in the page, not a file.
+    if (/^\s*(#|%23)/.test(m[2])) continue;
     const abs = resolveUrl(m[2], base);
     if (abs && !abs.startsWith('data:')) out.push(abs);
   }
@@ -370,7 +445,7 @@ function cssUrlRefs(css: string, base: string): string[] {
 
 function absolutizeCssUrls(css: string, base: string): string {
   return css.replace(CSS_URL, (whole, _q, u: string) => {
-    if (u.startsWith('data:') || u.startsWith('#')) return whole;
+    if (u.startsWith('data:') || /^\s*(#|%23)/.test(u)) return whole;
     const abs = resolveUrl(u, base);
     return abs ? `url("${abs}")` : 'url("")';
   });
@@ -378,7 +453,7 @@ function absolutizeCssUrls(css: string, base: string): string {
 
 function rewriteCssUrls(css: string, base: string, inline: (abs: string) => string | null): string {
   return css.replace(CSS_URL, (whole, _q, u: string) => {
-    if (u.startsWith('data:') || u.startsWith('#')) return whole;
+    if (u.startsWith('data:') || /^\s*(#|%23)/.test(u)) return whole;
     const abs = resolveUrl(u, base);
     const data = abs ? inline(abs) : null;
     return data ? `url("${data}")` : 'url("")';
@@ -407,9 +482,9 @@ class Inliner {
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, todo.length) }, worker));
   }
 
-  take(url: string, remaining: number): string | null {
+  take(url: string, remaining: number, refs = 1): string | null {
     const data = this.ready.get(url) ?? null;
-    if (data && data.length <= remaining) {
+    if (data && data.length * refs <= remaining) {
       this.inlined++;
       return data;
     }
@@ -417,40 +492,90 @@ class Inliner {
     return null;
   }
 
-  private async load(url: string): Promise<string | null> {
+  // One retry for failures that are usually momentary (a dropped connection,
+  // a timeout, a CDN's 429/5xx) — otherwise one blip loses that image or
+  // font from the snapshot for good.
+  private async load(url: string, attempt = 1): Promise<string | null> {
     try {
       const res = await this.fetchBytes(url, {
         headers: { 'User-Agent': UA, Accept: 'image/*,font/*,*/*;q=0.5', Referer: this.referer },
         maxBytes: MAX_ASSET_BYTES,
         timeoutMs: 8000,
       });
+      if ((res.status === 429 || res.status >= 500) && attempt < 2 && Date.now() < this.deadline) {
+        return this.load(url, attempt + 1);
+      }
       if (res.status >= 400 || res.truncated || !res.bytes.length) return null;
-      const mime = assetMime(res.contentType, url);
+      const mime = assetMime(res.contentType, url, res.bytes);
       if (!mime) return null;
       return `data:${mime};base64,${res.bytes.toString('base64')}`;
     } catch {
-      return null;
+      return attempt < 2 && Date.now() < this.deadline ? this.load(url, attempt + 1) : null;
     }
   }
 }
 
-const EXT_MIME: Record<string, string> = {
-  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp',
-  avif: 'image/avif', svg: 'image/svg+xml', ico: 'image/x-icon',
-  woff2: 'font/woff2', woff: 'font/woff', ttf: 'font/ttf', otf: 'font/otf',
-};
+/** An image or font type from the file's own signature, for servers that
+ *  label assets wrongly (one major news CDN sends its fonts as
+ *  application/x-www-form-urlencoded). */
+export function sniffMime(bytes: Buffer): string | null {
+  const ascii = (start: number, end: number) => bytes.subarray(start, end).toString('latin1');
+  if (ascii(0, 4) === 'wOF2') return 'font/woff2';
+  if (ascii(0, 4) === 'wOFF') return 'font/woff';
+  if (ascii(0, 4) === 'OTTO') return 'font/otf';
+  if (bytes.readUInt32BE(0) === 0x00010000 && bytes.length > 12) return 'font/ttf';
+  if (bytes[0] === 0x89 && ascii(1, 4) === 'PNG') return 'image/png';
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg';
+  if (ascii(0, 4) === 'GIF8') return 'image/gif';
+  if (ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP') return 'image/webp';
+  if (ascii(4, 8) === 'ftyp' && /^avi[fs]$/.test(ascii(8, 12))) return 'image/avif';
+  return null;
+}
 
 /** Only images and fonts are ever inlined: a stray HTML or script response
- *  behind an image URL is refused rather than smuggled into a data: URI. */
-function assetMime(contentType: string | null, url: string): string | null {
+ *  behind an image URL is refused rather than smuggled into a data: URI.
+ *  A declared image/font type is trusted; otherwise the bytes must say so
+ *  (or, for SVG, which has no fixed signature, a generic type plus the
+ *  file extension). */
+function assetMime(contentType: string | null, url: string, bytes: Buffer): string | null {
   const ct = contentType?.split(';')[0].trim().toLowerCase();
   if (ct && (ct.startsWith('image/') || ct.startsWith('font/'))) return ct;
   if (ct && /^application\/(font-woff2?|x-font-\w+|vnd\.ms-fontobject)$/.test(ct)) return ct;
+  const sniffed = bytes.length >= 12 ? sniffMime(bytes) : null;
+  if (sniffed) return sniffed;
   const ext = /\.([a-z0-9]+)(?:$|[?#])/i.exec(new URL(url).pathname)?.[1]?.toLowerCase();
-  if ((!ct || ct === 'application/octet-stream' || ct === 'binary/octet-stream') && ext && EXT_MIME[ext]) {
-    return EXT_MIME[ext];
-  }
+  if ((!ct || ct === 'application/octet-stream' || ct === 'binary/octet-stream') && ext === 'svg') return 'image/svg+xml';
   return null;
+}
+
+// Embeds worth keeping a pointer to when their iframe is stripped: video,
+// social posts, maps and charts. Anything else in an iframe is usually an ad.
+const EMBED_HOSTS =
+  /(^|\.)(youtube\.com|youtube-nocookie\.com|youtu\.be|vimeo\.com|twitter\.com|x\.com|instagram\.com|tiktok\.com|facebook\.com|spotify\.com|soundcloud\.com|podcasts\.apple\.com|datawrapper\.dwcdn\.net|flo\.uri\.sh|public\.flourish\.studio|google\.com|documentcloud\.org|scribd\.com|reddit\.com|bsky\.app|threads\.net|twitch\.tv)$/i;
+
+/** Swaps embedded iframes (videos, posts, charts) for a plain link to what
+ *  was there, since the snapshot can't run them. */
+function replaceEmbeds($: cheerio.CheerioAPI, resolve: (u: string | undefined) => string | null) {
+  $('iframe').each((_, el) => {
+    const src = resolve($(el).attr('src') ?? $(el).attr('data-src'));
+    if (!src || src.startsWith('data:')) return;
+    let host: string;
+    try {
+      host = new URL(src).hostname.replace(/^www\./, '');
+    } catch {
+      return;
+    }
+    if (!EMBED_HOSTS.test(host)) return;
+    const title = $(el).attr('title')?.trim();
+    const box =
+      'display:block;margin:1em 0;padding:10px 12px;border:1px dashed #a8a29e;' +
+      'font:13px/1.4 system-ui,-apple-system,Segoe UI,sans-serif;color:#57534e;';
+    $(el).replaceWith(
+      `<div data-broadside-embed style="${box}">Embedded content from ${escapeHtml(host)}` +
+        (title ? ` (${escapeHtml(title)})` : '') +
+        ` — <a href="${escapeHtml(src)}" rel="noopener noreferrer">open the original</a></div>`,
+    );
+  });
 }
 
 function escapeHtml(s: string): string {

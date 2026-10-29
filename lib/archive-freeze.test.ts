@@ -78,12 +78,57 @@ describe('freezeHtml — inlining', () => {
       'https://cdn.example.com/img/bg.png': ['image/png', PNG],
       'https://cdn.example.com/css/parts/icon.png': ['image/png', PNG],
     });
-    const html = `<head><link rel="stylesheet" href="https://cdn.example.com/css/main.css"></head><body></body>`;
+    const html = `<head><link rel="stylesheet" href="https://cdn.example.com/css/main.css"></head><body><div class="a"></div></body>`;
     const { html: out, assetsInlined } = await freezeHtml(html, PAGE, { fetchBytes, capturedAt: at });
     expect(out).not.toMatch(/<link/i);
     expect(out).toContain('.a {');
     expect(out).not.toContain('cdn.example.com/img');
     expect(assetsInlined).toBe(2);
+  });
+
+  it('applies async-loaded stylesheets (media="print" flipped by onload) as media="all"', async () => {
+    const fetchBytes = fakeFetch({ 'https://news.example.com/fonts.css': ['text/css', '.a{color:red}'] });
+    const html =
+      '<head><link rel="stylesheet" href="/fonts.css" media="print" onload="this.media=\'all\'"></head>' +
+      '<body><div class="a"></div></body>';
+    const { html: out } = await freezeHtml(html, PAGE, { fetchBytes, capturedAt: at });
+    expect(out).toContain('.a{color:red}');
+    expect(out).not.toContain('media="print"');
+  });
+
+  it('takes the default <picture> source over a mobile one', async () => {
+    const fetchBytes = fakeFetch({ 'https://news.example.com/desktop.jpg': ['image/jpeg', PNG] });
+    const html =
+      '<body><picture><source media="(max-width: 600px)" srcset="/mobile.jpg"><source srcset="/desktop.jpg"><img alt=""></picture></body>';
+    await freezeHtml(html, PAGE, { fetchBytes, capturedAt: at });
+    expect(fetchBytes.calls).toEqual(['https://news.example.com/desktop.jpg']);
+  });
+
+  it('replaces embedded videos and posts with a link, and drops other iframes', async () => {
+    const html =
+      '<body><iframe src="https://www.youtube.com/embed/abc" title="Clip"></iframe>' +
+      '<iframe src="https://ads.example.net/x"></iframe></body>';
+    const { html: out } = await freezeHtml(html, PAGE, { fetchBytes: fakeFetch({}), capturedAt: at });
+    expect(out).toContain('Embedded content from youtube.com (Clip)');
+    expect(out).toContain('href="https://www.youtube.com/embed/abc"');
+    expect(out).not.toContain('ads.example.net');
+    expect(out).not.toMatch(/<iframe/i);
+  });
+
+  it('restores article text a page ships as data but only renders with scripts', async () => {
+    const body = Array.from({ length: 8 }, (_, i) => ({
+      type: 'paragraph',
+      content: [{ type: 'text', value: `Recovered paragraph ${i}, long enough to count as real article prose here.` }],
+    }));
+    const data = JSON.stringify({ props: { pageProps: { story: { body: { content: body } } } } }).padEnd(2500);
+    const html =
+      '<head><meta property="og:type" content="article">' +
+      `<script id="__NEXT_DATA__" type="application/json">${data}</script></head>` +
+      '<body><article><p>Recovered paragraph 0, long enough to count as real article prose here.</p></article></body>';
+    const { html: out, recoveredParagraphs } = await freezeHtml(html, PAGE, { fetchBytes: fakeFetch({}), capturedAt: at });
+    expect(recoveredParagraphs).toBe(7);
+    expect(out).toContain('Recovered paragraph 7');
+    expect(out).not.toMatch(/<script/i);
   });
 
   it('picks a lazy src or the best srcset candidate', async () => {
@@ -93,6 +138,17 @@ describe('freezeHtml — inlining', () => {
     expect(fetchBytes.calls).toEqual(['https://news.example.com/m.jpg']);
     expect(out).toContain('data:image/jpeg;base64,');
     expect(out).not.toContain('srcset');
+  });
+
+  it('inlines a font its server mislabels, recognised by its signature', async () => {
+    const woff2 = Buffer.concat([Buffer.from('wOF2'), Buffer.alloc(40, 1)]);
+    const fetchBytes = fakeFetch({
+      'https://news.example.com/site.css': ['text/css', '@font-face{font-family:F;src:url(/f.woff2)}.a{font-family:F}'],
+      'https://news.example.com/f.woff2': ['application/x-www-form-urlencoded', woff2],
+    });
+    const html = '<head><link rel="stylesheet" href="/site.css"></head><body><p class="a">Hi</p></body>';
+    const { html: out } = await freezeHtml(html, PAGE, { fetchBytes, capturedAt: at });
+    expect(out).toContain('data:font/woff2;base64,');
   });
 
   it('refuses to inline a non-image response behind an image URL', async () => {
