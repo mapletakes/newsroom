@@ -42,14 +42,14 @@ const ITEMS: ArchiveListItem[] = [
   },
 ];
 
-function mockApi() {
+function mockApi(items: ArchiveListItem[] = ITEMS) {
   const calls: { method: string; body: unknown }[] = [];
   vi.stubGlobal(
     'fetch',
     vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
       const method = init?.method || 'GET';
       calls.push({ method, body: init?.body ? JSON.parse(String(init.body)) : null });
-      if (method === 'GET') return Promise.resolve(new Response(JSON.stringify({ items: ITEMS, truncated: false })));
+      if (method === 'GET') return Promise.resolve(new Response(JSON.stringify({ items, truncated: false })));
       return Promise.resolve(new Response(JSON.stringify({ ok: true, archive_url: 'https://thebroadside.net/a/newsnapshot' })));
     }),
   );
@@ -76,7 +76,7 @@ describe('ArchivesView', () => {
     renderView();
     const title = await screen.findByRole('link', { name: 'Budget vote delayed' });
     expect(title).toHaveAttribute('href', 'https://www.cbc.ca/news/budget');
-    const snaps = screen.getAllByRole('link', { name: /view snapshot/i }).map((a) => a.getAttribute('href'));
+    const snaps = screen.getAllByRole('link', { name: /^snapshot/i }).map((a) => a.getAttribute('href'));
     expect(snaps).toEqual([ITEMS[1].archive_url, ITEMS[0].archive_url]); // newest first
     expect(screen.getByText('archive.today fallback', { selector: 'span' })).toBeInTheDocument();
   });
@@ -116,5 +116,37 @@ describe('ArchivesView', () => {
     expect(calls.some((c) => c.method === 'DELETE')).toBe(false);
     await user.click(screen.getAllByRole('button', { name: /^delete$/i }).at(-1)!);
     await waitFor(() => expect(calls).toContainEqual({ method: 'DELETE', body: { id: 'sub-1' } }));
+  });
+
+  it('pages through the list 25 at a time and goes back to page 1 on a new search', async () => {
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
+    const many = Array.from({ length: 30 }, (_, i) => ({
+      ...ITEMS[0],
+      id: `sub-${i}`,
+      title: `Story ${String(i).padStart(2, '0')}`,
+      archived_at: new Date(Date.UTC(2026, 9, 1, 0, 30 - i)).toISOString(),
+    }));
+    mockApi(many);
+    const user = userEvent.setup();
+    renderView();
+
+    await screen.findByText('Story 00');
+    expect(screen.getAllByRole('link', { name: /^story/i })).toHaveLength(25);
+    expect(screen.getByText('1–25 of 30')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /next/i }));
+    expect(screen.getAllByRole('link', { name: /^story/i })).toHaveLength(5);
+    expect(screen.getByText('Story 29')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /next/i })).toBeDisabled();
+
+    await user.type(screen.getByRole('searchbox', { name: /search archives/i }), 'story');
+    expect(screen.getByText('1–25 of 30')).toBeInTheDocument();
+  });
+
+  it('shows no page controls when everything fits on one page', async () => {
+    mockApi();
+    renderView();
+    await screen.findByText('Budget vote delayed');
+    expect(screen.queryByRole('navigation', { name: /archive pages/i })).toBeNull();
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_ARCHIVE_FILTERS, filterArchives, formatBytes, type ArchiveListItem } from './archive-list';
+import { DEFAULT_ARCHIVE_FILTERS, filterArchives, formatBytes, paginate, type ArchiveListItem } from './archive-list';
 
 const base: ArchiveListItem = {
   id: '1',
@@ -51,5 +51,25 @@ describe('formatBytes', () => {
     expect(formatBytes(null)).toBe('');
     expect(formatBytes(2048)).toBe('2 KB');
     expect(formatBytes(3.5 * 1024 * 1024)).toBe('3.5 MB');
+  });
+});
+
+describe('paginate', () => {
+  const nums = Array.from({ length: 60 }, (_, i) => i + 1);
+
+  it('returns the requested page and its range', () => {
+    const p = paginate(nums, 2, 25);
+    expect(p.pageItems[0]).toBe(26);
+    expect(p.pageItems).toHaveLength(25);
+    expect(p).toMatchObject({ page: 2, pageCount: 3, from: 26, to: 50 });
+  });
+
+  it('clamps out-of-range pages to the last (or first) page', () => {
+    expect(paginate(nums, 9, 25)).toMatchObject({ page: 3, from: 51, to: 60 });
+    expect(paginate(nums, 0, 25)).toMatchObject({ page: 1, from: 1, to: 25 });
+  });
+
+  it('handles an empty list', () => {
+    expect(paginate([], 1, 25)).toMatchObject({ page: 1, pageCount: 1, from: 0, to: 0, pageItems: [] });
   });
 });

@@ -79,3 +79,21 @@ export function formatBytes(n: number | null): string {
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
+
+export const ARCHIVE_PAGE_SIZES = [25, 50, 100] as const;
+
+/** One page of `items`. `page` is 1-based and clamped into range, so a
+ *  page that empties out (the last row on it deleted, a narrower filter)
+ *  falls back to the last page that still has rows. */
+export function paginate<T>(items: T[], page: number, size: number) {
+  const pageCount = Math.max(1, Math.ceil(items.length / size));
+  const current = Math.min(Math.max(1, page), pageCount);
+  const start = (current - 1) * size;
+  return {
+    pageItems: items.slice(start, start + size),
+    page: current,
+    pageCount,
+    from: items.length ? start + 1 : 0,
+    to: Math.min(start + size, items.length),
+  };
+}
