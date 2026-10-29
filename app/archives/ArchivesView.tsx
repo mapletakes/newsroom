@@ -215,6 +215,53 @@ export function ArchivesView({
   const [busyId, setBusyId] = useState<string | null>(null);
   const refresh = () => queryClient.invalidateQueries({ queryKey: queryKeys.archives() });
 
+  // Rendered above and below the list, so changing page never needs a
+  // scroll to the bottom first.
+  const showPager = shown.length > ARCHIVE_PAGE_SIZES[0];
+  const pager = (where: 'top' | 'bottom') => (
+    <nav
+      aria-label={`Archive pages (${where})`}
+      className={`${where === 'top' ? 'mb-2' : 'mt-3'} flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-xs`}
+    >
+      <span className="text-ink/60">
+        {paged.from}–{paged.to} of {shown.length}
+      </span>
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="xs" onClick={() => goTo(paged.page - 1)} disabled={paged.page <= 1}>
+          ‹ Prev
+        </Button>
+        <span className="text-ink/80">
+          Page {paged.page} of {paged.pageCount}
+        </span>
+        <Button
+          variant="outline"
+          size="xs"
+          onClick={() => goTo(paged.page + 1)}
+          disabled={paged.page >= paged.pageCount}
+        >
+          Next ›
+        </Button>
+      </div>
+      <label className="ml-auto flex items-center gap-2 text-ink/60">
+        Per page
+        <select
+          value={pageSize}
+          onChange={(e) => {
+            setPageSize(Number(e.target.value));
+            goTo(1);
+          }}
+          className={selectClass}
+        >
+          {ARCHIVE_PAGE_SIZES.map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+      </label>
+    </nav>
+  );
+
   const recapture = useMutation({
     mutationFn: async (item: ArchiveListItem) => {
       const r = await fetch('/api/archive', {
@@ -389,63 +436,24 @@ export function ArchivesView({
             </button>
           </div>
         ) : (
-          <div ref={listTop} className="scroll-mt-4 space-y-1.5">
-            {paged.pageItems.map((item) => (
-              <ArchiveRow
-                key={item.id}
-                item={item}
-                busy={busyId === item.id}
-                onCopy={() => copy(item)}
-                onRecapture={() => recapture.mutate(item)}
-                onDelete={() => deleteItem(item)}
-              />
-            ))}
+          <div ref={listTop} className="scroll-mt-4">
+            {showPager && pager('top')}
+            <div className="space-y-1.5">
+              {paged.pageItems.map((item) => (
+                <ArchiveRow
+                  key={item.id}
+                  item={item}
+                  busy={busyId === item.id}
+                  onCopy={() => copy(item)}
+                  onRecapture={() => recapture.mutate(item)}
+                  onDelete={() => deleteItem(item)}
+                />
+              ))}
+            </div>
+            {showPager && pager('bottom')}
           </div>
         )}
 
-        {shown.length > ARCHIVE_PAGE_SIZES[0] && (
-          <nav
-            aria-label="Archive pages"
-            className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-xs"
-          >
-            <span className="text-ink/60">
-              {paged.from}–{paged.to} of {shown.length}
-            </span>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="xs" onClick={() => goTo(paged.page - 1)} disabled={paged.page <= 1}>
-                ‹ Prev
-              </Button>
-              <span className="text-ink/80">
-                Page {paged.page} of {paged.pageCount}
-              </span>
-              <Button
-                variant="outline"
-                size="xs"
-                onClick={() => goTo(paged.page + 1)}
-                disabled={paged.page >= paged.pageCount}
-              >
-                Next ›
-              </Button>
-            </div>
-            <label className="ml-auto flex items-center gap-2 text-ink/60">
-              Per page
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
-                  goTo(1);
-                }}
-                className={selectClass}
-              >
-                {ARCHIVE_PAGE_SIZES.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </nav>
-        )}
       </main>
     </div>
   );

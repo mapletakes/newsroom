@@ -3,7 +3,7 @@
 // archive API the way the deck's button does.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ArchivesView } from './ArchivesView';
@@ -132,21 +132,30 @@ describe('ArchivesView', () => {
 
     await screen.findByText('Story 00');
     expect(screen.getAllByRole('link', { name: /^story/i })).toHaveLength(25);
-    expect(screen.getByText('1–25 of 30')).toBeInTheDocument();
+    // The same controls sit above and below the list.
+    const top = screen.getByRole('navigation', { name: /archive pages \(top\)/i });
+    const bottom = screen.getByRole('navigation', { name: /archive pages \(bottom\)/i });
+    expect(within(top).getByText('1–25 of 30')).toBeInTheDocument();
+    expect(within(bottom).getByText('1–25 of 30')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /next/i }));
+    await user.click(within(top).getByRole('button', { name: /next/i }));
     expect(screen.getAllByRole('link', { name: /^story/i })).toHaveLength(5);
     expect(screen.getByText('Story 29')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /next/i })).toBeDisabled();
+    expect(within(bottom).getByText('26–30 of 30')).toBeInTheDocument();
+    expect(within(bottom).getByRole('button', { name: /next/i })).toBeDisabled();
 
+    await user.click(within(bottom).getByRole('button', { name: /prev/i }));
+    expect(within(top).getByText('1–25 of 30')).toBeInTheDocument();
+
+    await user.click(within(top).getByRole('button', { name: /next/i }));
     await user.type(screen.getByRole('searchbox', { name: /search archives/i }), 'story');
-    expect(screen.getByText('1–25 of 30')).toBeInTheDocument();
+    expect(within(top).getByText('1–25 of 30')).toBeInTheDocument();
   });
 
   it('shows no page controls when everything fits on one page', async () => {
     mockApi();
     renderView();
     await screen.findByText('Budget vote delayed');
-    expect(screen.queryByRole('navigation', { name: /archive pages/i })).toBeNull();
+    expect(screen.queryAllByRole('navigation', { name: /archive pages/i })).toHaveLength(0);
   });
 });
