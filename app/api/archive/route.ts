@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getApprovedSession } from '@/lib/session';
-import { createArchive } from '@/lib/archive';
+import { createArchive, deleteArchive } from '@/lib/archive';
 import { broadcastQueueChange } from '@/lib/realtime';
 
 export const dynamic = 'force-dynamic';
@@ -42,4 +42,42 @@ export async function POST(req: NextRequest) {
     broadcastQueueChange(session.streamId);
   }
   return NextResponse.json({ archive_url: archiveUrl });
+}
+
+// Delete a submission's snapshot (takedowns, a capture that caught something
+// it shouldn't) and clear the link from the submission and from any show
+// notes it was copied into at play time, so nothing points at a dead /a/<id>.
+export async function DELETE(req: NextRequest) {
+  const session = await getApprovedSession();
+  if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
+
+  const body = await req.json().catch(() => ({}));
+  const id = String(body.id || '');
+  if (!id) return NextResponse.json({ error: 'missing id' }, { status: 400 });
+
+  const sb = supabaseAdmin();
+  const { data: sub } = await sb
+    .from('submissions')
+    .select('archive_url')
+    .eq('id', id)
+    .eq('stream_id', session.streamId)
+    .maybeSingle();
+  if (!sub) return NextResponse.json({ error: 'submission not found' }, { status: 404 });
+  if (!sub.archive_url) return NextResponse.json({ ok: true });
+
+  try {
+    await deleteArchive(sb, sub.archive_url, session.streamId);
+  } catch (err) {
+    console.error('archive delete failed:', (err as Error).message);
+    return NextResponse.json({ error: 'could not delete snapshot' }, { status: 500 });
+  }
+
+  await sb.from('submissions').update({ archive_url: null }).eq('id', id);
+  await sb
+    .from('show_notes')
+    .update({ archive_url: null })
+    .eq('stream_id', session.streamId)
+    .eq('archive_url', sub.archive_url);
+  broadcastQueueChange(session.streamId);
+  return NextResponse.json({ ok: true });
 }

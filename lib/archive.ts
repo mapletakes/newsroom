@@ -108,3 +108,34 @@ export async function createArchive(input: {
     return requestArchive(url);
   }
 }
+
+/** The snapshot slug in one of our own /a/<id> links, or null for anything
+ *  else (an archive.today link, say). Ignores the origin, so links minted
+ *  under an old domain or a preview deploy still resolve. */
+export function archiveSlugFromUrl(link: string): string | null {
+  try {
+    const m = /^\/a\/([^/]+)\/?$/.exec(new URL(link).pathname);
+    return m && ARCHIVE_SLUG_RE.test(m[1]) ? m[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Deletes one of our snapshots — Storage object first, then its row — if
+ *  `link` is ours and belongs to `streamId`. archive.today links have nothing
+ *  of ours to delete, so they're a no-op. */
+export async function deleteArchive(sb: SupabaseClient, link: string, streamId: string): Promise<void> {
+  const slug = archiveSlugFromUrl(link);
+  if (!slug) return;
+  const { data: row } = await sb
+    .from('archives')
+    .select('id, storage_path')
+    .eq('id', slug)
+    .eq('stream_id', streamId)
+    .maybeSingle();
+  if (!row) return;
+  const { error: rmErr } = await sb.storage.from(ARCHIVE_BUCKET).remove([row.storage_path]);
+  if (rmErr) throw new Error(`storage remove failed: ${rmErr.message}`);
+  const { error: delErr } = await sb.from('archives').delete().eq('id', row.id);
+  if (delErr) throw new Error(`archives delete failed: ${delErr.message}`);
+}
