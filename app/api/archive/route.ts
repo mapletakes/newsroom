@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getApprovedSession } from '@/lib/session';
-import { requestArchive } from '@/lib/archive';
+import { createArchive } from '@/lib/archive';
 import { broadcastQueueChange } from '@/lib/realtime';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-// Archive a submission's URL to the Wayback Machine and store the snapshot.
+// Snapshot a submission's URL (lib/archive.ts) and store the link on it.
+// Capture runs inline — usually a few seconds, bounded by the freezer's own
+// deadline well inside maxDuration — so the button can show the result.
 export async function POST(req: NextRequest) {
   const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
@@ -28,7 +30,13 @@ export async function POST(req: NextRequest) {
   // Already archived — return what we have.
   if (sub.archive_url) return NextResponse.json({ archive_url: sub.archive_url });
 
-  const archiveUrl = await requestArchive(sub.url);
+  const archiveUrl = await createArchive({
+    sb,
+    url: sub.url,
+    submissionId: id,
+    streamId: session.streamId,
+    appUrl: process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin,
+  });
   if (archiveUrl) {
     await sb.from('submissions').update({ archive_url: archiveUrl }).eq('id', id);
     broadcastQueueChange(session.streamId);

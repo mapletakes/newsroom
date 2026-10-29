@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { STATUS_RESET_AFTER_MS } from '@/lib/mod-status';
+import { ARCHIVE_BUCKET } from '@/lib/archive';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -16,6 +17,10 @@ export const maxDuration = 60;
 //    this is the backstop for streams nobody's actively viewing (GET
 //    /api/mod-status does the same reset on every fetch, so an active
 //    viewer never waits on this once-a-day pass).
+//  - Snapshots whose submission is gone (archives.submission_id was set null
+//    by the delete above) lose their Storage object and then their row.
+//    Played submissions are never deleted, so a snapshot linked from show
+//    notes is never swept.
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
   const auth = req.headers.get('authorization');
@@ -49,14 +54,37 @@ export async function GET(req: NextRequest) {
     .not('status', 'is', null)
     .lt('status_updated_at', modStatusCutoff);
 
+  let archivesDeleted = 0;
+  let archivesErr: string | null = null;
+  const { data: orphans, error: orphanErr } = await sb
+    .from('archives')
+    .select('id, storage_path')
+    .is('submission_id', null)
+    .limit(500);
+  if (orphanErr) archivesErr = orphanErr.message;
+  else if (orphans?.length) {
+    const { error: rmErr } = await sb.storage.from(ARCHIVE_BUCKET).remove(orphans.map((o) => o.storage_path));
+    if (rmErr) archivesErr = rmErr.message;
+    else {
+      const { error: delErr, count } = await sb
+        .from('archives')
+        .delete({ count: 'exact' })
+        .in('id', orphans.map((o) => o.id));
+      if (delErr) archivesErr = delErr.message;
+      archivesDeleted = count ?? 0;
+    }
+  }
+
   if (eventsErr) console.error('cleanup: processed_events failed:', eventsErr.message);
   if (rejectedErr) console.error('cleanup: rejected submissions failed:', rejectedErr.message);
   if (modStatusErr) console.error('cleanup: mod status reset failed:', modStatusErr.message);
+  if (archivesErr) console.error('cleanup: orphan archives failed:', archivesErr);
 
   return NextResponse.json({
-    ok: !eventsErr && !rejectedErr && !modStatusErr,
+    ok: !eventsErr && !rejectedErr && !modStatusErr && !archivesErr,
     processedEventsDeleted: eventsDeleted ?? 0,
     rejectedSubmissionsDeleted: rejectedDeleted ?? 0,
     modStatusesReset: modStatusesReset ?? 0,
+    orphanArchivesDeleted: archivesDeleted,
   });
 }

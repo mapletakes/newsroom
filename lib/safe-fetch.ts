@@ -155,6 +155,21 @@ export type SafeFetchResult = {
  * an extraction failure rather than needing their own handling.
  */
 export async function safeFetchText(url: string, options: SafeFetchOptions = {}): Promise<SafeFetchResult> {
+  const r = await safeFetchBytes(url, options);
+  return { url: r.url, status: r.status, text: r.bytes.toString('utf8'), truncated: r.truncated };
+}
+
+export type SafeFetchBytesResult = {
+  url: string;
+  status: number;
+  contentType: string | null;
+  bytes: Buffer;
+  truncated: boolean;
+};
+
+/** safeFetchText's binary sibling — same SSRF and size guards, for callers
+ *  that need the raw body (archive-freeze.ts inlining images and fonts). */
+export async function safeFetchBytes(url: string, options: SafeFetchOptions = {}): Promise<SafeFetchBytesResult> {
   const maxBytes = options.maxBytes ?? 5 * 1024 * 1024;
   const maxRedirects = options.maxRedirects ?? 5;
   let current = url;
@@ -179,19 +194,21 @@ export async function safeFetchText(url: string, options: SafeFetchOptions = {})
 
     if (res.status >= 300 && res.status < 400) {
       const location = res.headers.get('location');
-      if (!location) return { url: parsed.toString(), status: res.status, text: '', truncated: false };
+      if (!location) {
+        return { url: parsed.toString(), status: res.status, contentType: null, bytes: Buffer.alloc(0), truncated: false };
+      }
       if (hop >= maxRedirects) throw new UnsafeUrlError('too many redirects');
       current = new URL(location, parsed).toString();
       continue;
     }
 
-    const { text, truncated } = await readTextLimited(res, maxBytes);
-    return { url: parsed.toString(), status: res.status, text, truncated };
+    const { bytes, truncated } = await readLimited(res, maxBytes);
+    return { url: parsed.toString(), status: res.status, contentType: res.headers.get('content-type'), bytes, truncated };
   }
 }
 
-async function readTextLimited(res: Response, maxBytes: number): Promise<{ text: string; truncated: boolean }> {
-  if (!res.body) return { text: '', truncated: false };
+async function readLimited(res: Response, maxBytes: number): Promise<{ bytes: Buffer; truncated: boolean }> {
+  if (!res.body) return { bytes: Buffer.alloc(0), truncated: false };
   const reader = res.body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
@@ -209,5 +226,5 @@ async function readTextLimited(res: Response, maxBytes: number): Promise<{ text:
     total += value.byteLength;
     chunks.push(value);
   }
-  return { text: Buffer.concat(chunks.map((c) => Buffer.from(c))).toString('utf8'), truncated };
+  return { bytes: Buffer.concat(chunks.map((c) => Buffer.from(c))), truncated };
 }
