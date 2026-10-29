@@ -50,6 +50,11 @@ export async function GET() {
 // deadline well inside maxDuration — so the button can show the result.
 // `recapture: true` retries an item whose link is an archive.today fallback;
 // our own snapshots are never silently replaced.
+//
+// Captures cost storage and bandwidth, so they only ever happen when a
+// streamer or mod presses an archive button: every caller must send
+// `manual: true`. Nothing archives automatically (approval used to), and the
+// flag also turns away tabs still running that older auto-archiving code.
 export async function POST(req: NextRequest) {
   const session = await getApprovedSession();
   if (!session) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
@@ -57,6 +62,9 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const id = String(body.id || '');
   if (!id) return NextResponse.json({ error: 'missing id' }, { status: 400 });
+  if (body.manual !== true) {
+    return NextResponse.json({ error: 'archiving must be started from an archive button' }, { status: 400 });
+  }
 
   const sb = supabaseAdmin();
   const { data: sub } = await sb

@@ -101,7 +101,7 @@ describe('ArchivesView', () => {
     expect(buttons).toHaveLength(1);
     await user.click(buttons[0]);
     await waitFor(() =>
-      expect(calls).toContainEqual({ method: 'POST', body: { id: 'sub-2', recapture: true } }),
+      expect(calls).toContainEqual({ method: 'POST', body: { id: 'sub-2', recapture: true, manual: true } }),
     );
   });
 

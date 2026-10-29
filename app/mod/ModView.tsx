@@ -206,15 +206,6 @@ export function ModView({
         };
       });
     }
-    // Auto-archive on approval (fire-and-forget; the snapshot link appears
-    // on the card once the capture finishes and broadcasts).
-    if (patch.status === 'approved') {
-      fetch('/api/archive', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
-      }).catch(() => {});
-    }
     queryClient.invalidateQueries({ queryKey: queueKeyAllFilters });
     return { ok: true };
   };

@@ -191,6 +191,20 @@ describe('ModView — keyboard triage', () => {
     await waitFor(() => expect(backend.patches).toContainEqual({ id: 'a', status: 'approved' }));
   });
 
+  // Archiving costs storage, so it only happens from an archive button —
+  // approving used to fire one off automatically.
+  it('does not archive an item when approving it', async () => {
+    const backend = installMockBackend([makeSub('a', 'Item A', 'pending')]);
+    renderModView();
+
+    await screen.findByText('Item A');
+    await userEvent.keyboard('a');
+    await waitFor(() => expect(backend.patches).toContainEqual({ id: 'a', status: 'approved' }));
+
+    const urls = vi.mocked(fetch).mock.calls.map(([input]) => String(input));
+    expect(urls.some((u) => u.startsWith('/api/archive'))).toBe(false);
+  });
+
   it('moves the highlight with j/k before acting on the newly-highlighted item', async () => {
     const backend = installMockBackend([
       makeSub('a', 'Item A', 'pending'),

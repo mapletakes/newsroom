@@ -97,7 +97,7 @@ export function ArchiveButton({
     fetch('/api/archive', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: forId }),
+      body: JSON.stringify({ id: forId, manual: true }),
     })
       .then((r) => r.json())
       .then((data) => {
