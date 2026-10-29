@@ -102,8 +102,34 @@ export function paginate<T>(items: T[], page: number, size: number) {
  *  SiteRefusedError in lib/archive-freeze.ts). */
 export function refusedMessage(waybackRequested: boolean): string {
   return (
-    'This site blocks archivers, so it was saved as an archive.today link. ' +
-    'For a full snapshot, open the page and use "Archive this page" in The Broadside browser extension.' +
+    'This site blocks automated archiving, so it was saved as an archive.today link. ' +
+    'For a full snapshot, open the page in your browser and right-click → "Archive this page in The Broadside" ' +
+    '(the extension saves it as you see it, so it works on any site you can read).' +
     (waybackRequested ? ' We also asked the Wayback Machine to save it; Re-capture on the Archives page may work in a minute.' : '')
   );
+}
+
+/** Runs `fn` over `items` a few at a time and reports which succeeded, so a
+ *  batch delete survives one bad item and can say exactly what's left. */
+export async function runBatch<T>(
+  items: T[],
+  fn: (item: T) => Promise<void>,
+  concurrency = 4,
+): Promise<{ ok: T[]; failed: T[] }> {
+  const ok: T[] = [];
+  const failed: T[] = [];
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const item = items[next++];
+      try {
+        await fn(item);
+        ok.push(item);
+      } catch {
+        failed.push(item);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
+  return { ok, failed };
 }

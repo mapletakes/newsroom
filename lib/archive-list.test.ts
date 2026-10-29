@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_ARCHIVE_FILTERS, filterArchives, formatBytes, paginate, type ArchiveListItem } from './archive-list';
+import { DEFAULT_ARCHIVE_FILTERS, filterArchives, formatBytes, paginate, runBatch, type ArchiveListItem } from './archive-list';
 
 const base: ArchiveListItem = {
   id: '1',
@@ -71,5 +71,30 @@ describe('paginate', () => {
 
   it('handles an empty list', () => {
     expect(paginate([], 1, 25)).toMatchObject({ page: 1, pageCount: 1, from: 0, to: 0, pageItems: [] });
+  });
+});
+
+describe('runBatch', () => {
+  it('reports successes and failures without stopping at the first error', async () => {
+    const r = await runBatch([1, 2, 3, 4, 5], async (n) => {
+      if (n % 2 === 0) throw new Error('nope');
+    });
+    expect(r.ok.sort()).toEqual([1, 3, 5]);
+    expect(r.failed.sort()).toEqual([2, 4]);
+  });
+
+  it('never runs more than the concurrency limit at once', async () => {
+    let running = 0;
+    let peak = 0;
+    await runBatch(Array.from({ length: 12 }, (_, i) => i), async () => {
+      peak = Math.max(peak, ++running);
+      await new Promise((r) => setTimeout(r, 2));
+      running--;
+    }, 3);
+    expect(peak).toBeLessThanOrEqual(3);
+  });
+
+  it('handles an empty list', async () => {
+    expect(await runBatch([], async () => {})).toEqual({ ok: [], failed: [] });
   });
 });

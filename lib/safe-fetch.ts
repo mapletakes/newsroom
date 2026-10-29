@@ -165,6 +165,7 @@ export type SafeFetchBytesResult = {
   contentType: string | null;
   bytes: Buffer;
   truncated: boolean;
+  retryAfter?: string | null; // the response's Retry-After header, if any
 };
 
 /** safeFetchText's binary sibling — same SSRF and size guards, for callers
@@ -203,7 +204,14 @@ export async function safeFetchBytes(url: string, options: SafeFetchOptions = {}
     }
 
     const { bytes, truncated } = await readLimited(res, maxBytes);
-    return { url: parsed.toString(), status: res.status, contentType: res.headers.get('content-type'), bytes, truncated };
+    return {
+      url: parsed.toString(),
+      status: res.status,
+      contentType: res.headers.get('content-type'),
+      bytes,
+      truncated,
+      retryAfter: res.headers.get('retry-after'),
+    };
   }
 }
 

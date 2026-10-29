@@ -24,6 +24,7 @@ import {
   hostOf,
   paginate,
   refusedMessage,
+  runBatch,
   type ArchiveFilters,
   type ArchiveListItem,
 } from '@/lib/archive-list';
@@ -74,12 +75,17 @@ function FilterSelect({
 function ArchiveRow({
   item,
   busy,
+  selected,
+  onSelect,
   onCopy,
   onRecapture,
   onDelete,
 }: {
   item: ArchiveListItem;
   busy: boolean;
+  selected: boolean;
+  // `range` is true for a shift-click: select everything since the last click.
+  onSelect: (range: boolean) => void;
   onCopy: () => void;
   onRecapture: () => void;
   onDelete: () => void;
@@ -90,8 +96,18 @@ function ArchiveRow({
   // actions beside it, then a single meta line. The publisher/domain stands
   // in for the full URL, which lives in the title's tooltip.
   return (
-    <Card className="px-3 py-2">
-      <div className="flex flex-col gap-y-1 sm:flex-row sm:items-center sm:gap-x-4">
+    <Card className={`flex items-center gap-3 px-3 py-2 ${selected ? 'border-ink bg-ink/5' : ''}`}>
+      <input
+        type="checkbox"
+        checked={selected}
+        // onClick, not onChange, because only the click carries Shift (and
+        // Space on a focused checkbox fires one too).
+        onClick={(e) => onSelect(e.shiftKey)}
+        onChange={() => {}}
+        aria-label={`Select ${item.title || item.url}`}
+        className="h-4 w-4 shrink-0 accent-rust"
+      />
+      <div className="flex min-w-0 flex-1 flex-col gap-y-1 sm:flex-row sm:items-center sm:gap-x-4">
         <div className="min-w-0 flex-1">
           <a
             href={item.url}
@@ -192,13 +208,20 @@ export function ArchivesView({
   const [pageSize, setPageSize] = useState<number>(ARCHIVE_PAGE_SIZES[0]);
   const listTop = useRef<HTMLDivElement>(null);
   // Any change to what's being looked at starts again from the first page.
+  // A selection also ends with the view it was made in, so a bulk action can
+  // never reach rows the filters have hidden.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const lastClicked = useRef<string | null>(null);
+  const [batchBusy, setBatchBusy] = useState(false);
   const set = <K extends keyof ArchiveFilters>(k: K, v: ArchiveFilters[K]) => {
     setFilters((f) => ({ ...f, [k]: v }));
     setPage(1);
+    setSelected(new Set());
   };
   const clearFilters = () => {
     setFilters(DEFAULT_ARCHIVE_FILTERS);
     setPage(1);
+    setSelected(new Set());
   };
   const goTo = (p: number) => {
     setPage(p);
@@ -215,6 +238,68 @@ export function ArchivesView({
 
   const [busyId, setBusyId] = useState<string | null>(null);
   const refresh = () => queryClient.invalidateQueries({ queryKey: queryKeys.archives() });
+
+  const selectedItems = useMemo(() => shown.filter((i) => selected.has(i.id)), [shown, selected]);
+  const pageIds = paged.pageItems.map((i) => i.id);
+  const pageAllSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+  const select = (item: ArchiveListItem, range: boolean) => {
+    // Read the anchor now: the updater below runs later, after it's moved.
+    const anchor = range ? lastClicked.current : null;
+    setSelected((cur) => {
+      const next = new Set(cur);
+      const want = !cur.has(item.id);
+      const ids = paged.pageItems.map((i) => i.id);
+      const from = anchor ? ids.indexOf(anchor) : -1;
+      if (from >= 0) {
+        const [a, b] = [from, ids.indexOf(item.id)].sort((x, y) => x - y);
+        ids.slice(a, b + 1).forEach((id) => (want ? next.add(id) : next.delete(id)));
+      } else if (want) next.add(item.id);
+      else next.delete(item.id);
+      return next;
+    });
+    lastClicked.current = item.id;
+  };
+  const togglePage = () =>
+    setSelected((cur) => {
+      const next = new Set(cur);
+      pageIds.forEach((id) => (pageAllSelected ? next.delete(id) : next.add(id)));
+      return next;
+    });
+
+  const deleteSelected = async () => {
+    const targets = selectedItems;
+    if (!targets.length || batchBusy) return;
+    const own = targets.filter((i) => i.source === 'broadside').length;
+    const n = targets.length;
+    const ok = await confirm({
+      title: `Delete ${n} snapshot${n === 1 ? '' : 's'}?`,
+      description:
+        (own ? `${own} archived cop${own === 1 ? 'y is' : 'ies are'} removed and the links stop working for everyone, including in show notes. ` : '') +
+        (n - own ? `${n - own} archive.today link${n - own === 1 ? ' is' : 's are'} removed from the items and their show notes; the copies on archive.today itself are not affected. ` : '') +
+        'This can’t be undone.',
+      confirmText: `Delete ${n}`,
+      destructive: true,
+    });
+    if (!ok) return;
+    setBatchBusy(true);
+    try {
+      const { ok: done, failed } = await runBatch(targets, async (item) => {
+        const r = await fetch('/api/archive', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: item.id }),
+        });
+        if (!r.ok) throw new Error('delete failed');
+      });
+      // Whatever didn't go stays selected, ready to retry.
+      setSelected(new Set(failed.map((i) => i.id)));
+      if (failed.length) toast.error(`Deleted ${done.length}; ${failed.length} couldn’t be deleted and are still selected`);
+      else toast.success(`Deleted ${done.length} snapshot${done.length === 1 ? '' : 's'}`);
+    } finally {
+      setBatchBusy(false);
+      refresh();
+    }
+  };
 
   // Rendered above and below the list, so changing page never needs a
   // scroll to the bottom first.
@@ -439,13 +524,52 @@ export function ArchivesView({
           </div>
         ) : (
           <div ref={listTop} className="scroll-mt-4">
+            <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-xs">
+              <label className="flex items-center gap-2 text-ink/80">
+                <input
+                  type="checkbox"
+                  checked={pageAllSelected}
+                  onChange={togglePage}
+                  disabled={batchBusy}
+                  aria-label="Select all on this page"
+                  className="h-4 w-4 accent-rust"
+                />
+                Select page
+              </label>
+              {shown.length > paged.pageItems.length && selectedItems.length < shown.length && (
+                <button
+                  type="button"
+                  onClick={() => setSelected(new Set(shown.map((i) => i.id)))}
+                  disabled={batchBusy}
+                  className="underline text-ink/70 hover:text-ink"
+                >
+                  Select all {shown.length}
+                  {filtered ? ' matching' : ''}
+                </button>
+              )}
+              {selectedItems.length > 0 && (
+                <>
+                  <span className="text-ink/60" aria-live="polite">
+                    {selectedItems.length} selected
+                  </span>
+                  <Button variant="outline" size="xs" onClick={() => setSelected(new Set())} disabled={batchBusy}>
+                    Clear
+                  </Button>
+                  <Button variant="destructive" size="xs" onClick={deleteSelected} disabled={batchBusy}>
+                    {batchBusy ? 'Deleting…' : `Delete ${selectedItems.length}`}
+                  </Button>
+                </>
+              )}
+            </div>
             {showPager && pager('top')}
             <div className="space-y-1.5">
               {paged.pageItems.map((item) => (
                 <ArchiveRow
                   key={item.id}
                   item={item}
-                  busy={busyId === item.id}
+                  busy={batchBusy || busyId === item.id}
+                  selected={selected.has(item.id)}
+                  onSelect={(range) => select(item, range)}
                   onCopy={() => copy(item)}
                   onRecapture={() => recapture.mutate(item)}
                   onDelete={() => deleteItem(item)}

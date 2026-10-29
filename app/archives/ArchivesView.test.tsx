@@ -158,4 +158,76 @@ describe('ArchivesView', () => {
     await screen.findByText('Budget vote delayed');
     expect(screen.queryAllByRole('navigation', { name: /archive pages/i })).toHaveLength(0);
   });
+
+  describe('selecting and deleting in bulk', () => {
+    const many = Array.from({ length: 30 }, (_, i) => ({
+      ...ITEMS[0],
+      id: `sub-${i}`,
+      title: `Story ${String(i).padStart(2, '0')}`,
+      archived_at: new Date(Date.UTC(2026, 9, 1, 0, 30 - i)).toISOString(),
+    }));
+
+    it('deletes every selected snapshot after one confirmation', async () => {
+      const calls = mockApi();
+      const user = userEvent.setup();
+      renderView();
+      await screen.findByText('Budget vote delayed');
+      await user.click(screen.getByRole('checkbox', { name: /select all on this page/i }));
+      expect(screen.getByText('2 selected')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Delete 2' }));
+      await screen.findByText('Delete 2 snapshots?');
+      expect(calls.some((c) => c.method === 'DELETE')).toBe(false);
+      await user.click(screen.getAllByRole('button', { name: 'Delete 2' }).at(-1)!);
+      await waitFor(() => expect(calls.filter((c) => c.method === 'DELETE')).toHaveLength(2));
+      expect(calls).toContainEqual({ method: 'DELETE', body: { id: 'sub-1' } });
+      expect(calls).toContainEqual({ method: 'DELETE', body: { id: 'sub-2' } });
+    });
+
+    it('selects a range with shift-click', async () => {
+      window.HTMLElement.prototype.scrollIntoView = vi.fn();
+      mockApi(many);
+      const user = userEvent.setup();
+      renderView();
+      await screen.findByText('Story 00');
+      await user.click(screen.getByRole('checkbox', { name: 'Select Story 02' }));
+      await user.keyboard('{Shift>}');
+      await user.click(screen.getByRole('checkbox', { name: 'Select Story 05' }));
+      await user.keyboard('{/Shift}');
+      expect(screen.getByText('4 selected')).toBeInTheDocument();
+    });
+
+    it('can select everything matching across pages, and drops the selection when the filter changes', async () => {
+      window.HTMLElement.prototype.scrollIntoView = vi.fn();
+      mockApi(many);
+      const user = userEvent.setup();
+      renderView();
+      await screen.findByText('Story 00');
+      await user.click(screen.getByRole('button', { name: /select all 30/i }));
+      expect(screen.getByText('30 selected')).toBeInTheDocument();
+      await user.type(screen.getByRole('searchbox', { name: /search archives/i }), 'story 1');
+      expect(screen.queryByText(/selected/)).toBeNull();
+    });
+
+    it('leaves failures selected so they can be retried', async () => {
+      const calls: { method: string; body: unknown }[] = [];
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((_i: RequestInfo | URL, init?: RequestInit) => {
+          const method = init?.method || 'GET';
+          const body = init?.body ? JSON.parse(String(init.body)) : null;
+          calls.push({ method, body });
+          if (method === 'GET') return Promise.resolve(new Response(JSON.stringify({ items: ITEMS, truncated: false })));
+          return Promise.resolve(new Response('{}', { status: body.id === 'sub-2' ? 500 : 200 }));
+        }),
+      );
+      const user = userEvent.setup();
+      renderView();
+      await screen.findByText('Budget vote delayed');
+      await user.click(screen.getByRole('checkbox', { name: /select all on this page/i }));
+      await user.click(screen.getByRole('button', { name: 'Delete 2' }));
+      await user.click((await screen.findAllByRole('button', { name: 'Delete 2' })).at(-1)!);
+      expect(await screen.findByText('1 selected')).toBeInTheDocument();
+      expect(screen.getByRole('checkbox', { name: 'Select Paywalled story' })).toBeChecked();
+    });
+  });
 });

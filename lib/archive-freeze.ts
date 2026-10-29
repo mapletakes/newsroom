@@ -89,8 +89,39 @@ const REFUSED = new Set([401, 403, 429, 451, 503]);
 const SUBSCRIPTION_HOSTS =
   /(^|\.)(nytimes|wsj|ft|economist|bloomberg|washingtonpost|theatlantic|newyorker|wired|barrons|theglobeandmail|thetimes|telegraph|bostonglobe|businessinsider|thestar|nationalpost|latimes|newsweek|foreignpolicy|foreignaffairs|seattletimes|chicagotribune|sfchronicle|haaretz|lemonde|spiegel|faz)\.(com|co\.uk|ca|net|de|fr)$/i;
 
+// A browser user agent, deliberately. An A/B run against 28 news sites found a
+// self-identifying archiver UA no better anywhere and worse on four: Medium
+// answered it 403, and Washington Post, CBC and NPR dropped the connection.
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
+
+// Longest we'll wait out a rate limit (429/503 with Retry-After) before the
+// page fetch is treated as refused.
+const MAX_RETRY_WAIT_MS = 4000;
+
+/** Fetches the page, waiting out one short rate limit. A site that says
+ *  "try again in a few seconds" isn't refusing us. */
+async function fetchPage(fetchBytes: FetchBytes, url: string): Promise<SafeFetchBytesResult> {
+  const opts = {
+    headers: { 'User-Agent': UA, Accept: 'text/html,application/xhtml+xml' },
+    maxBytes: 5 * 1024 * 1024,
+    timeoutMs: 15000,
+  };
+  const res = await fetchBytes(url, opts);
+  if (res.status !== 429 && res.status !== 503) return res;
+  const wait = retryAfterMs(res.retryAfter);
+  if (wait === null || wait > MAX_RETRY_WAIT_MS) return res;
+  await new Promise((r) => setTimeout(r, wait));
+  return fetchBytes(url, opts);
+}
+
+function retryAfterMs(header: string | null | undefined): number | null {
+  if (!header) return null;
+  const secs = Number(header);
+  if (Number.isFinite(secs)) return Math.max(0, secs) * 1000;
+  const at = Date.parse(header);
+  return Number.isNaN(at) ? null : Math.max(0, at - Date.now());
+}
 
 const DEFAULT_MAX_BYTES = 4 * 1024 * 1024;
 const MAX_ASSET_BYTES = 800 * 1024;
@@ -116,11 +147,7 @@ const DROP_ATTRS = new Set(['srcdoc', 'formaction', 'action', 'ping', 'integrity
  *  SiteRefusedError. Throws plain errors for missing or non-HTML pages. */
 export async function freezePage(url: string, options: FreezeOptions = {}): Promise<FreezeResult> {
   const fetchBytes = options.fetchBytes ?? safeFetchBytes;
-  const res = await fetchBytes(url, {
-    headers: { 'User-Agent': UA, Accept: 'text/html,application/xhtml+xml' },
-    maxBytes: 5 * 1024 * 1024,
-    timeoutMs: 15000,
-  });
+  const res = await fetchPage(fetchBytes, url);
   if (REFUSED.has(res.status)) {
     const copy = options.wayback === false ? { kind: 'none' as const } : await waybackFreeCopy(url, fetchBytes);
     if (copy.kind !== 'free') throw new SiteRefusedError(res.status, copy.kind === 'none');
