@@ -4,8 +4,9 @@
 // Toolbar click adds the current tab to your saved default destination.
 // Right-click context menu adds a page, link, video, or selected URL, and
 // lets you pick where it goes: a segment of the live deck, or a shelf (for
-// pre-show research — see The Broadside → Shelf). Auth is the personal add
-// token.
+// pre-show research — see The Broadside → Shelf). "Archive this page"
+// snapshots the page as this browser shows it (see capture.js). Auth is the
+// personal add token.
 
 const DEFAULT_APP_URL = 'https://thebroadside.net';
 const CONTEXTS = ['page', 'link', 'selection', 'video'];
@@ -13,11 +14,17 @@ const SEG_PREFIX = 'nr-seg:';
 const SHELF_PREFIX = 'nr-shelf:';
 
 async function getConfig() {
-  const { token, appUrl, defaultTarget } = await chrome.storage.local.get(['token', 'appUrl', 'defaultTarget']);
+  const { token, appUrl, defaultTarget, scrubTerms } = await chrome.storage.local.get([
+    'token',
+    'appUrl',
+    'defaultTarget',
+    'scrubTerms',
+  ]);
   return {
     token: token || '',
     appUrl: (appUrl || DEFAULT_APP_URL).replace(/\/+$/, ''),
     defaultTarget: defaultTarget || { type: 'deck', segmentId: null },
+    scrubTerms: Array.isArray(scrubTerms) ? scrubTerms : [],
   };
 }
 
@@ -49,6 +56,45 @@ async function addUrl(url, target) {
           body: JSON.stringify({ url, segmentId: (target && target.segmentId) || null }),
         });
     flashBadge(r.ok);
+  } catch (e) {
+    flashBadge(false);
+  }
+}
+
+// --- Archive this page ---
+
+// Snapshots the tab as this browser renders it — signed in, past any paywall
+// the reader has access to, on sites that refuse The Broadside's server — and
+// sends it (gzipped) to be frozen and published. The snapshot then opens in
+// a new tab, so the reader can check nothing of theirs slipped through.
+async function archiveTab(tab) {
+  if (!tab || !tab.id || !/^https?:/i.test(tab.url || '')) return;
+  const { token, appUrl, scrubTerms } = await getConfig();
+  if (!token) {
+    chrome.runtime.openOptionsPage();
+    return;
+  }
+  chrome.action.setBadgeText({ text: '…' });
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: (terms) => { globalThis.__broadsideScrubTerms = terms; },
+      args: [scrubTerms],
+    });
+    const [injection] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['capture.js'] });
+    const page = injection && injection.result;
+    if (!page || !page.html) throw new Error('capture failed');
+
+    const json = JSON.stringify({ url: page.url || tab.url, html: page.html });
+    const gzipped = await new Response(new Blob([json]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer();
+    const r = await fetch(`${appUrl}/api/archive/capture`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Add-Token': token, 'X-Content-Encoding': 'gzip' },
+      body: gzipped,
+    });
+    const data = await r.json().catch(() => ({}));
+    flashBadge(r.ok && !!data.archive_url);
+    if (r.ok && data.archive_url) chrome.tabs.create({ url: data.archive_url, index: tab.index + 1 });
   } catch (e) {
     flashBadge(false);
   }
@@ -93,6 +139,7 @@ async function rebuildMenus() {
   try {
     const [segments, shelves] = await Promise.all([fetchSegments(), fetchShelves()]);
     await chrome.contextMenus.removeAll();
+    chrome.contextMenus.create({ id: 'nr-archive', title: 'Archive this page in The Broadside', contexts: ['page'] });
 
     // Nothing configured yet (or not signed in) → a single plain item,
     // straight to the live deck's ungrouped list.
@@ -167,6 +214,10 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === 'nr-archive') {
+    archiveTab(tab);
+    return;
+  }
   // Prefer the specific thing under the cursor (a link or video), then a
   // selected URL, then the page itself.
   let url = info.linkUrl || info.srcUrl;

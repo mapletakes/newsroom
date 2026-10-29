@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { bestFromSrcset, freezeHtml, freezePage, type FetchBytes } from './archive-freeze';
+import { bestFromSrcset, freezeHtml, freezePage, SiteRefusedError, type FetchBytes } from './archive-freeze';
 
 const PNG = Buffer.from('89504e470d0a1a0a', 'hex');
 
 // A fake network: url → [content-type, body]. Anything else 404s, so a test
 // fails loudly if the freezer fetches something it shouldn't.
-function fakeFetch(routes: Record<string, [string, string | Buffer]>): FetchBytes & { calls: string[] } {
+function fakeFetch(routes: Record<string, [string, string | Buffer, number?]>): FetchBytes & { calls: string[] } {
   const calls: string[] = [];
   const fn = (async (url: string) => {
     calls.push(url);
     const hit = routes[url];
     if (!hit) return { url, status: 404, contentType: 'text/plain', bytes: Buffer.alloc(0), truncated: false };
-    const [contentType, body] = hit;
-    return { url, status: 200, contentType, bytes: Buffer.isBuffer(body) ? body : Buffer.from(body), truncated: false };
+    const [contentType, body, status = 200] = hit;
+    return { url, status, contentType, bytes: Buffer.isBuffer(body) ? body : Buffer.from(body), truncated: false };
   }) as FetchBytes & { calls: string[] };
   fn.calls = calls;
   return fn;
@@ -196,5 +196,61 @@ describe('bestFromSrcset', () => {
     expect(bestFromSrcset('a.jpg 400w, b.jpg 1100w, c.jpg 2000w')).toBe('b.jpg');
     expect(bestFromSrcset('c.jpg 2000w, d.jpg 3000w')).toBe('c.jpg');
     expect(bestFromSrcset('a.jpg 1x, b.jpg 2x')).toBe('b.jpg');
+  });
+});
+
+describe('freezePage — sites that refuse us', () => {
+  const AP = 'https://apnews.com/article/some-story';
+  const cdx = (u: string) =>
+    `https://web.archive.org/cdx/search/cdx?url=${encodeURIComponent(u)}&output=json&limit=-1&filter=statuscode:200&fl=timestamp,original`;
+  const TS = '20261028120000';
+  const copyUrl = `https://web.archive.org/web/${TS}id_/${AP}`;
+  const freeCopy =
+    '<html><head><title>Free story</title><link rel="stylesheet" href="/site.css"></head>' +
+    '<body><p class="a">Body text</p></body></html>';
+
+  it('freezes a free article from the Wayback Machine, assets included', async () => {
+    const fetchBytes = fakeFetch({
+      [AP]: ['text/html', 'Forbidden', 403],
+      [cdx(AP)]: ['application/json', JSON.stringify([['timestamp', 'original'], [TS, AP]])],
+      [copyUrl]: ['text/html', freeCopy],
+      [`https://web.archive.org/web/${TS}id_/https://apnews.com/site.css`]: ['text/css', '.a{color:red}'],
+    });
+    const r = await freezePage(AP, { fetchBytes, capturedAt: at });
+    expect(r.via).toBe('the Wayback Machine');
+    expect(r.html).toContain('Body text');
+    expect(r.html).toContain('.a{color:red}');
+    expect(r.html).toContain(`https://web.archive.org/web/${TS}/${AP}`);
+    expect(r.html).toContain('the site refuses archivers');
+  });
+
+  it('refuses a copy whose own markup marks it subscriber-only', async () => {
+    const walled =
+      '<html><head><script type="application/ld+json">{"@type":"NewsArticle","isAccessibleForFree":false}</script></head><body>x</body></html>';
+    const fetchBytes = fakeFetch({
+      [AP]: ['text/html', 'Forbidden', 403],
+      [cdx(AP)]: ['application/json', JSON.stringify([['timestamp', 'original'], [TS, AP]])],
+      [copyUrl]: ['text/html', walled],
+    });
+    await expect(freezePage(AP, { fetchBytes })).rejects.toBeInstanceOf(SiteRefusedError);
+  });
+
+  it('never looks for copies of subscription publishers', async () => {
+    const NYT = 'https://www.nytimes.com/2026/10/28/us/story.html';
+    const fetchBytes = fakeFetch({ [NYT]: ['text/html', 'Forbidden', 403] });
+    const err = await freezePage(NYT, { fetchBytes }).catch((e) => e);
+    expect(err).toBeInstanceOf(SiteRefusedError);
+    expect(err.freeCopyPossible).toBe(false);
+    expect(fetchBytes.calls).toEqual([NYT]);
+  });
+
+  it('reports a refusal when no copy exists yet', async () => {
+    const fetchBytes = fakeFetch({
+      [AP]: ['text/html', 'Forbidden', 403],
+      [cdx(AP)]: ['application/json', '[]'],
+    });
+    const err = await freezePage(AP, { fetchBytes }).catch((e) => e);
+    expect(err).toBeInstanceOf(SiteRefusedError);
+    expect(err.freeCopyPossible).toBe(true);
   });
 });

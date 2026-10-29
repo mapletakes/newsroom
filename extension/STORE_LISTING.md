@@ -76,7 +76,7 @@ https://thebroadside.net/privacy
 ## Single purpose (required field)
 
 ```
-Adds the page, link, or video the user is viewing to their Broadside streamer deck queue.
+Adds the page, link, or video the user is viewing to their Broadside streamer deck queue, and archives the page as the user sees it.
 ```
 
 ## Permission justifications (required per-permission in the Privacy Practices tab)
@@ -90,8 +90,19 @@ segment to file the link under.
 
 **activeTab**
 ```
-Used only when the user clicks the toolbar button, to read the current tab's
-URL so it can be submitted. No access to tab content otherwise.
+Used only when the user clicks the toolbar button or a context-menu item, to
+read the current tab's URL so it can be submitted, and — only when they choose
+"Archive this page" — to capture that tab's content. No access to tabs
+otherwise.
+```
+
+**scripting**
+```
+Used only when the user chooses "Archive this page" from the right-click menu:
+injects a script into that one tab (under the activeTab grant) that makes a
+copy of the page as displayed, removes scripts and the user's own account
+details from the copy, and returns it so it can be saved as a snapshot in the
+user's Broadside account. Nothing runs on any page unless the user asks.
 ```
 
 **storage**

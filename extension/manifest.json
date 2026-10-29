@@ -1,13 +1,29 @@
 {
   "manifest_version": 3,
   "name": "The Broadside Quick Add",
-  "version": "1.6.0",
-  "description": "Add the current page, a link, or a video to your Broadside streamer deck or shelf.",
-  "permissions": ["contextMenus", "activeTab", "storage", "alarms"],
-  "host_permissions": ["https://thebroadside.net/*", "https://newsroom-psi-five.vercel.app/*"],
-  "background": { "service_worker": "background.js", "scripts": ["background.js"] },
+  "version": "1.7.0",
+  "description": "Add the current page, a link, or a video to your Broadside streamer deck or shelf, and archive pages as you see them.",
+  "permissions": [
+    "contextMenus",
+    "activeTab",
+    "storage",
+    "alarms",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://thebroadside.net/*",
+    "https://newsroom-psi-five.vercel.app/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "scripts": [
+      "background.js"
+    ]
+  },
   "browser_specific_settings": {
-    "gecko": { "id": "quickadd@thebroadside.net" }
+    "gecko": {
+      "id": "quickadd@thebroadside.net"
+    }
   },
   "icons": {
     "16": "icons/icon16.png",

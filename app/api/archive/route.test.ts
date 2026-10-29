@@ -7,8 +7,9 @@ vi.mock('@/lib/session', () => ({
   getApprovedSession: vi.fn(async () => ({ streamId: 'stream-1', accountId: '1', displayName: 'Mike', role: 'streamer' })),
 }));
 vi.mock('@/lib/realtime', () => ({ broadcastQueueChange: vi.fn() }));
+vi.mock('@vercel/functions', () => ({ waitUntil: vi.fn() }));
 vi.mock('@/lib/archive', () => ({
-  createArchive: vi.fn(async () => 'https://thebroadside.net/a/abcdefghij'),
+  createArchive: vi.fn(async () => ({ url: 'https://thebroadside.net/a/abcdefghij', refused: false, waybackRequested: false })),
   deleteArchive: vi.fn(),
   archiveSlugFromUrl: vi.fn(() => null),
 }));
@@ -51,7 +52,11 @@ describe('POST /api/archive', () => {
   it('archives when started from a button', async () => {
     const res = await post({ id: 'sub-1', manual: true });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ archive_url: 'https://thebroadside.net/a/abcdefghij' });
+    expect(await res.json()).toEqual({
+      archive_url: 'https://thebroadside.net/a/abcdefghij',
+      refused: false,
+      wayback_requested: false,
+    });
     expect(createArchive).toHaveBeenCalledOnce();
   });
 });

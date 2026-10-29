@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { Icon } from '@/components/ui/icon';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { refusedMessage } from '@/lib/archive-list';
 
 // Shows a link to the snapshot if archived, otherwise a button that triggers
 // archiving. The server freezes the page itself (lib/archive.ts) and returns
@@ -102,6 +103,7 @@ export function ArchiveButton({
       .then((r) => r.json())
       .then((data) => {
         if (data?.archive_url) setResult({ id: forId, url: data.archive_url });
+        if (data?.refused) toast(refusedMessage(!!data.wayback_requested), { duration: 10000 });
       })
       .catch(() => {})
       .finally(() => setBusyId((cur) => (cur === forId ? null : cur)));

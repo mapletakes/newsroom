@@ -97,3 +97,13 @@ export function paginate<T>(items: T[], page: number, size: number) {
     to: Math.min(start + size, items.length),
   };
 }
+
+/** What to tell someone whose capture a site refused (see
+ *  SiteRefusedError in lib/archive-freeze.ts). */
+export function refusedMessage(waybackRequested: boolean): string {
+  return (
+    'This site blocks archivers, so it was saved as an archive.today link. ' +
+    'For a full snapshot, open the page and use "Archive this page" in The Broadside browser extension.' +
+    (waybackRequested ? ' We also asked the Wayback Machine to save it; Re-capture on the Archives page may work in a minute.' : '')
+  );
+}

@@ -12,7 +12,7 @@
 
 import crypto from 'crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { freezePage } from './archive-freeze';
+import { freezePage, SiteRefusedError, type FreezeResult } from './archive-freeze';
 
 const BASE = 'https://archive.today';
 const UA =
@@ -69,43 +69,88 @@ export function archiveSlug(length = 10): string {
 
 export const ARCHIVE_SLUG_RE = /^[A-Za-z0-9]{6,20}$/;
 
+/** Stores a frozen page and returns its public /a/<id> link. Throws if
+ *  storage fails, leaving nothing half-written behind. */
+export async function storeSnapshot(
+  sb: SupabaseClient,
+  frozen: FreezeResult,
+  input: { url: string; submissionId: string | null; streamId: string | null; appUrl: string; method: 'server' | 'extension' },
+): Promise<string> {
+  const id = archiveSlug();
+  const path = `${id}.html`;
+  const { error: upErr } = await sb.storage
+    .from(ARCHIVE_BUCKET)
+    .upload(path, Buffer.from(frozen.html, 'utf8'), { contentType: 'text/html; charset=utf-8', upsert: false });
+  if (upErr) throw new Error(`storage upload failed: ${upErr.message}`);
+  const { error: rowErr } = await sb.from('archives').insert({
+    id,
+    submission_id: input.submissionId,
+    stream_id: input.streamId,
+    url: input.url,
+    final_url: frozen.finalUrl,
+    title: frozen.title,
+    method: input.method,
+    storage_path: path,
+    bytes: frozen.bytes,
+  });
+  if (rowErr) {
+    await sb.storage.from(ARCHIVE_BUCKET).remove([path]);
+    throw new Error(`archives insert failed: ${rowErr.message}`);
+  }
+  return `${input.appUrl.replace(/\/+$/, '')}/a/${id}`;
+}
+
+/** Asks the Wayback Machine to capture `url` (its public Save Page Now), so
+ *  a free article a site refuses to serve us has a copy to fall back on next
+ *  time. Takes up to a minute, so callers run it in the background.
+ *
+ *  Off unless ARCHIVE_WAYBACK_SAVE=1: it publishes the URL to a public
+ *  archive on the channel's behalf, which is the operator's call to make. */
+export const waybackSaveEnabled = () => process.env.ARCHIVE_WAYBACK_SAVE === '1';
+
+export async function requestWaybackSave(url: string): Promise<void> {
+  try {
+    await fetch(`https://web.archive.org/save/${url}`, {
+      headers: { 'User-Agent': 'BroadsideArchiver/1.0 (+https://thebroadside.net)' },
+      signal: AbortSignal.timeout(55000),
+    });
+  } catch {
+    /* best effort */
+  }
+}
+
+export type ArchiveOutcome = {
+  url: string | null;
+  // The site refuses server requests; only a capture from the reader's own
+  // browser (the extension) will get it.
+  refused: boolean;
+  // A Wayback Machine save was requested, so a re-capture shortly may work.
+  waybackRequested: boolean;
+};
+
 /** Freezes `url`, stores it, and returns the public /a/<id> link — or, if
- *  our own capture fails, the archive.today link as before. Never throws. */
+ *  our own capture fails, the archive.today link as before. Never throws.
+ *  `background` runs work that may outlive the response (Vercel's
+ *  waitUntil). */
 export async function createArchive(input: {
   sb: SupabaseClient;
   url: string;
   submissionId: string | null;
   streamId: string | null;
   appUrl: string;
-}): Promise<string | null> {
+  background?: (p: Promise<unknown>) => void;
+}): Promise<ArchiveOutcome> {
   const { sb, url } = input;
   try {
     const frozen = await freezePage(url);
-    const id = archiveSlug();
-    const path = `${id}.html`;
-    const { error: upErr } = await sb.storage
-      .from(ARCHIVE_BUCKET)
-      .upload(path, Buffer.from(frozen.html, 'utf8'), { contentType: 'text/html; charset=utf-8', upsert: false });
-    if (upErr) throw new Error(`storage upload failed: ${upErr.message}`);
-    const { error: rowErr } = await sb.from('archives').insert({
-      id,
-      submission_id: input.submissionId,
-      stream_id: input.streamId,
-      url,
-      final_url: frozen.finalUrl,
-      title: frozen.title,
-      method: 'server',
-      storage_path: path,
-      bytes: frozen.bytes,
-    });
-    if (rowErr) {
-      await sb.storage.from(ARCHIVE_BUCKET).remove([path]);
-      throw new Error(`archives insert failed: ${rowErr.message}`);
-    }
-    return `${input.appUrl.replace(/\/+$/, '')}/a/${id}`;
+    return { url: await storeSnapshot(sb, frozen, { ...input, method: 'server' }), refused: false, waybackRequested: false };
   } catch (err) {
+    const refused = err instanceof SiteRefusedError;
+    const waybackRequested =
+      refused && (err as SiteRefusedError).freeCopyPossible && !!input.background && waybackSaveEnabled();
+    if (waybackRequested) input.background!(requestWaybackSave(url));
     console.warn(`createArchive: in-house capture of ${url} failed, falling back to archive.today:`, (err as Error).message);
-    return requestArchive(url);
+    return { url: await requestArchive(url), refused, waybackRequested };
   }
 }
 

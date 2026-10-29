@@ -161,6 +161,24 @@ export function findEmbeddedArticle($: cheerio.CheerioAPI): Recovered | null {
   return dataLen > ldLen ? { paragraphs: data, source: 'page-data' } : { paragraphs: ld, source: 'json-ld' };
 }
 
+/** Whether the page's own structured data says some of it is for
+ *  subscribers only (schema.org isAccessibleForFree: false, which Google
+ *  requires of paywalled news). */
+export function isMarkedPaywalled($: cheerio.CheerioAPI): boolean {
+  let walled = false;
+  $('script[type="application/ld+json"]').each((_, el) => {
+    try {
+      walk(JSON.parse($(el).text()), (x) => {
+        const v = (x as Record<string, unknown> | null)?.isAccessibleForFree;
+        if (v === false || v === 'False' || v === 'false') walled = true;
+      });
+    } catch {
+      /* ignore */
+    }
+  });
+  return walled;
+}
+
 /** Selectors Google's paywall markup says hold the subscriber-only part. */
 export function paywalledSelectors($: cheerio.CheerioAPI): string[] {
   const out = new Set<string>();

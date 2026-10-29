@@ -23,6 +23,7 @@ import {
   formatBytes,
   hostOf,
   paginate,
+  refusedMessage,
   type ArchiveFilters,
   type ArchiveListItem,
 } from '@/lib/archive-list';
@@ -271,12 +272,13 @@ export function ArchivesView({
       });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(body.error || 'Capture failed');
-      return body.archive_url as string | null;
+      return body as { archive_url: string | null; refused?: boolean; wayback_requested?: boolean };
     },
     onMutate: (item) => setBusyId(item.id),
-    onSuccess: (url) => {
-      if (url && !/archive\.(today|ph|is|li|md|fo|vn)\//.test(url)) toast.success('Captured');
-      else toast.error('Still couldn’t capture this page — the site may block archivers');
+    onSuccess: (res) => {
+      if (res.refused) toast(refusedMessage(!!res.wayback_requested), { duration: 10000 });
+      else if (res.archive_url && !/archive\.(today|ph|is|li|md|fo|vn)\//.test(res.archive_url)) toast.success('Captured');
+      else toast.error('Still couldn’t capture this page');
     },
     onError: (e: Error) => toast.error(e.message),
     onSettled: () => {

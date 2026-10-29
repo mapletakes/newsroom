@@ -4,6 +4,7 @@ const tokenEl = document.getElementById('token');
 const appUrlEl = document.getElementById('appUrl');
 const targetEl = document.getElementById('target');
 const statusEl = document.getElementById('status');
+const scrubEl = document.getElementById('scrub');
 
 let savedDefaultTarget = null;
 
@@ -57,8 +58,9 @@ async function loadTargets() {
   if (savedDefaultTarget) targetEl.value = targetToValue(savedDefaultTarget);
 }
 
-chrome.storage.local.get(['token', 'appUrl', 'defaultTarget'], ({ token, appUrl, defaultTarget }) => {
+chrome.storage.local.get(['token', 'appUrl', 'defaultTarget', 'scrubTerms'], ({ token, appUrl, defaultTarget, scrubTerms }) => {
   tokenEl.value = token || '';
+  scrubEl.value = Array.isArray(scrubTerms) ? scrubTerms.join(', ') : '';
   appUrlEl.value = appUrl || DEFAULT_APP_URL;
   savedDefaultTarget = defaultTarget || null;
   loadTargets();
@@ -73,7 +75,8 @@ document.getElementById('save').addEventListener('click', () => {
   const [kind, id] = (targetEl.value || 'deck:').split(':');
   const defaultTarget = kind === 'shelf' ? { type: 'shelf', listId: id } : { type: 'deck', segmentId: id || null };
   savedDefaultTarget = defaultTarget;
-  chrome.storage.local.set({ token, appUrl, defaultTarget }, () => {
+  const scrubTerms = scrubEl.value.split(',').map((t) => t.trim()).filter(Boolean);
+  chrome.storage.local.set({ token, appUrl, defaultTarget, scrubTerms }, () => {
     statusEl.textContent = 'Saved ✓';
     setTimeout(() => { statusEl.textContent = ''; }, 1500);
   });

@@ -1,7 +1,22 @@
 # The Broadside Quick Add (Chrome/Edge/Firefox extension)
 
 Add the current page, a link, or a video to your Broadside streamer deck without
-copy/paste or tab-switching.
+copy/paste or tab-switching — and archive a page exactly as you're seeing it.
+
+## Archive this page
+
+Right-click any page → **Archive this page in The Broadside**. The extension copies
+the page as your browser shows it and saves it as a public Broadside snapshot,
+attached to that link's deck item (it's added to the deck first if it isn't there).
+Because the request is yours — your browser, your sign-in — this works on sites
+that refuse The Broadside's server (NYT, WSJ, Reuters, AP, …) and on articles
+you can read because you subscribe.
+
+The snapshot is public, so before anything leaves your browser the copy has its
+scripts, account menus and email addresses removed, plus anything you list under
+**Remove from page archives** in Options (your name, say). Publishers can hide a
+subscriber ID where it isn't visible, so the snapshot opens in a new tab for you
+to check — delete it from the deck or the Archives page if anything slipped through.
 
 ## Install on Chrome/Edge (Web Store — recommended)
 

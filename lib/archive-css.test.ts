@@ -69,6 +69,15 @@ describe('pruneStylesheets', () => {
     expect(out).not.toContain('f.eot');
   });
 
+  it('keeps only the last src declaration of a face', () => {
+    const [out] = pruneStylesheets(
+      ['@font-face{font-family:F;src:url(f.eot);src:url(f.eot?#iefix) format("embedded-opentype"),url(f.woff2) format("woff2")}.a{font-family:F}'],
+      doc,
+    );
+    expect(out).toContain('f.woff2');
+    expect(out).not.toContain('f.eot');
+  });
+
   it('keeps at most four faces per family, regular and bold first', () => {
     const weights = [100, 200, 300, 400, 500, 600, 700, 800, 900];
     const faces = weights.map((w) => `@font-face{font-family:F;font-weight:${w};src:url(f${w}.woff2)}`).join('');

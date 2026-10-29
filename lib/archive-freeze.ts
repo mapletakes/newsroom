@@ -32,7 +32,7 @@ import * as cheerio from 'cheerio';
 import type { Element } from 'domhandler';
 import { safeFetchBytes, type SafeFetchBytesResult, type SafeFetchOptions } from './safe-fetch';
 import { documentTokens, fontFaceUrls, pruneStylesheets } from './archive-css';
-import { findEmbeddedArticle, injectRecovered, isArticlePage, paywalledSelectors } from './archive-recover';
+import { findEmbeddedArticle, injectRecovered, isArticlePage, isMarkedPaywalled, paywalledSelectors } from './archive-recover';
 
 export type FetchBytes = (url: string, options?: SafeFetchOptions) => Promise<SafeFetchBytesResult>;
 
@@ -41,6 +41,15 @@ export type FreezeOptions = {
   capturedAt?: Date;
   maxBytes?: number; // budget for the whole frozen document
   deadlineMs?: number; // stop starting new asset fetches after this
+  // Set when the page came from another archive's copy rather than the site
+  // itself; named in the banner.
+  via?: { name: string; url: string; capturedAt: Date };
+  // Fetch the page's assets through this prefix (an archive's raw-copy URL)
+  // rather than from their own hosts.
+  assetPrefix?: string;
+  // Fall back to the Wayback Machine's copy of a free article when the site
+  // refuses us. Default true.
+  wayback?: boolean;
 };
 
 export type FreezeResult = {
@@ -51,7 +60,34 @@ export type FreezeResult = {
   assetsInlined: number;
   assetsDropped: number;
   recoveredParagraphs: number; // article text restored from embedded data
+  via: string | null; // set when the page came from another archive's copy
 };
+
+/** The site refused our request outright (a bot wall, not a missing page)
+ *  and no usable free copy exists elsewhere. Capturing it from the reader's
+ *  own browser, with the extension, is the way in. */
+export class SiteRefusedError extends Error {
+  constructor(
+    public status: number,
+    // Whether a free copy could still turn up (asking the Wayback Machine to
+    // save the page is worthwhile): false for subscription publishers and
+    // for copies that turned out to be paywalled.
+    public freeCopyPossible: boolean,
+  ) {
+    super(`site refused the request (HTTP ${status})`);
+    this.name = 'SiteRefusedError';
+  }
+}
+
+// Statuses that mean "not for you" rather than "not here": bot walls (401,
+// 403, 429), legal blocks (451) and the 503s some bot shields answer with.
+const REFUSED = new Set([401, 403, 429, 451, 503]);
+
+// Publishers whose articles are subscriber-only by default. A Wayback copy
+// from these is never used even if its markup doesn't say so, since the
+// fallback is for free articles only.
+const SUBSCRIPTION_HOSTS =
+  /(^|\.)(nytimes|wsj|ft|economist|bloomberg|washingtonpost|theatlantic|newyorker|wired|barrons|theglobeandmail|thetimes|telegraph|bostonglobe|businessinsider|thestar|nationalpost|latimes|newsweek|foreignpolicy|foreignaffairs|seattletimes|chicagotribune|sfchronicle|haaretz|lemonde|spiegel|faz)\.(com|co\.uk|ca|net|de|fr)$/i;
 
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
@@ -75,8 +111,9 @@ const LAZY_SRCSET_ATTRS = ['data-srcset', 'data-lazy-srcset'];
 const DANGEROUS_VALUE = /^\s*(javascript|vbscript|data\s*:\s*text\/html)/i;
 const DROP_ATTRS = new Set(['srcdoc', 'formaction', 'action', 'ping', 'integrity', 'nonce', 'crossorigin', 'srcset', 'sizes']);
 
-/** Fetches `url` and freezes it. Throws if the page can't be fetched or
- *  isn't HTML — the caller falls back to an archive.today link. */
+/** Fetches `url` and freezes it. When the site refuses us, a free article
+ *  is frozen from the Wayback Machine's copy instead; otherwise this throws
+ *  SiteRefusedError. Throws plain errors for missing or non-HTML pages. */
 export async function freezePage(url: string, options: FreezeOptions = {}): Promise<FreezeResult> {
   const fetchBytes = options.fetchBytes ?? safeFetchBytes;
   const res = await fetchBytes(url, {
@@ -84,6 +121,17 @@ export async function freezePage(url: string, options: FreezeOptions = {}): Prom
     maxBytes: 5 * 1024 * 1024,
     timeoutMs: 15000,
   });
+  if (REFUSED.has(res.status)) {
+    const copy = options.wayback === false ? { kind: 'none' as const } : await waybackFreeCopy(url, fetchBytes);
+    if (copy.kind !== 'free') throw new SiteRefusedError(res.status, copy.kind === 'none');
+    // Assets come from the same capture: the site that refused the page
+    // usually refuses its CSS too, and old asset paths go stale.
+    return freezeHtml(copy.html, url, {
+      ...options,
+      via: { name: 'the Wayback Machine', url: copy.viewUrl, capturedAt: copy.capturedAt },
+      assetPrefix: `https://web.archive.org/web/${copy.ts}id_/`,
+    });
+  }
   if (res.status >= 400) throw new Error(`page returned HTTP ${res.status}`);
   if (res.contentType && !/html|xml/i.test(res.contentType)) {
     throw new Error(`not an HTML page (${res.contentType})`);
@@ -92,9 +140,77 @@ export async function freezePage(url: string, options: FreezeOptions = {}): Prom
   return freezeHtml(html, res.url, options);
 }
 
+/** The Wayback Machine's most recent capture of `url`, if it's a free
+ *  article: fetched raw (the `id_` form, without the Wayback toolbar or
+ *  rewritten links) so it freezes like a live fetch. Null when there's no
+ *  capture, or the copy is subscriber-only — by its own paywall markup or
+ *  its publisher — since this fallback is for free articles only.
+ *
+ *  Looks the URL up in the CDX index (fresher than the availability API),
+ *  as given and then without its query string, since shared links often
+ *  carry tracking parameters the capture didn't. */
+async function waybackFreeCopy(
+  url: string,
+  fetchBytes: FetchBytes,
+): Promise<{ kind: 'free'; html: string; ts: string; viewUrl: string; capturedAt: Date } | { kind: 'none' | 'walled' }> {
+  let host: string;
+  const variants = [url];
+  try {
+    const u = new URL(url);
+    host = u.hostname.replace(/^www\./, '');
+    if (u.search) {
+      u.search = '';
+      variants.push(u.toString());
+    }
+  } catch {
+    return { kind: 'none' };
+  }
+  if (SUBSCRIPTION_HOSTS.test(host)) return { kind: 'walled' };
+
+  for (const target of variants) {
+    try {
+      const cdx = await fetchBytes(
+        `https://web.archive.org/cdx/search/cdx?url=${encodeURIComponent(target)}` +
+          '&output=json&limit=-1&filter=statuscode:200&fl=timestamp,original',
+        { headers: { 'User-Agent': UA, Accept: 'application/json' }, maxBytes: 64 * 1024, timeoutMs: 10000 },
+      );
+      if (cdx.status >= 400) continue;
+      const rows = JSON.parse(cdx.bytes.toString('utf8') || '[]') as string[][];
+      const [ts, original] = rows[rows.length - 1] ?? [];
+      if (!ts || !/^\d{14}$/.test(ts)) continue;
+      const res = await fetchBytes(`https://web.archive.org/web/${ts}id_/${original}`, {
+        headers: { 'User-Agent': UA, Accept: 'text/html,application/xhtml+xml' },
+        maxBytes: 5 * 1024 * 1024,
+        timeoutMs: 20000,
+      });
+      if (res.status >= 400 || (res.contentType && !/html|xml/i.test(res.contentType))) continue;
+      const html = decode(res.bytes, res.contentType);
+      if (isMarkedPaywalled(cheerio.load(html))) return { kind: 'walled' };
+      const capturedAt = new Date(
+        `${ts.slice(0, 4)}-${ts.slice(4, 6)}-${ts.slice(6, 8)}T${ts.slice(8, 10)}:${ts.slice(10, 12)}:${ts.slice(12, 14)}Z`,
+      );
+      return { kind: 'free', html, ts, viewUrl: `https://web.archive.org/web/${ts}/${original}`, capturedAt };
+    } catch {
+      /* try the next variant */
+    }
+  }
+  return { kind: 'none' };
+}
+
+/** Routes asset fetches through an archive's raw-copy prefix, reporting
+ *  the original URL back so relative url()s in fetched CSS still resolve
+ *  against the original site. */
+function viaPrefix(fetchBytes: FetchBytes, prefix: string | undefined): FetchBytes {
+  if (!prefix) return fetchBytes;
+  return async (url, options) => {
+    const res = await fetchBytes(prefix + url, options);
+    return { ...res, url: res.url.replace(/^https:\/\/web\.archive\.org\/web\/\d+id_\//, '') };
+  };
+}
+
 /** Freezes already-fetched HTML. `pageUrl` resolves relative links. */
 export async function freezeHtml(html: string, pageUrl: string, options: FreezeOptions = {}): Promise<FreezeResult> {
-  const fetchBytes = options.fetchBytes ?? safeFetchBytes;
+  const fetchBytes = viaPrefix(options.fetchBytes ?? safeFetchBytes, options.assetPrefix);
   const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
   const deadline = Date.now() + (options.deadlineMs ?? 35000);
   const capturedAt = options.capturedAt ?? new Date();
@@ -156,7 +272,7 @@ export async function freezeHtml(html: string, pageUrl: string, options: FreezeO
     const img = $(el);
     const src = pickImageSrc(img);
     const abs = resolve(src);
-    for (const a of [...LAZY_SRC_ATTRS, ...LAZY_SRCSET_ATTRS, 'loading', 'decoding']) img.removeAttr(a);
+    for (const a of [...LAZY_SRC_ATTRS, ...LAZY_SRCSET_ATTRS, 'loading', 'decoding', 'data-broadside-src']) img.removeAttr(a);
     if (abs) img.attr('src', abs);
     else img.removeAttr('src');
   });
@@ -164,7 +280,7 @@ export async function freezeHtml(html: string, pageUrl: string, options: FreezeO
   // Tracking pixels: nothing to see, and fetching them reports a visit.
   $('img').each((_, el) => {
     const { width, height, src } = el.attribs;
-    if ((Number(width) <= 1 && Number(height) <= 1 && width != null && height != null) || /\/akam\/\d+\/pixel_/.test(src ?? '')) {
+    if ((Number(width) <= 1 && Number(height) <= 1 && width != null && height != null) || /\/akam\/\d+\/pixel_|scorecardresearch\.com|doubleclick\.net|google-analytics\.com|facebook\.com\/tr\b|bat\.bing\.com/.test(src ?? '')) {
       $(el).remove();
     }
   });
@@ -281,7 +397,7 @@ export async function freezeHtml(html: string, pageUrl: string, options: FreezeO
   if (!$('meta[name="viewport"]').length) {
     head.append('<meta name="viewport" content="width=device-width, initial-scale=1">');
   }
-  $('body').prepend(banner(pageUrl, capturedAt));
+  $('body').prepend(banner(pageUrl, capturedAt, options.via));
 
   const out = '<!DOCTYPE html>\n' + $.html().replace(/^<!DOCTYPE[^>]*>\s*/i, '');
   return {
@@ -292,6 +408,7 @@ export async function freezeHtml(html: string, pageUrl: string, options: FreezeO
     assetsInlined: inliner.inlined,
     assetsDropped: inliner.dropped,
     recoveredParagraphs,
+    via: options.via?.name ?? null,
   };
 }
 
@@ -342,6 +459,10 @@ function unwrapNoscript($: cheerio.CheerioAPI) {
 }
 
 function pickImageSrc(img: cheerio.Cheerio<Element>): string | undefined {
+  // A browser capture (extension/capture.js) records the image the reader
+  // actually saw; nothing beats that.
+  const seen = img.attr('data-broadside-src');
+  if (seen) return seen;
   const src = img.attr('src');
   const placeholder = !src || src.startsWith('data:') || /blank|placeholder|spacer|transparent/i.test(src);
   for (const a of LAZY_SRCSET_ATTRS) {
@@ -584,8 +705,10 @@ function escapeHtml(s: string): string {
 
 /** Static header across the top of the snapshot, like archive.today's. Inline
  *  styles with `all: initial` so the page's own CSS can't restyle it. */
-function banner(url: string, capturedAt: Date): string {
-  const when = capturedAt.toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
+const utc = (d: Date) => d.toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
+
+function banner(url: string, capturedAt: Date, via?: FreezeOptions['via']): string {
+  const when = utc(capturedAt);
   const host = (() => {
     try {
       return new URL(url).hostname.replace(/^www\./, '');
@@ -603,7 +726,12 @@ function banner(url: string, capturedAt: Date): string {
     `<span style="all:initial;font:inherit;color:inherit;font-weight:700;">The Broadside archive</span>` +
     `<span style="all:initial;font:inherit;color:inherit;"> · Snapshot of </span>` +
     `<a href="${escapeHtml(url)}" rel="noopener noreferrer" style="${link}">${escapeHtml(host)}</a>` +
-    `<span style="all:initial;font:inherit;color:#a8a29e;"> taken ${when}. Scripts, forms and some images are removed.</span>` +
+    (via
+      ? `<span style="all:initial;font:inherit;color:inherit;">, from </span>` +
+        `<a href="${escapeHtml(via.url)}" rel="noopener noreferrer" style="${link}">${escapeHtml(via.name)}'s copy</a>` +
+        `<span style="all:initial;font:inherit;color:#a8a29e;"> of ${utc(via.capturedAt)} (the site refuses archivers), saved ${when}.` +
+        ` Scripts, forms and some images are removed.</span>`
+      : `<span style="all:initial;font:inherit;color:#a8a29e;"> taken ${when}. Scripts, forms and some images are removed.</span>`) +
     `</div>`
   );
 }

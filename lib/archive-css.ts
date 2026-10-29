@@ -280,6 +280,9 @@ export function pruneStylesheets(sheets: string[], doc: DocTokens, inlineStyles:
       let style = '';
       let stretch = '';
       let hasUrl = false;
+      // Only the last src counts; earlier ones are IE-era .eot fallbacks.
+      const srcs = face.nodes?.filter((n) => n.type === 'decl' && n.prop.toLowerCase() === 'src') ?? [];
+      srcs.slice(0, -1).forEach((n) => n.remove());
       face.walkDecls((d) => {
         const p = d.prop.toLowerCase();
         if (p === 'font-family') family = familiesIn(d.value)[0] ?? '';

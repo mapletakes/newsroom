@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { waitUntil } from '@vercel/functions';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getApprovedSession } from '@/lib/session';
 import { archiveSlugFromUrl, createArchive, deleteArchive } from '@/lib/archive';
@@ -79,18 +80,24 @@ export async function POST(req: NextRequest) {
   const recapture = body.recapture === true && !!sub.archive_url && !archiveSlugFromUrl(sub.archive_url);
   if (sub.archive_url && !recapture) return NextResponse.json({ archive_url: sub.archive_url });
 
-  const archiveUrl = await createArchive({
+  const outcome = await createArchive({
     sb,
     url: sub.url,
     submissionId: id,
     streamId: session.streamId,
     appUrl: process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin,
+    background: waitUntil,
   });
-  if (archiveUrl) {
-    await sb.from('submissions').update({ archive_url: archiveUrl }).eq('id', id);
+  if (outcome.url) {
+    await sb.from('submissions').update({ archive_url: outcome.url }).eq('id', id);
     broadcastQueueChange(session.streamId);
   }
-  return NextResponse.json({ archive_url: archiveUrl });
+  // `refused` lets the button suggest capturing from the browser extension.
+  return NextResponse.json({
+    archive_url: outcome.url,
+    refused: outcome.refused,
+    wayback_requested: outcome.waybackRequested,
+  });
 }
 
 // Delete a submission's snapshot (takedowns, a capture that caught something
