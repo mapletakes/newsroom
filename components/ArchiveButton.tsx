@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Icon } from '@/components/ui/icon';
 
 // Shows a link to the snapshot if archived, otherwise a button that triggers
@@ -15,13 +15,15 @@ export function ArchiveButton({
   archiveUrl: string | null;
   className?: string;
 }) {
-  const [stored, setStored] = useState<string | null>(archiveUrl);
-  const [busy, setBusy] = useState(false);
-
-  // Pick up archive_url that arrives via a later refresh/broadcast.
-  useEffect(() => {
-    if (archiveUrl) setStored(archiveUrl);
-  }, [archiveUrl]);
+  // The deck keeps this mounted while the active item changes, so a link we
+  // got back from archiving — and the busy flag — are remembered against the
+  // item they belong to. Otherwise switching to an unarchived item would keep
+  // showing the previous item's link, and a capture still in flight would
+  // land on whichever item is showing when it finishes.
+  const [result, setResult] = useState<{ id: string; url: string } | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const stored = archiveUrl || (result?.id === id ? result.url : null);
+  const busy = busyId === id;
 
   if (stored) {
     return (
@@ -40,18 +42,19 @@ export function ArchiveButton({
 
   const archive = () => {
     if (busy) return;
-    setBusy(true);
+    const forId = id;
+    setBusyId(forId);
     fetch('/api/archive', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id }),
+      body: JSON.stringify({ id: forId }),
     })
       .then((r) => r.json())
       .then((data) => {
-        if (data?.archive_url) setStored(data.archive_url);
+        if (data?.archive_url) setResult({ id: forId, url: data.archive_url });
       })
       .catch(() => {})
-      .finally(() => setBusy(false));
+      .finally(() => setBusyId((cur) => (cur === forId ? null : cur)));
   };
 
   return (
