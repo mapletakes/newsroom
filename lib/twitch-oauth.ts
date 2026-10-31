@@ -14,7 +14,7 @@ const SCOPES = [
   'moderator:manage:chat_messages',
   // Create Stream Marker, for the "marker on Open source" setting. Like the
   // scope above, only accounts that reconnect after it was added get it.
-  'channel:manage:broadcasts',
+  'channel:manage:broadcast',
 ];
 
 export function buildAuthUrl(state: string): string {
@@ -177,7 +177,7 @@ export type MarkerResult = { ok: true } | { ok: false; reason: 'reconnect' | 'of
 
 /**
  * Drops a marker at the current point of the broadcaster's live stream.
- * Requires a token with `channel:manage:broadcasts` belonging to the
+ * Requires a token with `channel:manage:broadcast` belonging to the
  * broadcaster (or one of their editors), and a stream that's live with VODs
  * enabled — Twitch answers 404 otherwise, which isn't an error worth alarming
  * anyone over, so it's reported as `offline`.
