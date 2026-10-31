@@ -234,6 +234,7 @@ export function DeckMobile({
   onSkip,
   onRemove,
   onAnnounce,
+  onOpenSource,
   onPlayNext,
   onSaveTriggerWarning,
   onSaveTitleOverride,
@@ -263,6 +264,7 @@ export function DeckMobile({
   onSkip: () => void;
   onRemove: (id: string) => void;
   onAnnounce: () => void;
+  onOpenSource?: () => void;
   onPlayNext: (id: string) => void;
   onSaveTriggerWarning: (id: string, v: string | null) => Promise<{ ok?: boolean } | void> | void;
   onSaveTitleOverride: (id: string, v: string | null) => Promise<{ ok?: boolean } | void> | void;
@@ -464,6 +466,7 @@ export function DeckMobile({
               href={active.url}
               target="_blank"
               rel="noreferrer"
+              onClick={onOpenSource}
               className="inline-flex items-center min-h-[44px] font-mono text-xs uppercase tracking-widest underline"
             >
               Open source ↗

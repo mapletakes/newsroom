@@ -70,6 +70,7 @@ export async function POST(req: NextRequest) {
   if (typeof body.allow_anyone === 'boolean') patch.allow_anyone = body.allow_anyone;
   if (typeof body.allow_duplicates === 'boolean') patch.allow_duplicates = body.allow_duplicates;
   if (typeof body.auto_summarize === 'boolean') patch.auto_summarize = body.auto_summarize;
+  if (typeof body.marker_on_open === 'boolean') patch.marker_on_open = body.marker_on_open;
   if (Array.isArray(body.ignored_users)) {
     patch.ignored_users = body.ignored_users
       .map((u: string) => String(u).trim().toLowerCase())

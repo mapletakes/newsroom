@@ -33,6 +33,7 @@ export function ActiveItemCard({
   onSkip,
   onReject,
   onAnnounce,
+  onOpenSource,
   chatEnabled = true,
   onSaveTriggerWarning,
   onSaveTitleOverride,
@@ -52,6 +53,8 @@ export function ActiveItemCard({
   onSkip: () => void;
   onReject: () => void;
   onAnnounce: () => void;
+  /** Runs alongside the Open source link (the stream-marker setting). */
+  onOpenSource?: () => void;
   /** No linked Twitch channel → no chat to post to. */
   chatEnabled?: boolean;
   onSaveTriggerWarning: (id: string, value: string | null) => void;
@@ -206,7 +209,7 @@ export function ActiveItemCard({
         )}
 
       <div className="flex gap-3 flex-wrap mb-6">
-        <a href={active.url} target="_blank" rel="noreferrer" className={buttonVariants()}>
+        <a href={active.url} target="_blank" rel="noreferrer" className={buttonVariants()} onClick={onOpenSource}>
           Open source ↗
         </a>
         {!curateOnly && (

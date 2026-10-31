@@ -74,6 +74,7 @@ export function DeckView({
   modStatusEnabled = false,
   raffleEnabled = false,
   discordWebhookConfigured = false,
+  markerOnOpen = false,
 }: {
   displayName: string;
   streamId: string;
@@ -91,6 +92,8 @@ export function DeckView({
   modStatusEnabled?: boolean;
   raffleEnabled?: boolean;
   discordWebhookConfigured?: boolean;
+  /** Streamer's "marker when I open a source" setting (always false for mods). */
+  markerOnOpen?: boolean;
 }) {
   const queryClient = useQueryClient();
   const queueKey = queryKeys.queue(streamId, 'approved');
@@ -665,6 +668,28 @@ export function DeckView({
       announcingRef.current = false;
     }
   };
+
+  // "Open source" also drops a Twitch marker titled after the item, when the
+  // streamer turned that on. The link itself opens as normal; this runs beside
+  // it and only ever reports trouble, never blocks the tab.
+  const onOpenSource = markerOnOpen
+    ? async () => {
+        if (!active) return;
+        try {
+          const r = await fetch('/api/deck/marker', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: active.id }),
+          });
+          const e = await r.json().catch(() => ({}));
+          if (!r.ok) toast.error(e.detail || e.error || 'Could not add a stream marker');
+          else if (e.error === 'offline') toast(e.detail);
+          else if (!e.skipped) toast.success('Marker added');
+        } catch {
+          toast.error('Could not add a stream marker');
+        }
+      }
+    : undefined;
 
   // Posts everything played since the last Discord post to the configured
   // webhook (see lib/discord.ts). Confirmed first, same as deleteSegment and
@@ -1244,6 +1269,7 @@ export function DeckView({
         onSkip={skip}
         onRemove={removeFromQueue}
         onAnnounce={announce}
+        onOpenSource={onOpenSource}
         onPlayNext={playNext}
         onSaveTriggerWarning={saveTriggerWarning}
         onSaveTitleOverride={saveTitleOverride}
@@ -1388,6 +1414,7 @@ export function DeckView({
             onSkip={skip}
             onReject={rejectActive}
             onAnnounce={announce}
+            onOpenSource={onOpenSource}
             chatEnabled={chatEnabled}
             onSaveTriggerWarning={saveTriggerWarning}
             onSaveTitleOverride={saveTitleOverride}

@@ -12,6 +12,9 @@ const SCOPES = [
   // reconnected since this scope was added — an already-stored token from
   // before doesn't retroactively gain it.
   'moderator:manage:chat_messages',
+  // Create Stream Marker, for the "marker on Open source" setting. Like the
+  // scope above, only accounts that reconnect after it was added get it.
+  'channel:manage:broadcasts',
 ];
 
 export function buildAuthUrl(state: string): string {
@@ -165,4 +168,41 @@ export async function fetchModeratedChannels(
     if (!cursor) break;
   }
   return out;
+}
+
+/** Twitch rejects a marker description over this many characters. */
+export const MAX_MARKER_DESCRIPTION = 140;
+
+export type MarkerResult = { ok: true } | { ok: false; reason: 'reconnect' | 'offline' | 'failed'; error?: string };
+
+/**
+ * Drops a marker at the current point of the broadcaster's live stream.
+ * Requires a token with `channel:manage:broadcasts` belonging to the
+ * broadcaster (or one of their editors), and a stream that's live with VODs
+ * enabled — Twitch answers 404 otherwise, which isn't an error worth alarming
+ * anyone over, so it's reported as `offline`.
+ */
+export async function createStreamMarker(
+  accessToken: string,
+  broadcasterId: string,
+  description: string,
+): Promise<MarkerResult> {
+  const clientId = process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID!;
+  const r = await fetch('https://api.twitch.tv/helix/streams/markers', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Client-Id': clientId,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      user_id: broadcasterId,
+      description: description.slice(0, MAX_MARKER_DESCRIPTION),
+    }),
+  });
+  if (r.ok) return { ok: true };
+  if (r.status === 401 || r.status === 403) return { ok: false, reason: 'reconnect' };
+  if (r.status === 404) return { ok: false, reason: 'offline' };
+  const text = await r.text().catch(() => '');
+  return { ok: false, reason: 'failed', error: `Twitch ${r.status}: ${text}` };
 }

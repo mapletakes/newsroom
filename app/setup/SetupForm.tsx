@@ -54,6 +54,7 @@ export function SetupForm({
   videoCommand,
   allowAnyone,
   allowDuplicates,
+  markerOnOpen = false,
   ignoredUsers,
   preferredSources,
   addToken,
@@ -74,6 +75,7 @@ export function SetupForm({
   videoCommand: string;
   allowAnyone: boolean;
   allowDuplicates: boolean;
+  markerOnOpen?: boolean;
   ignoredUsers: string[];
   preferredSources: string[];
   addToken: string | null;
@@ -97,6 +99,7 @@ export function SetupForm({
   const [questionsAreOpen, setQuestionsAreOpen] = useState(questionsOpen);
   const [open, setOpen] = useState(allowAnyone);
   const [dupes, setDupes] = useState(allowDuplicates);
+  const [markerOpen, setMarkerOpen] = useState(markerOnOpen);
   const [ignored, setIgnored] = useState<string[]>(ignoredUsers);
   const [ignoreInput, setIgnoreInput] = useState('');
   const [sources, setSources] = useState<string[]>(preferredSources);
@@ -152,6 +155,7 @@ export function SetupForm({
         video_command: videoCmd,
         allow_anyone: open,
         allow_duplicates: dupes,
+        marker_on_open: markerOpen,
         ignored_users: ignored,
         preferred_sources: sources,
         // Sent unconditionally (same as the other command fields, sent from
@@ -350,6 +354,27 @@ export function SetupForm({
 
       {tab === 'deck' && (
       <>
+      {chatEnabled && (
+        <section className="mb-10">
+          <h2 className="font-display text-2xl font-bold mb-4">Stream markers</h2>
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={markerOpen}
+              onChange={(e) => setMarkerOpen(e.target.checked)}
+              className="mt-1"
+            />
+            <span>
+              <span className="font-mono text-xs uppercase tracking-widest">Add a Twitch marker when I open a source</span>
+              <span className="block text-xs text-ink/60 mt-0.5">
+                Pressing Open source on the deck also drops a marker on your live stream, described with the item&apos;s title,
+                so you can jump to it in the VOD. Nothing is added when you&apos;re offline, and mods never add markers.
+                Needs a one-time reconnect: sign out and back in so Twitch can grant marker access.
+              </span>
+            </span>
+          </label>
+        </section>
+      )}
       <section className="mb-10">
         <h2 className="font-display text-2xl font-bold mb-4">Related coverage</h2>
 

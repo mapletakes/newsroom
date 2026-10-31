@@ -69,7 +69,7 @@ export type AnnounceResult = { ok: boolean; error?: string; message?: string };
  * other chat-posting feature (raffles; anything future) gets the same
  * refresh-then-persist dance for free rather than reimplementing it.
  */
-async function getValidAccessToken(senderStreamId: string): Promise<string | null> {
+export async function getValidAccessToken(senderStreamId: string): Promise<string | null> {
   const sb = supabaseAdmin();
   const { data: sender } = await sb
     .from('streams')
