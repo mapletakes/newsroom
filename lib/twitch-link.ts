@@ -8,9 +8,18 @@ type TwitchUser = { id: string; login: string; display_name: string };
 
 /** Records, for every Newsroom channel this Twitch user moderates, a
  *  `moderators` row so the streamer can grant them deck access. Shared by a
- *  normal Twitch sign-in and by linking Twitch to an email account. */
-export async function syncModeratorRows(sb: Sb, accessToken: string, user: TwitchUser): Promise<void> {
-  const modChannels = await fetchModeratedChannels(accessToken, user.id);
+ *  normal Twitch sign-in, by linking Twitch to an email account, and by the
+ *  channel picker's refresh (which passes `strict` so a rejected token throws
+ *  rather than reading as "moderates nothing"). Only ever adds or updates
+ *  rows — an existing row's permissions (can_curate etc.) are left alone, and
+ *  nothing is removed. */
+export async function syncModeratorRows(
+  sb: Sb,
+  accessToken: string,
+  user: TwitchUser,
+  opts: { strict?: boolean } = {},
+): Promise<void> {
+  const modChannels = await fetchModeratedChannels(accessToken, user.id, opts);
   if (modChannels.length === 0) return;
 
   const { data: matched } = await sb

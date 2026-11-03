@@ -146,9 +146,26 @@ export async function sendChatMessage(
   return { ok: true };
 }
 
+/** A non-2xx answer from Twitch's API, carrying the status so callers can tell
+ *  "your token is no good" (401/403) from "Twitch is having a moment". */
+export class TwitchApiError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+    this.name = 'TwitchApiError';
+  }
+}
+
+/**
+ * Every channel `userId` moderates. By default a failed request quietly ends
+ * the list early — fine at sign-in, where an empty result just means no mod
+ * rows get written. A caller that has to tell "moderates nothing" from "Twitch
+ * refused the token" (the channel-list refresh) passes `strict` to get a
+ * TwitchApiError instead.
+ */
 export async function fetchModeratedChannels(
   accessToken: string,
   userId: string,
+  opts: { strict?: boolean } = {},
 ): Promise<{ broadcaster_id: string; broadcaster_login: string; broadcaster_name: string }[]> {
   const clientId = process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID!;
   const out: { broadcaster_id: string; broadcaster_login: string; broadcaster_name: string }[] = [];
@@ -161,7 +178,10 @@ export async function fetchModeratedChannels(
     const r = await fetch(u, {
       headers: { Authorization: `Bearer ${accessToken}`, 'Client-Id': clientId },
     });
-    if (!r.ok) break;
+    if (!r.ok) {
+      if (opts.strict) throw new TwitchApiError(`Twitch moderated-channels fetch failed: ${r.status}`, r.status);
+      break;
+    }
     const data = await r.json();
     for (const ch of data.data || []) out.push(ch);
     cursor = data.pagination?.cursor;
