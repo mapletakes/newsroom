@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { getApprovedSession, sessionLogin } from '@/lib/session';
 import { sessionCanCurate } from '@/lib/curate';
 import { broadcastQueueChange } from '@/lib/realtime';
+import { nextPositionAtBottom } from '@/lib/group-position';
 
 // POST — copy list item(s) onto the live deck as approved submissions.
 // Non-destructive: items stay on the list (it's a durable reference, not a
@@ -184,16 +185,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // appended after whatever's already there.
     const ungroupedItems = allItems.filter((it) => !it.segment_id);
     if (ungroupedItems.length > 0) {
-      const { data: lastPos } = await sb
-        .from('submissions')
-        .select('position')
-        .eq('stream_id', session.streamId)
-        .eq('status', 'approved')
-        .is('segment_id', null)
-        .order('position', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      let pos = (lastPos?.position ?? 0) + 1;
+      let pos = await nextPositionAtBottom(sb, session.streamId, null);
       for (const item of ungroupedItems) {
         if (await insertItem(item, null, pos)) { added++; pos++; } else { skipped++; }
       }
@@ -221,14 +213,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { data: items } = await itemsQuery;
   if (!items || items.length === 0) return NextResponse.json({ added: 0, skipped: 0 });
 
-  let posQuery = sb
-    .from('submissions')
-    .select('position')
-    .eq('stream_id', session.streamId)
-    .eq('status', 'approved');
-  posQuery = segId ? posQuery.eq('segment_id', segId) : posQuery.is('segment_id', null);
-  const { data: lastPos } = await posQuery.order('position', { ascending: false }).limit(1).maybeSingle();
-  let nextPos = (lastPos?.position ?? 0) + 1;
+  let nextPos = await nextPositionAtBottom(sb, session.streamId, segId);
 
   let added = 0;
   let skipped = 0;

@@ -4,6 +4,7 @@ import { getSession, getApprovedSession, sessionLogin } from '@/lib/session';
 import { sessionCanCurate } from '@/lib/curate';
 import { searchRelatedCoverage } from '@/lib/search-coverage';
 import { runAiEnrichment } from '@/lib/extract';
+import { nextPositionAtBottom } from '@/lib/group-position';
 import { normalizeTitleOverride } from '@/lib/title-override';
 import { submitUrlToQueue } from '@/lib/submit-url';
 import { broadcastQueueChange } from '@/lib/realtime';
@@ -214,17 +215,7 @@ export async function PATCH(req: NextRequest) {
       targetSeg = seg?.id ?? null;
     }
     patch.segment_id = targetSeg;
-    let posQ = sb
-      .from('submissions')
-      .select('position')
-      .eq('stream_id', session.streamId)
-      .eq('status', 'approved');
-    posQ = targetSeg ? posQ.eq('segment_id', targetSeg) : posQ.is('segment_id', null);
-    const { data: last } = await posQ
-      .order('position', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    patch.position = (last?.position ?? 0) + 1;
+    patch.position = await nextPositionAtBottom(sb, session.streamId, targetSeg, id);
   }
 
   // On approval, fetch related coverage before writing — but only for news
