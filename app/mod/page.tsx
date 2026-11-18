@@ -44,6 +44,7 @@ export default async function ModPage() {
         questionsOpen={stream?.questions_open !== false}
         modStatusEnabled={stream?.mod_status_enabled === true}
         raffleEnabled={stream?.raffle_enabled === true}
+        suspiciousLogEnabled={stream?.suspicious_log_enabled === true}
       />
     </>
   );

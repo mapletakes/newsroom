@@ -227,6 +227,7 @@ export function DeckMobile({
   questionsOpen,
   modStatusEnabled,
   raffleEnabled = false,
+  suspiciousLogEnabled = false,
   discordWebhookConfigured = false,
   canSetNowPlaying = false,
   onSelect,
@@ -258,6 +259,7 @@ export function DeckMobile({
   questionsOpen: boolean;
   modStatusEnabled: boolean;
   raffleEnabled?: boolean;
+  suspiciousLogEnabled?: boolean;
   discordWebhookConfigured?: boolean;
   onSelect: (id: string) => void;
   onPlayed: () => void;
@@ -350,6 +352,9 @@ export function DeckMobile({
               {chatEnabled && <DropdownMenuItem asChild><Link href="/mod">Mod View</Link></DropdownMenuItem>}
               <DropdownMenuItem asChild><Link href="/shelf">Shelf</Link></DropdownMenuItem>
               <DropdownMenuItem asChild><Link href="/archives">Archives</Link></DropdownMenuItem>
+              {suspiciousLogEnabled && (
+                <DropdownMenuItem asChild><Link href="/suspicious-log">Suspicious Log</Link></DropdownMenuItem>
+              )}
               {!curateOnly && (
                 <DropdownMenuItem asChild><Link href="/setup">Settings</Link></DropdownMenuItem>
               )}

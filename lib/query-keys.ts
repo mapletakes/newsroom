@@ -13,4 +13,6 @@ export const queryKeys = {
   shelves: () => ['shelves'] as const,
   shelf: (shelfId: string) => ['shelf', shelfId] as const,
   archives: () => ['archives'] as const,
+  suspiciousLog: (params?: string) =>
+    params === undefined ? (['suspicious-log'] as const) : (['suspicious-log', params] as const),
 };

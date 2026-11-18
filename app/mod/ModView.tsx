@@ -63,6 +63,7 @@ export function ModView({
   questionsOpen = true,
   modStatusEnabled = false,
   raffleEnabled = false,
+  suspiciousLogEnabled = false,
 }: {
   channel: string;
   displayName: string;
@@ -76,6 +77,7 @@ export function ModView({
   questionsOpen?: boolean;
   modStatusEnabled?: boolean;
   raffleEnabled?: boolean;
+  suspiciousLogEnabled?: boolean;
 }) {
   const queryClient = useQueryClient();
   const headerRef = useRef<HTMLElement>(null);
@@ -379,6 +381,7 @@ export function ModView({
             {isMod && canCurate && <Link href="/deck" className="underline hover:text-rust">Curate Deck →</Link>}
             <Link href="/shelf" className="underline hover:text-rust">Shelf</Link>
             <Link href="/archives" className="underline hover:text-rust">Archives</Link>
+            {suspiciousLogEnabled && <Link href="/suspicious-log" className="underline hover:text-rust">Suspicious Log</Link>}
             {/* Questions and Mod status are reached via the rail above, not a
                 header link — see the DeckRail block's comment. */}
             {/* Two different pages, deliberately: /setup is the channel and is
