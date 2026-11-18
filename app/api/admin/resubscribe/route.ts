@@ -4,6 +4,7 @@ import { getSession } from '@/lib/session';
 import { isAdmin } from '@/lib/admin';
 import { createChatSubscription } from '@/lib/twitch-eventsub';
 import { logAdminAction } from '@/lib/audit';
+import { connectSuspiciousLog } from '@/lib/suspicious-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
   const sb = supabaseAdmin();
   const { data: stream } = await sb
     .from('streams')
-    .select('twitch_user_id')
+    .select('twitch_user_id, suspicious_log_enabled')
     .eq('id', streamId)
     .maybeSingle();
   if (!stream) return NextResponse.json({ error: 'stream not found' }, { status: 404 });
@@ -29,7 +30,10 @@ export async function POST(req: NextRequest) {
   try {
     const id = await createChatSubscription(stream.twitch_user_id);
     await logAdminAction(sb, session, 'resubscribe', streamId, { subscriptionId: id });
-    return NextResponse.json({ ok: !!id, subscriptionId: id });
+    const logStatus = stream.suspicious_log_enabled === true
+      ? await connectSuspiciousLog(sb, { id: streamId, twitch_user_id: stream.twitch_user_id })
+      : undefined;
+    return NextResponse.json({ ok: !!id, subscriptionId: id, ...(logStatus ? { logStatus } : {}) });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ ok: false, error: message }, { status: 500 });

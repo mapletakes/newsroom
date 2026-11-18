@@ -15,6 +15,9 @@ const SCOPES = [
   // Create Stream Marker, for the "marker on Open source" setting. Like the
   // scope above, only accounts that reconnect after it was added get it.
   'channel:manage:broadcast',
+  // Suspicious-user log capture. Like the scopes above, only accounts that
+  // reconnect after it was added get it.
+  'moderator:read:suspicious_users',
 ];
 
 export function buildAuthUrl(state: string): string {

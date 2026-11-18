@@ -99,22 +99,30 @@ export function classifyDedupOutcome(insertError: { code?: string } | null): Ded
 
 // ── Subscription management ────────────────────────────────────
 
-/**
- * Create an EventSub subscription for `channel.chat.message`.
- * Uses broadcaster's user ID as both broadcaster_user_id and user_id
- * (the broadcaster must have granted `user:read:chat` via OAuth).
- *
- * Returns the subscription ID, or null on failure.
- * If the subscription already exists, Twitch returns 409 — we treat that as success.
- */
-export async function createChatSubscription(
-  broadcasterUserId: string,
-): Promise<string | null> {
+export const CHAT_MESSAGE_SUBSCRIPTION = 'channel.chat.message';
+export const SUSPICIOUS_MESSAGE_SUBSCRIPTION = 'channel.suspicious_user.message';
+export const SUSPICIOUS_UPDATE_SUBSCRIPTION = 'channel.suspicious_user.update';
+
+export function isSuspiciousSubscription(type: unknown): boolean {
+  return type === SUSPICIOUS_MESSAGE_SUBSCRIPTION || type === SUSPICIOUS_UPDATE_SUBSCRIPTION;
+}
+
+type CreateOutcome =
+  | { kind: 'created'; id: string }
+  | { kind: 'existing' }
+  | { kind: 'failed'; status: number };
+
+/** Create one webhook subscription. Twitch's 409 means it already exists,
+ *  which counts as success. */
+async function createWebhookSubscription(
+  type: string,
+  condition: Record<string, string>,
+): Promise<CreateOutcome> {
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/+$/, '');
   const secret = getEventSubSecret();
   if (!appUrl || !secret) {
     console.error('Missing NEXT_PUBLIC_APP_URL or EVENTSUB_SECRET');
-    return null;
+    return { kind: 'failed', status: 0 };
   }
 
   const token = await getAppAccessToken();
@@ -128,12 +136,9 @@ export async function createChatSubscription(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      type: 'channel.chat.message',
+      type,
       version: '1',
-      condition: {
-        broadcaster_user_id: broadcasterUserId,
-        user_id: broadcasterUserId,
-      },
+      condition,
       transport: {
         method: 'webhook',
         callback: `${appUrl}/api/twitch/eventsub`,
@@ -142,25 +147,94 @@ export async function createChatSubscription(
     }),
   });
 
-  // 409 = duplicate subscription — that's fine
   if (r.status === 409) {
-    console.log(`EventSub chat sub already exists for user ${broadcasterUserId}`);
-    return 'existing';
+    console.log(`EventSub ${type} sub already exists for ${condition.broadcaster_user_id}`);
+    return { kind: 'existing' };
   }
 
   if (!r.ok) {
     const text = await r.text();
-    console.error(`EventSub create failed ${r.status}: ${text}`);
-    return null;
+    console.error(`EventSub ${type} create failed ${r.status}: ${text}`);
+    return { kind: 'failed', status: r.status };
   }
 
   const data = await r.json();
   const sub = data.data?.[0];
   if (sub) {
-    console.log(`EventSub chat sub created: ${sub.id} (${sub.status})`);
-    return sub.id;
+    console.log(`EventSub ${type} sub created: ${sub.id} (${sub.status})`);
+    return { kind: 'created', id: sub.id };
   }
-  return null;
+  return { kind: 'failed', status: r.status };
+}
+
+/**
+ * Create an EventSub subscription for `channel.chat.message`.
+ * Uses broadcaster's user ID as both broadcaster_user_id and user_id
+ * (the broadcaster must have granted `user:read:chat` via OAuth).
+ *
+ * Returns the subscription ID, or null on failure.
+ * If the subscription already exists, Twitch returns 409 — we treat that as success.
+ */
+export async function createChatSubscription(
+  broadcasterUserId: string,
+): Promise<string | null> {
+  const outcome = await createWebhookSubscription(CHAT_MESSAGE_SUBSCRIPTION, {
+    broadcaster_user_id: broadcasterUserId,
+    user_id: broadcasterUserId,
+  });
+  if (outcome.kind === 'created') return outcome.id;
+  return outcome.kind === 'existing' ? 'existing' : null;
+}
+
+export type SuspiciousSubscriptionResult = 'active' | 'needs_reconnect' | 'stopped';
+
+/**
+ * Subscribe to a channel's suspicious-user messages and status changes, with
+ * the broadcaster acting as the moderator. A 401/403 means they haven't granted
+ * `moderator:read:suspicious_users` yet, which only a reconnect can fix.
+ */
+export async function createSuspiciousLogSubscriptions(
+  broadcasterUserId: string,
+): Promise<SuspiciousSubscriptionResult> {
+  const condition = { broadcaster_user_id: broadcasterUserId, moderator_user_id: broadcasterUserId };
+  const outcomes = await Promise.all([
+    createWebhookSubscription(SUSPICIOUS_MESSAGE_SUBSCRIPTION, condition),
+    createWebhookSubscription(SUSPICIOUS_UPDATE_SUBSCRIPTION, condition),
+  ]);
+  const failures = outcomes.filter(
+    (o): o is Extract<CreateOutcome, { kind: 'failed' }> => o.kind === 'failed',
+  );
+  if (failures.length === 0) return 'active';
+  return failures.some((o) => o.status === 401 || o.status === 403) ? 'needs_reconnect' : 'stopped';
+}
+
+/** Remove a channel's suspicious-user subscriptions. Returns false if Twitch
+ *  couldn't list or delete them; the webhook still drops events for a channel
+ *  whose module is off, so a failure here can't resume capture. */
+export async function deleteSuspiciousLogSubscriptions(broadcasterUserId: string): Promise<boolean> {
+  const token = await getAppAccessToken();
+  const clientId = process.env.NEXT_PUBLIC_TWITCH_CLIENT_ID!;
+  let allDeleted = true;
+  let cursor: string | undefined;
+
+  do {
+    const u = new URL('https://api.twitch.tv/helix/eventsub/subscriptions');
+    u.searchParams.set('user_id', broadcasterUserId);
+    if (cursor) u.searchParams.set('after', cursor);
+    const r = await fetch(u, {
+      headers: { Authorization: `Bearer ${token}`, 'Client-Id': clientId },
+    });
+    if (!r.ok) return false;
+    const data = await r.json();
+    for (const sub of data.data || []) {
+      if (isSuspiciousSubscription(sub.type) && sub.condition?.broadcaster_user_id === broadcasterUserId) {
+        if (!(await deleteSubscription(sub.id))) allDeleted = false;
+      }
+    }
+    cursor = data.pagination?.cursor;
+  } while (cursor);
+
+  return allDeleted;
 }
 
 /**
