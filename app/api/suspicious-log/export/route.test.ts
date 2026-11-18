@@ -74,8 +74,12 @@ describe('GET /api/suspicious-log/export', () => {
     expect(res.headers.get('content-type')).toBe('text/csv; charset=utf-8');
     expect(res.headers.get('content-disposition')).toMatch(/^attachment; filename="suspicious-log-\d{4}-\d{2}-\d{2}\.csv"$/);
     expect(res.headers.get('cache-control')).toBe('no-store');
+    // Response.text() drops a leading byte-order mark, so check the bytes: the
+    // mark is what makes Excel read the file as UTF-8.
+    const bytes = new Uint8Array(await res.clone().arrayBuffer());
+    expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
     expect(await res.text()).toBe(
-      '﻿time_utc,username,display_name,status,detection,ban_evasion,message\r\n' +
+      'time_utc,username,display_name,status,detection,ban_evasion,message\r\n' +
         '2026-11-18 19:09:24,viewer,Viewer,restricted,manually_added,unknown,hello\r\n',
     );
   });
