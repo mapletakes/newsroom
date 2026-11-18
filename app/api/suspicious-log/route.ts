@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getSuspiciousLogAccess, type LogDenied } from '@/lib/suspicious-log-access';
+import { getSuspiciousLogAccess } from '@/lib/suspicious-log-access';
+import { denied, reply } from '@/lib/suspicious-log-http';
 import {
   LOG_PAGE_SIZE,
   MAX_DELETE_IDS,
@@ -13,20 +14,9 @@ export const dynamic = 'force-dynamic';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const STATUS_HISTORY_LIMIT = 50;
-const NO_STORE = { 'Cache-Control': 'no-store' };
 
-const DENIED_STATUS: Record<LogDenied, number> = {
-  unauthenticated: 401,
-  forbidden: 403,
-  reconnect: 403,
-  twitch: 503,
-};
-
-const reply = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: NO_STORE });
-const denied = (reason: LogDenied) => reply({ error: reason }, DENIED_STATUS[reason]);
-
-// One page of a channel's log, newest first. Filtering happens in the database
-// because a year of messages is too much to send to the browser.
+// One page of a channel's log. Filtering happens in the database because a
+// year of messages is too much to send to the browser.
 export async function GET(req: NextRequest) {
   const access = await getSuspiciousLogAccess();
   if (!access.ok) return denied(access.reason);
@@ -51,10 +41,13 @@ export async function GET(req: NextRequest) {
   if (filters.from) query = query.gte('sent_at', filters.from);
   if (filters.to) query = query.lt('sent_at', filters.to);
 
+  // The id breaks ties so two messages in the same instant keep a stable order
+  // from one page to the next.
+  const ascending = filters.order === 'oldest';
   const start = (filters.page - 1) * LOG_PAGE_SIZE;
   const { data, error, count } = await query
-    .order('sent_at', { ascending: false })
-    .order('id', { ascending: false })
+    .order('sent_at', { ascending })
+    .order('id', { ascending })
     .range(start, start + LOG_PAGE_SIZE - 1);
 
   // PGRST103 is a page past the end, which deleting the last rows can cause.

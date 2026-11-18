@@ -1,8 +1,10 @@
 // The log page's filters and response shapes, shared by the API route and the
 // browser. No server-only imports belong here.
 
-export const LOG_PAGE_SIZE = 50;
-export const MAX_DELETE_IDS = 100;
+// One line per message makes a long page cheap to scan, so pages are large.
+export const LOG_PAGE_SIZE = 200;
+// A whole page can be selected at once, so a delete must accept one.
+export const MAX_DELETE_IDS = 200;
 
 export const STATUS_LABELS: Record<string, string> = {
   restricted: 'Restricted',
@@ -24,6 +26,7 @@ export type LogFilters = {
   type: string;
   from: string;
   to: string;
+  order: 'newest' | 'oldest';
   page: number;
 };
 
@@ -35,6 +38,7 @@ export const DEFAULT_LOG_FILTERS: LogFilters = {
   type: '',
   from: '',
   to: '',
+  order: 'newest',
   page: 1,
 };
 
@@ -70,6 +74,18 @@ export type LogResponse = {
   logStatusAt: string | null;
 };
 
+/** A chatter in the log, as the picker lists them. `status` and `name` come
+ *  from their most recent message. */
+export type LogChatter = {
+  id: string;
+  login: string;
+  name: string;
+  status: string;
+  last_seen: string;
+};
+
+export type ChattersResponse = { chatters: LogChatter[] };
+
 function isoOrEmpty(value: string | null): string {
   if (!value) return '';
   const time = Date.parse(value);
@@ -89,6 +105,7 @@ export function parseLogFilters(params: URLSearchParams): LogFilters {
     type: Object.hasOwn(DETECTION_LABELS, type) ? type : '',
     from: isoOrEmpty(params.get('from')),
     to: isoOrEmpty(params.get('to')),
+    order: params.get('order') === 'oldest' ? 'oldest' : 'newest',
     page: Number.isInteger(page) && page >= 1 && page <= 100_000 ? page : 1,
   };
 }
@@ -102,6 +119,7 @@ export function toLogSearchParams(filters: LogFilters): URLSearchParams {
   if (filters.type) params.set('type', filters.type);
   if (filters.from) params.set('from', filters.from);
   if (filters.to) params.set('to', filters.to);
+  if (filters.order !== 'newest') params.set('order', filters.order);
   if (filters.page > 1) params.set('page', String(filters.page));
   return params;
 }
@@ -118,4 +136,43 @@ export function localDayToIso(day: string, addDays = 0): string {
   if (Number.isNaN(date.getTime())) return '';
   date.setDate(date.getDate() + addDays);
   return date.toISOString();
+}
+
+const pad = (n: number) => String(n).padStart(2, '0');
+
+/** `YYYY-MM-DD` in the viewer's time zone, for grouping a log by day. */
+export function localDayKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** `HH:MM:SS` in the viewer's time zone. Built by hand rather than with Intl so
+ *  every log line has the same fixed width in every locale. */
+export function formatLogTime(iso: string): string {
+  const d = new Date(iso);
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+export function formatLogDay(iso: string): string {
+  return new Date(iso).toLocaleDateString([], {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+/** Splits an already-ordered list into runs that share a calendar day, so each
+ *  line needs only a time and the date appears once above its group. */
+export function groupByDay<T extends { sent_at: string }>(
+  items: T[],
+): { key: string; label: string; items: T[] }[] {
+  const groups: { key: string; label: string; items: T[] }[] = [];
+  for (const item of items) {
+    const key = localDayKey(item.sent_at);
+    const last = groups[groups.length - 1];
+    if (last && last.key === key) last.items.push(item);
+    else groups.push({ key, label: formatLogDay(item.sent_at), items: [item] });
+  }
+  return groups;
 }
