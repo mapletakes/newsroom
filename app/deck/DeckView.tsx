@@ -73,6 +73,7 @@ export function DeckView({
   questionsOpen = true,
   modStatusEnabled = false,
   raffleEnabled = false,
+  suspiciousLogEnabled = false,
   discordWebhookConfigured = false,
   markerOnOpen = false,
 }: {
@@ -91,6 +92,7 @@ export function DeckView({
   questionsOpen?: boolean;
   modStatusEnabled?: boolean;
   raffleEnabled?: boolean;
+  suspiciousLogEnabled?: boolean;
   discordWebhookConfigured?: boolean;
   /** Streamer's "marker when I open a source" setting (always false for mods). */
   markerOnOpen?: boolean;
@@ -1263,6 +1265,7 @@ export function DeckView({
         questionsOpen={questionsOpen}
         modStatusEnabled={modStatusEnabled}
         raffleEnabled={raffleEnabled}
+        suspiciousLogEnabled={suspiciousLogEnabled}
         discordWebhookConfigured={discordWebhookConfigured}
         onSelect={activateItem}
         onPlayed={markPlayed}
@@ -1315,6 +1318,11 @@ export function DeckView({
             <Link href="/archives" className="underline hover:text-rust">
               Archives
             </Link>
+            {suspiciousLogEnabled && (
+              <Link href="/suspicious-log" className="underline hover:text-rust">
+                Suspicious Log
+              </Link>
+            )}
             {!curateOnly && (
               <a href="/api/notes?format=markdown&commit=1" className="underline hover:text-rust">
                 Export Notes
