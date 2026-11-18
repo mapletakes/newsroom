@@ -86,15 +86,16 @@ describe('SuspiciousLogView', () => {
     await screen.findByText(/onerror=alert/);
     expect(screen.getByRole('button', { name: /^\d{2}:\d{2}:\d{2}$/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Viewer' })).toBeInTheDocument();
-    // The reason a user is flagged stays out of the line until asked for.
-    expect(screen.queryByText(/Added by a mod/)).toBeNull();
+    // The reason a user is flagged stays out of the line until asked for. The
+    // " · " separator keeps this from matching the Detection filter's option.
+    expect(screen.queryByText(/Restricted · Added by a mod/)).toBeNull();
   });
 
   it('shows why a user is flagged when the time is clicked', async () => {
     mockApi();
     renderView();
     await userEvent.click(await screen.findByRole('button', { name: /^\d{2}:\d{2}:\d{2}$/ }));
-    expect(screen.getByText(/Added by a mod/)).toHaveTextContent('Ban evasion: unknown');
+    expect(screen.getByText(/Restricted · Added by a mod/)).toHaveTextContent('Ban evasion: unknown');
   });
 
   it('hides deleting from mods', async () => {
