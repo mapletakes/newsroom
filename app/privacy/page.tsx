@@ -62,7 +62,10 @@ export default function PrivacyPage() {
             the message, the chatter&apos;s Twitch ID and username, and the status and detection
             details Twitch provides. We also store status changes for those users, including the
             moderator who made the change. This log is for that channel&apos;s streamer and
-            moderators.
+            moderators. They can also download it, or make an unlisted link to selected messages
+            or to everything one user has said. Anyone who has such a link can read those messages
+            and the username without signing in, until the link expires after 30 days or is
+            revoked. Expired links are removed a week later.
           </li>
         </ul>
         <p><strong>From the links themselves:</strong></p>

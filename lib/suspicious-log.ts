@@ -5,6 +5,7 @@
 // withheld or flagged, and server logs outlive the retention period below.
 
 import type { supabaseAdmin } from './supabase';
+import { SHARE_EXPIRED_KEEP_DAYS } from './suspicious-log-query';
 import {
   SUSPICIOUS_MESSAGE_SUBSCRIPTION,
   SUSPICIOUS_UPDATE_SUBSCRIPTION,
@@ -181,9 +182,13 @@ export async function purgeExpiredSuspiciousLog(sb: Sb, now: number) {
   const cutoff = new Date(now - SUSPICIOUS_LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
   const messages = await sb.from('suspicious_messages').delete({ count: 'exact' }).lt('sent_at', cutoff);
   const changes = await sb.from('suspicious_status_changes').delete({ count: 'exact' }).lt('changed_at', cutoff);
+  // Share links go once they've been expired for a while.
+  const sharesCutoff = new Date(now - SHARE_EXPIRED_KEEP_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const shares = await sb.from('suspicious_shares').delete({ count: 'exact' }).lt('expires_at', sharesCutoff);
   return {
     messagesDeleted: messages.count ?? 0,
     statusChangesDeleted: changes.count ?? 0,
-    error: messages.error?.message ?? changes.error?.message ?? null,
+    sharesDeleted: shares.count ?? 0,
+    error: messages.error?.message ?? changes.error?.message ?? shares.error?.message ?? null,
   };
 }

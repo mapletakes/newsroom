@@ -1,11 +1,12 @@
 import { NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getSuspiciousLogAccess } from '@/lib/suspicious-log-access';
+import { applyLogFilters } from '@/lib/suspicious-log-filters';
 import { denied, reply } from '@/lib/suspicious-log-http';
 import {
   LOG_PAGE_SIZE,
   MAX_DELETE_IDS,
-  escapeLike,
+  chunk,
   parseLogFilters,
   type LogResponse,
 } from '@/lib/suspicious-log-query';
@@ -32,14 +33,7 @@ export async function GET(req: NextRequest) {
     )
     .eq('stream_id', access.streamId);
 
-  if (filters.q) query = query.ilike('message_text', `%${escapeLike(filters.q)}%`);
-  if (filters.user) query = query.ilike('chatter_login', `${escapeLike(filters.user)}%`);
-  if (filters.chatterId) query = query.eq('chatter_user_id', filters.chatterId);
-  if (filters.status === 'restricted') query = query.eq('low_trust_status', 'restricted');
-  if (filters.status === 'other') query = query.neq('low_trust_status', 'restricted');
-  if (filters.type) query = query.contains('detection_types', [filters.type]);
-  if (filters.from) query = query.gte('sent_at', filters.from);
-  if (filters.to) query = query.lt('sent_at', filters.to);
+  query = applyLogFilters(query, filters);
 
   // The id breaks ties so two messages in the same instant keep a stable order
   // from one page to the next.
@@ -100,14 +94,21 @@ export async function DELETE(req: NextRequest) {
     return reply({ error: 'invalid ids' }, 400);
   }
 
-  const { error, count } = await supabaseAdmin()
-    .from('suspicious_messages')
-    .delete({ count: 'exact' })
-    .eq('stream_id', access.streamId)
-    .in('id', ids);
-  if (error) {
-    console.error('suspicious-log: delete failed:', error.message);
-    return reply({ error: 'could not delete messages' }, 500);
+  // In small batches: the ids travel in the request URL, and 200 of them can
+  // run past its length limit.
+  const sb = supabaseAdmin();
+  let deleted = 0;
+  for (const batch of chunk(ids as string[])) {
+    const { error, count } = await sb
+      .from('suspicious_messages')
+      .delete({ count: 'exact' })
+      .eq('stream_id', access.streamId)
+      .in('id', batch);
+    if (error) {
+      console.error('suspicious-log: delete failed:', error.message);
+      return reply({ error: 'could not delete messages', deleted }, 500);
+    }
+    deleted += count ?? 0;
   }
-  return reply({ ok: true, deleted: count ?? 0 });
+  return reply({ ok: true, deleted });
 }

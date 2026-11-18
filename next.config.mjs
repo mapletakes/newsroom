@@ -48,6 +48,16 @@ const snapshotHeaders = [
   { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
 ];
 
+// Shared suspicious-log pages (/sl/<token>) are reachable by anyone holding the
+// link, so the link must go no further than that: no referrer to anything the
+// page links to, no search indexing, and no cached copy that could outlive a
+// revoked or expired link.
+const sharedLogHeaders = [
+  { key: 'Referrer-Policy', value: 'no-referrer' },
+  { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
+  { key: 'Cache-Control', value: 'no-store' },
+];
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // No remotePatterns: thumbnails come from arbitrary submitted/publisher
@@ -60,6 +70,7 @@ const nextConfig = {
     return [
       { source: '/:path*', headers: securityHeaders },
       { source: '/a/:id', headers: snapshotHeaders },
+      { source: '/sl/:token', headers: sharedLogHeaders },
     ];
   },
 };

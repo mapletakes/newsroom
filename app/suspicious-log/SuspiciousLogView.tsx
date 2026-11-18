@@ -11,13 +11,16 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { queryKeys } from '@/lib/query-keys';
 import { useDebouncedValue } from '@/lib/use-debounced-value';
+import { toText } from '@/lib/suspicious-log-export';
 import {
   DETECTION_LABELS,
   LOG_PAGE_SIZE,
   MAX_DELETE_IDS,
+  MAX_EXPORT_ROWS,
   STATUS_LABELS,
   formatLogTime,
   groupByDay,
+  localDayKey,
   localDayToIso,
   toLogSearchParams,
   type LogFilters,
@@ -26,6 +29,7 @@ import {
 } from '@/lib/suspicious-log-query';
 import { formatDateTime } from '@/lib/url';
 import { ChatterPicker, type PickedChatter } from './ChatterPicker';
+import { ShareDialog, SharedLinksDialog, copyText, type ShareTarget } from './ShareDialogs';
 import { StatusDot } from './StatusDot';
 
 const controlClass =
@@ -95,7 +99,6 @@ function detailsOf(message: LogMessage): string {
 function LogRow({
   message,
   showUser,
-  canDelete,
   selected,
   expanded,
   onSelect,
@@ -104,7 +107,6 @@ function LogRow({
 }: {
   message: LogMessage;
   showUser: boolean;
-  canDelete: boolean;
   selected: boolean;
   expanded: boolean;
   onSelect: () => void;
@@ -116,15 +118,13 @@ function LogRow({
   return (
     <li className={`hover:bg-ink/5 ${selected ? 'bg-ink/10' : ''}`}>
       <div className="flex items-start gap-2 px-2">
-        {canDelete && (
-          <input
-            type="checkbox"
-            checked={selected}
-            onChange={onSelect}
-            aria-label={`Select message from ${message.chatter_name}`}
-            className="mt-1 h-3 w-3 shrink-0 accent-rust"
-          />
-        )}
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onSelect}
+          aria-label={`Select message from ${message.chatter_name}`}
+          className="mt-1 h-3 w-3 shrink-0 accent-rust"
+        />
         <button
           type="button"
           onClick={onToggle}
@@ -170,6 +170,9 @@ export function SuspiciousLogView({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showHistory, setShowHistory] = useState(false);
+  const [shareTarget, setShareTarget] = useState<ShareTarget | null>(null);
+  const [shareKey, setShareKey] = useState(0);
+  const [linksOpen, setLinksOpen] = useState(false);
 
   // Searching as you type, without a request per keystroke.
   const debouncedQ = useDebouncedValue(ui.q, 300);
@@ -256,6 +259,31 @@ export function SuspiciousLogView({
   const pageAllSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
   const rangeFrom = items.length ? (ui.page - 1) * pageSize + 1 : 0;
   const rangeTo = items.length ? rangeFrom + items.length - 1 : 0;
+  const chatter = ui.chatter;
+
+  // A fresh key per opening, so a link made last time never shows in the next.
+  const openShare = (target: ShareTarget) => {
+    setShareKey((key) => key + 1);
+    setShareTarget(target);
+  };
+
+  // Copied in the order they were said, whichever way the page is sorted.
+  const copySelected = () => {
+    const picked = items.filter((m) => selected.has(m.id));
+    const ordered = ui.order === 'newest' ? picked.reverse() : picked;
+    copyText(
+      toText(ordered, (iso) => `${localDayKey(iso)} ${formatLogTime(iso)}`),
+      `Copied ${picked.length} message${picked.length === 1 ? '' : 's'}`,
+    );
+  };
+
+  // Downloads cover every page of what the filters match, not just this one.
+  const exportHref = (format: 'csv' | 'txt') => {
+    const exportParams = new URLSearchParams(params);
+    exportParams.delete('page');
+    exportParams.set('format', format);
+    return `/api/suspicious-log/export?${exportParams}`;
+  };
 
   const toggleIn = (set: Set<string>, id: string) => {
     const next = new Set(set);
@@ -282,6 +310,8 @@ export function SuspiciousLogView({
   return (
     <div className="flex min-h-screen flex-col">
       {confirmDialog}
+      {shareTarget && <ShareDialog key={shareKey} target={shareTarget} onClose={() => setShareTarget(null)} />}
+      <SharedLinksDialog open={linksOpen} onOpenChange={setLinksOpen} isStreamer={canDelete} />
       <AppHeader
         className="border-b-2 border-ink px-6 py-3 gap-6"
         section="suspicious log"
@@ -388,7 +418,7 @@ export function SuspiciousLogView({
               Status history ({history.length})
             </button>
           )}
-          {canDelete && items.length > 0 && (
+          {items.length > 0 && (
             <label className="flex items-center gap-1.5">
               <input
                 type="checkbox"
@@ -399,16 +429,57 @@ export function SuspiciousLogView({
               Select page
             </label>
           )}
-          {canDelete && selected.size > 0 && (
+          {selected.size > 0 && (
+            <>
+              <Button variant="outline" size="xs" onClick={copySelected}>
+                Copy
+              </Button>
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={() => openShare({ kind: 'messages', messageIds: [...selected] })}
+              >
+                Share {selected.size}
+              </Button>
+              {canDelete && (
+                <Button
+                  variant="destructive"
+                  size="xs"
+                  onClick={deleteSelected}
+                  disabled={remove.isPending || selected.size > MAX_DELETE_IDS}
+                >
+                  {remove.isPending ? 'Deleting…' : `Delete ${selected.size}`}
+                </Button>
+              )}
+            </>
+          )}
+          {chatter && (
             <Button
-              variant="destructive"
+              variant="outline"
               size="xs"
-              onClick={deleteSelected}
-              disabled={remove.isPending || selected.size > MAX_DELETE_IDS}
+              onClick={() => openShare({ kind: 'chatter', chatterId: chatter.id, chatterName: chatter.name })}
+              title={`Link to everything ${chatter.name} has said here`}
             >
-              {remove.isPending ? 'Deleting…' : `Delete ${selected.size}`}
+              Share all
             </Button>
           )}
+          {items.length > 0 && (
+            <>
+              <a
+                href={exportHref('csv')}
+                className="underline hover:text-ink"
+                title={`Download everything these filters match, up to ${MAX_EXPORT_ROWS.toLocaleString()} messages`}
+              >
+                Export CSV
+              </a>
+              <a href={exportHref('txt')} className="underline hover:text-ink">
+                Export text
+              </a>
+            </>
+          )}
+          <button type="button" onClick={() => setLinksOpen(true)} className="underline hover:text-ink">
+            Shared links
+          </button>
           <div className="ml-auto">{pager('top')}</div>
         </div>
 
@@ -448,7 +519,6 @@ export function SuspiciousLogView({
                         key={message.id}
                         message={message}
                         showUser={!ui.chatter}
-                        canDelete={canDelete}
                         selected={selected.has(message.id)}
                         expanded={expanded.has(message.id)}
                         onSelect={() => setSelected((current) => toggleIn(current, message.id))}

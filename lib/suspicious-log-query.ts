@@ -176,3 +176,57 @@ export function groupByDay<T extends { sent_at: string }>(
   }
   return groups;
 }
+
+// ── Sharing and export ─────────────────────────────────────────────────
+
+export const SHARE_TTL_DAYS = 30;
+/** Expired links are kept this long, so they can still be seen as expired
+ *  before the cleanup job removes them. */
+export const SHARE_EXPIRED_KEEP_DAYS = 7;
+/** A whole page of the log can be shared at once. */
+export const MAX_SHARE_MESSAGES = 200;
+export const MAX_ACTIVE_SHARES = 200;
+export const MAX_EXPORT_ROWS = 10_000;
+
+/** How many ids go into one `in (…)` filter. PostgREST carries them in the
+ *  URL, and a few hundred uuids can run past the length limit in front of it. */
+export const IN_CHUNK = 50;
+
+export function chunk<T>(items: T[], size = IN_CHUNK): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+/** `YYYY-MM-DD HH:MM:SS` in UTC. Used wherever a log leaves the app, since a
+ *  reader elsewhere can't know the sender's time zone. */
+export function formatUtc(iso: string): string {
+  return new Date(iso).toISOString().slice(0, 19).replace('T', ' ');
+}
+
+export type ShareStatus = 'active' | 'expired' | 'revoked';
+
+export type ShareSummary = {
+  id: string;
+  /** Only present while the link works. */
+  url: string | null;
+  kind: 'messages' | 'chatter';
+  label: string;
+  created_by_login: string;
+  created_at: string;
+  expires_at: string;
+  status: ShareStatus;
+  /** Whether the person asking made it. */
+  mine: boolean;
+};
+
+export type SharesResponse = { shares: ShareSummary[] };
+
+/** What a shared page shows of each message. Deliberately not the chatter's
+ *  Twitch id, the detection details, or who flagged them. */
+export type SharedMessage = {
+  sent_at: string;
+  chatter_name: string;
+  message_text: string;
+  low_trust_status: string;
+};

@@ -15,6 +15,7 @@ export const queryKeys = {
   archives: () => ['archives'] as const,
   suspiciousLog: (params?: string) =>
     params === undefined ? (['suspicious-log'] as const) : (['suspicious-log', params] as const),
+  suspiciousShares: () => ['suspicious-shares'] as const,
   // A different first element from suspiciousLog's, so invalidating one never
   // reaches the other by prefix.
   suspiciousChatters: (q?: string) =>

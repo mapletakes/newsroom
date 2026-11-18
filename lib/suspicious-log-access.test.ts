@@ -57,7 +57,12 @@ describe('getSuspiciousLogAccess', () => {
 
   it('admits the channel owner without asking Twitch', async () => {
     state.session = streamer;
-    expect(await getSuspiciousLogAccess()).toMatchObject({ ok: true, role: 'streamer', logStatus: 'active' });
+    expect(await getSuspiciousLogAccess()).toMatchObject({
+      ok: true,
+      role: 'streamer',
+      logStatus: 'active',
+      userId: '100',
+    });
     expect(fetchModeratedChannels).not.toHaveBeenCalled();
   });
 
@@ -78,7 +83,7 @@ describe('getSuspiciousLogAccess', () => {
   });
 
   it('admits a current mod confirmed by Twitch', async () => {
-    expect(await getSuspiciousLogAccess()).toMatchObject({ ok: true, role: 'mod' });
+    expect(await getSuspiciousLogAccess()).toMatchObject({ ok: true, role: 'mod', userId: '200' });
     expect(fetchModeratedChannels).toHaveBeenCalledWith('mod-token', '200', { strict: true });
   });
 

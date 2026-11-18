@@ -188,6 +188,8 @@ describe('purgeExpiredSuspiciousLog', () => {
     const cutoff = new Date(now - SUSPICIOUS_LOG_RETENTION_DAYS * 86_400_000).toISOString();
     expect(lt).toHaveBeenCalledWith('sent_at', cutoff);
     expect(lt).toHaveBeenCalledWith('changed_at', cutoff);
-    expect(result).toEqual({ messagesDeleted: 2, statusChangesDeleted: 2, error: null });
+    // Share links are kept for a week past their expiry, not a year.
+    expect(lt).toHaveBeenCalledWith('expires_at', new Date(now - 7 * 86_400_000).toISOString());
+    expect(result).toEqual({ messagesDeleted: 2, statusChangesDeleted: 2, sharesDeleted: 2, error: null });
   });
 });
