@@ -4,6 +4,7 @@ import { getSession } from '@/lib/session';
 import { isAdmin, isChannelModuleKey } from '@/lib/admin';
 import { streamHasChat } from '@/lib/chat';
 import { logAdminAction } from '@/lib/audit';
+import { connectSuspiciousLog, disconnectSuspiciousLog, type SuspiciousLogStatus } from '@/lib/suspicious-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,5 +34,15 @@ export async function POST(req: NextRequest) {
   const { error } = await sb.from('streams').update({ [flag]: enabled }).eq('id', streamId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   await logAdminAction(sb, session, 'flag', streamId, { flag, enabled });
-  return NextResponse.json({ ok: true, flag, enabled });
+
+  // The one module that needs its own Twitch subscriptions.
+  let logStatus: SuspiciousLogStatus | undefined;
+  if (flag === 'suspicious_log_enabled') {
+    const { data: stream } = await sb.from('streams').select('id, twitch_user_id').eq('id', streamId).maybeSingle();
+    if (stream?.twitch_user_id) {
+      logStatus = enabled ? await connectSuspiciousLog(sb, stream) : await disconnectSuspiciousLog(sb, stream);
+    }
+  }
+
+  return NextResponse.json({ ok: true, flag, enabled, ...(logStatus ? { logStatus } : {}) });
 }

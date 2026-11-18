@@ -32,6 +32,7 @@ export const CHANNEL_MODULES = [
   { key: 'questions_enabled', label: 'Questions', blurb: 'Chat Q&A — the !question-style command' },
   { key: 'mod_status_enabled', label: 'Mod status', blurb: 'Mod availability board (green/yellow/red)' },
   { key: 'raffle_enabled', label: 'Raffle', blurb: 'Chat raffles — !enter, timed, random draw' },
+  { key: 'suspicious_log_enabled', label: 'Suspicious log', blurb: 'Keeps messages from users flagged as suspicious' },
 ] as const;
 
 export type ChannelModuleKey = (typeof CHANNEL_MODULES)[number]['key'];

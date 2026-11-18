@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { STATUS_RESET_AFTER_MS } from '@/lib/mod-status';
 import { ARCHIVE_BUCKET } from '@/lib/archive';
+import { purgeExpiredSuspiciousLog } from '@/lib/suspicious-log';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -21,6 +22,8 @@ export const maxDuration = 60;
 //    by the delete above) lose their Storage object and then their row.
 //    Played submissions are never deleted, so a snapshot linked from show
 //    notes is never swept.
+//  - Suspicious-user log entries past their retention period are deleted, as
+//    the privacy policy promises.
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
   const auth = req.headers.get('authorization');
@@ -75,16 +78,21 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  const suspiciousLog = await purgeExpiredSuspiciousLog(sb, now);
+
   if (eventsErr) console.error('cleanup: processed_events failed:', eventsErr.message);
   if (rejectedErr) console.error('cleanup: rejected submissions failed:', rejectedErr.message);
   if (modStatusErr) console.error('cleanup: mod status reset failed:', modStatusErr.message);
   if (archivesErr) console.error('cleanup: orphan archives failed:', archivesErr);
+  if (suspiciousLog.error) console.error('cleanup: suspicious log failed:', suspiciousLog.error);
 
   return NextResponse.json({
-    ok: !eventsErr && !rejectedErr && !modStatusErr && !archivesErr,
+    ok: !eventsErr && !rejectedErr && !modStatusErr && !archivesErr && !suspiciousLog.error,
     processedEventsDeleted: eventsDeleted ?? 0,
     rejectedSubmissionsDeleted: rejectedDeleted ?? 0,
     modStatusesReset: modStatusesReset ?? 0,
     orphanArchivesDeleted: archivesDeleted,
+    suspiciousMessagesDeleted: suspiciousLog.messagesDeleted,
+    suspiciousStatusChangesDeleted: suspiciousLog.statusChangesDeleted,
   });
 }

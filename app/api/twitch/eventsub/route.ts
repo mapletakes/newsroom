@@ -8,7 +8,10 @@ import {
   isTimestampFresh,
   resolveEventId,
   classifyDedupOutcome,
+  isSuspiciousSubscription,
+  CHAT_MESSAGE_SUBSCRIPTION,
 } from '@/lib/twitch-eventsub';
+import { recordSuspiciousEvent, markSuspiciousLogRevoked } from '@/lib/suspicious-log';
 import { supabaseAdmin } from '@/lib/supabase';
 import { extractUrlsFromMessage } from '@/lib/url';
 import { submitUrlToQueue } from '@/lib/submit-url';
@@ -130,6 +133,13 @@ export async function POST(req: NextRequest) {
       body.subscription?.id,
       body.subscription?.status,
     );
+    if (isSuspiciousSubscription(body.subscription?.type)) {
+      await markSuspiciousLogRevoked(
+        supabaseAdmin(),
+        String(body.subscription?.condition?.broadcaster_user_id ?? ''),
+        body.subscription?.status,
+      );
+    }
     return new NextResponse(null, { status: 204 });
   }
 
@@ -142,6 +152,24 @@ export async function POST(req: NextRequest) {
   if (!event) return new NextResponse(null, { status: 204 });
 
   const sb = supabaseAdmin();
+
+  // Routed before any chat handling: a suspicious user's message must only
+  // ever reach the log, never link submission, questions or raffles. Stored
+  // before answering so a failed write makes Twitch retry, because a missed
+  // message can't be fetched later.
+  const subscriptionType = body.subscription?.type;
+  if (isSuspiciousSubscription(subscriptionType)) {
+    const outcome = await recordSuspiciousEvent(sb, {
+      subscriptionType,
+      event,
+      deliveryId: msgId,
+      sentAt: msgTs,
+    });
+    return new NextResponse(null, { status: outcome === 'failed' ? 500 : 204 });
+  }
+  if (subscriptionType !== CHAT_MESSAGE_SUBSCRIPTION) {
+    return new NextResponse(null, { status: 204 });
+  }
 
   // event.message_id is stable across every delivery of the same chat
   // message — computing it is free, but CLAIMING it (the processed_events

@@ -6,6 +6,7 @@ import { buildSessionCookie, getSession, isLinkState, verifyOAuthStateDetailed }
 import { linkTwitchToStream, syncModeratorRows } from '@/lib/twitch-link';
 import { requireApproval } from '@/lib/admin';
 import { encryptSecret } from '@/lib/crypto';
+import { connectSuspiciousLog } from '@/lib/suspicious-log';
 
 // Auth callback must never be cached.
 export const dynamic = 'force-dynamic';
@@ -114,6 +115,13 @@ export async function GET(req: NextRequest) {
       );
     } else {
       console.warn('user:read:chat scope NOT granted. Got:', grantedScopes);
+    }
+
+    // Signing in again is how a streamer grants the suspicious-log scope, so
+    // this is where capture starts or resumes. connectSuspiciousLog records
+    // its own failures; sign-in carries on regardless.
+    if (stream.suspicious_log_enabled === true) {
+      await connectSuspiciousLog(sb, { id: stream.id, twitch_user_id: user.id });
     }
 
     // Default session: logged in as streamer on their own channel

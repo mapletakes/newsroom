@@ -4,7 +4,7 @@ import { Wordmark } from '@/components/ui/wordmark';
 export const metadata = { title: 'Privacy Policy — The Broadside' };
 
 const CONTACT = 'mapletakestv@gmail.com';
-const UPDATED = 'July 2026';
+const UPDATED = 'November 2026';
 
 export default function PrivacyPage() {
   return (
@@ -33,8 +33,9 @@ export default function PrivacyPage() {
         <ul>
           <li>Your Twitch user ID, login, and display name.</li>
           <li>
-            An OAuth access/refresh token, encrypted at rest. It&apos;s used only to read your
-            channel&apos;s chat (via Twitch EventSub) and, if you click &ldquo;Post to chat,&rdquo;
+            An OAuth access/refresh token, encrypted at rest. Your authorization is used only to
+            read your channel&apos;s chat (via Twitch EventSub), to receive suspicious-user messages
+            if that log is turned on for your channel, and, if you click &ldquo;Post to chat,&rdquo;
             to send that one message as you. We never post, moderate, ban, or take any other
             action on your behalf.
           </li>
@@ -51,8 +52,17 @@ export default function PrivacyPage() {
         <ul>
           <li>
             Messages are scanned for URLs. When one is found, we store the link, the submitting
-            username, the message text, and their sub/mod/VIP status at the time. We don&apos;t
-            otherwise read, store, or process chat that doesn&apos;t contain a link.
+            username, the message text, and their sub/mod/VIP status at the time. Apart from the
+            suspicious-user log below, we don&apos;t otherwise read, store, or process chat that
+            doesn&apos;t contain a link.
+          </li>
+          <li>
+            <strong>Suspicious-user log, only on channels where it&apos;s turned on:</strong> when
+            Twitch reports a message from a user flagged as suspicious in that channel, we store
+            the message, the chatter&apos;s Twitch ID and username, and the status and detection
+            details Twitch provides. We also store status changes for those users, including the
+            moderator who made the change. This log is for that channel&apos;s streamer and
+            moderators.
           </li>
         </ul>
         <p><strong>From the links themselves:</strong></p>
@@ -102,6 +112,7 @@ export default function PrivacyPage() {
           them or an admin removes your access. Signing out only ends your browser session — it
           doesn&apos;t delete anything from our database. If you want your data removed, see
           &ldquo;Contact&rdquo; below; there&apos;s no automated self-service deletion yet.
+          Suspicious-user log entries are deleted automatically after one year.
         </p>
 
         <h2>Stopping chat capture</h2>

@@ -112,9 +112,15 @@ export function AdminChannelDetail({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ streamId: ch.id, flag, enabled }),
     });
+    const data = await r.json().catch(() => ({}));
     setBusy(null);
-    if (r.ok) setCh((c) => ({ ...c, modules: { ...c.modules, [flag]: enabled } }));
-    else setTempNote('failed');
+    if (!r.ok) {
+      setTempNote('failed');
+      return;
+    }
+    setCh((c) => ({ ...c, modules: { ...c.modules, [flag]: enabled } }));
+    if (data.logStatus === 'needs_reconnect') setTempNote('on, but the streamer must sign out and back in');
+    if (data.logStatus === 'stopped') setTempNote('on, but Twitch refused the subscription — try Re-sub');
   };
 
   const resubscribe = async () => {
