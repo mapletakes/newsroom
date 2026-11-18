@@ -70,7 +70,7 @@ describe('GET /api/suspicious-log', () => {
     expect(called('ilike')).toContainEqual(['chatter_login', 'viewer%']);
     expect(called('eq')).toContainEqual(['low_trust_status', 'restricted']);
     expect(called('contains')).toContainEqual(['detection_types', ['ban_evader']]);
-    expect(called('range')).toContainEqual([50, 99]);
+    expect(called('range')).toContainEqual([200, 399]);
   });
 
   it('loads status history only for a single user', async () => {
@@ -80,6 +80,16 @@ describe('GET /api/suspicious-log', () => {
     state.calls = [];
     await get('?chatterId=200');
     expect(called('from')).toContainEqual(['suspicious_status_changes']);
+  });
+
+  it('shows the newest messages first unless asked for the oldest', async () => {
+    await get();
+    expect(called('order')).toContainEqual(['sent_at', { ascending: false }]);
+
+    state.calls = [];
+    await get('?order=oldest');
+    expect(called('order')).toContainEqual(['sent_at', { ascending: true }]);
+    expect(called('order')).toContainEqual(['id', { ascending: true }]);
   });
 
   it('tells mods they cannot delete', async () => {
@@ -102,7 +112,7 @@ describe('DELETE /api/suspicious-log', () => {
     expect(called('delete')).toEqual([]);
   });
 
-  it.each([[{}], [{ ids: [] }], [{ ids: ['not-a-uuid'] }], [{ ids: Array(101).fill(ID) }]])(
+  it.each([[{}], [{ ids: [] }], [{ ids: ['not-a-uuid'] }], [{ ids: Array(201).fill(ID) }]])(
     'rejects invalid ids %#',
     async (body) => {
       expect((await del(body)).status).toBe(400);
