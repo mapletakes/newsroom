@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_LOG_FILTERS,
+  chunk,
   escapeLike,
   formatLogTime,
+  formatUtc,
   groupByDay,
   localDayKey,
   localDayToIso,
@@ -74,6 +76,28 @@ describe('log line formatting', () => {
 
   it('returns no groups for an empty page', () => {
     expect(groupByDay([])).toEqual([]);
+  });
+});
+
+describe('chunk', () => {
+  it('splits a list into batches, the last one shorter', () => {
+    expect(chunk([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]]);
+  });
+
+  it('defaults to fifty at a time', () => {
+    expect(chunk(Array.from({ length: 120 }, (_, i) => i)).map((batch) => batch.length)).toEqual([50, 50, 20]);
+  });
+
+  it('gives nothing for nothing', () => {
+    expect(chunk([])).toEqual([]);
+  });
+});
+
+describe('formatUtc', () => {
+  it('writes a timestamp in UTC whatever the time zone', () => {
+    expect(formatUtc('2026-11-18T19:09:24.448Z')).toBe('2026-11-18 19:09:24');
+    expect(formatUtc('2026-11-18T19:09:24.448+00:00')).toBe('2026-11-18 19:09:24');
+    expect(formatUtc('2026-11-18T12:09:24-07:00')).toBe('2026-11-18 19:09:24');
   });
 });
 

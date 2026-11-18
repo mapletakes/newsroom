@@ -18,6 +18,9 @@ export type LogAccess =
   | {
       ok: true;
       role: Session['role'];
+      /** The caller's own Twitch identity, recorded against links they create. */
+      userId: string;
+      userLogin: string;
       streamId: string;
       logEnabled: boolean;
       logStatus: SuspiciousLogStatus;
@@ -77,6 +80,8 @@ export async function getSuspiciousLogAccess(): Promise<LogAccess> {
   const granted: LogAccess = {
     ok: true,
     role: session.role,
+    userId: session.twitchUserId,
+    userLogin: session.twitchLogin ?? session.displayName,
     streamId: session.streamId,
     logEnabled,
     logStatus: (stream.suspicious_log_status ?? 'off') as SuspiciousLogStatus,

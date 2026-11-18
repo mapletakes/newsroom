@@ -3,7 +3,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SuspiciousLogView } from './SuspiciousLogView';
-import type { ChattersResponse, LogResponse } from '@/lib/suspicious-log-query';
+import type { ChattersResponse, LogResponse, ShareSummary } from '@/lib/suspicious-log-query';
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
@@ -38,23 +38,61 @@ const CHATTERS: ChattersResponse = {
   ],
 };
 
-function mockApi(response: LogResponse = RESPONSE) {
+const SHARE_URL = `https://app.test/sl/sl_${'a'.repeat(48)}`;
+
+const share = (over: Partial<ShareSummary> = {}): ShareSummary => ({
+  id: '9c2d3e1f-1111-4222-8333-444455556666',
+  url: SHARE_URL,
+  kind: 'chatter',
+  label: 'Viewer',
+  created_by_login: 'themod',
+  created_at: '2026-11-18T19:30:00.000Z',
+  expires_at: '2026-12-18T19:30:00.000Z',
+  status: 'active',
+  mine: true,
+  ...over,
+});
+
+const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status }));
+
+function mockApi(response: LogResponse = RESPONSE, shareList: ShareSummary[] = []) {
   const urls: string[] = [];
   const deletes: unknown[] = [];
+  const created: unknown[] = [];
+  const revoked: unknown[] = [];
   vi.stubGlobal(
     'fetch',
     vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      if (init?.method === 'DELETE') {
-        deletes.push(JSON.parse(String(init.body)));
-        return Promise.resolve(new Response(JSON.stringify({ ok: true, deleted: 1 })));
+      const method = init?.method ?? 'GET';
+      const body = init?.body ? JSON.parse(String(init.body)) : null;
+
+      if (url.startsWith('/api/suspicious-log/share')) {
+        if (method === 'POST') {
+          created.push(body);
+          return json({ share: { id: 'new', url: SHARE_URL, kind: body.kind, label: 'Viewer', expiresAt: '2026-12-18T19:00:00.000Z' } }, 201);
+        }
+        if (method === 'DELETE') {
+          revoked.push(body);
+          return json({ ok: true });
+        }
+        return json({ shares: shareList });
+      }
+      if (method === 'DELETE') {
+        deletes.push(body);
+        return json({ ok: true, deleted: 1 });
       }
       urls.push(url);
-      const body = url.startsWith('/api/suspicious-log/chatters') ? CHATTERS : response;
-      return Promise.resolve(new Response(JSON.stringify(body)));
+      return json(url.startsWith('/api/suspicious-log/chatters') ? CHATTERS : response);
     }),
   );
-  return { urls, deletes };
+  return { urls, deletes, created, revoked };
+}
+
+function stubClipboard() {
+  const writeText = vi.fn(async () => {});
+  Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+  return writeText;
 }
 
 function renderView() {
@@ -69,6 +107,7 @@ function renderView() {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
 });
 
 describe('SuspiciousLogView', () => {
@@ -98,12 +137,12 @@ describe('SuspiciousLogView', () => {
     expect(screen.getByText(/Restricted · Added by a mod/)).toHaveTextContent('Ban evasion: unknown');
   });
 
-  it('hides deleting from mods', async () => {
+  it('lets mods select messages, but not delete them', async () => {
     mockApi({ ...RESPONSE, canDelete: false });
     renderView();
-    await screen.findByText(/onerror=alert/);
-    expect(screen.queryByRole('checkbox', { name: /select message/i })).toBeNull();
-    expect(screen.queryByRole('checkbox', { name: /select page/i })).toBeNull();
+    await userEvent.click(await screen.findByRole('checkbox', { name: /select message from viewer/i }));
+    expect(screen.getByRole('button', { name: 'Share 1' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Delete/ })).toBeNull();
   });
 
   it('warns when logging has stopped', async () => {
@@ -195,5 +234,128 @@ describe('SuspiciousLogView', () => {
     const buttons = await screen.findAllByRole('button', { name: 'Delete 1' });
     await userEvent.click(buttons[buttons.length - 1]);
     await waitFor(() => expect(deletes).toEqual([{ ids: [RESPONSE.items[0].id] }]));
+  });
+});
+
+describe('SuspiciousLogView sharing', () => {
+  it('copies selected messages as plain text', async () => {
+    mockApi();
+    const writeText = stubClipboard();
+    renderView();
+
+    await userEvent.click(await screen.findByRole('checkbox', { name: /select message from viewer/i }));
+    await userEvent.click(screen.getByRole('button', { name: 'Copy' }));
+
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith(
+        expect.stringContaining('Viewer: <img src=x onerror=alert(1)> https://bad.test/link'),
+      ),
+    );
+  });
+
+  it('offers CSV and text downloads of everything the filters match', async () => {
+    mockApi();
+    renderView();
+    await screen.findByText(/onerror=alert/);
+
+    expect(screen.getByRole('link', { name: 'Export CSV' })).toHaveAttribute(
+      'href',
+      '/api/suspicious-log/export?format=csv',
+    );
+    expect(screen.getByRole('link', { name: 'Export text' })).toHaveAttribute(
+      'href',
+      '/api/suspicious-log/export?format=txt',
+    );
+
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search messages' }), 'abc');
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: 'Export CSV' }).getAttribute('href')).toContain('q=abc'),
+    );
+    expect(screen.getByRole('link', { name: 'Export CSV' }).getAttribute('href')).not.toContain('page=');
+  });
+
+  it('tells you who can read a link before making it', async () => {
+    const { created } = mockApi();
+    renderView();
+    await userEvent.click(await screen.findByRole('checkbox', { name: /select message from viewer/i }));
+    await userEvent.click(screen.getByRole('button', { name: 'Share 1' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Share a link' });
+    expect(dialog).toHaveTextContent(/anyone who has the link can read/i);
+    expect(dialog).toHaveTextContent(/30 days/);
+    // Opening the dialog is not agreeing to it.
+    expect(created).toEqual([]);
+  });
+
+  it('makes a link to the selected messages', async () => {
+    const { created } = mockApi();
+    renderView();
+    await userEvent.click(await screen.findByRole('checkbox', { name: /select message from viewer/i }));
+    await userEvent.click(screen.getByRole('button', { name: 'Share 1' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Create link' }));
+
+    expect(await screen.findByRole('textbox', { name: 'Share link' })).toHaveValue(SHARE_URL);
+    expect(created).toEqual([{ kind: 'messages', messageIds: [RESPONSE.items[0].id] }]);
+  });
+
+  it('makes a link to everything one chatter has said', async () => {
+    const { created } = mockApi();
+    renderView();
+    await userEvent.click(await screen.findByRole('button', { name: 'Viewer' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Share all' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Create link' }));
+
+    expect(await screen.findByRole('textbox', { name: 'Share link' })).toHaveValue(SHARE_URL);
+    expect(created).toEqual([{ kind: 'chatter', chatterId: '200' }]);
+  });
+
+  it('lists links and revokes one', async () => {
+    const { revoked } = mockApi(RESPONSE, [share()]);
+    renderView();
+    await screen.findByText(/onerror=alert/);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Shared links' }));
+    const list = await screen.findByRole('list', { name: 'Shared links' });
+    expect(list).toHaveTextContent('Viewer');
+    expect(list).toHaveTextContent('all messages');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Revoke' }));
+    await waitFor(() => expect(revoked).toEqual([{ id: share().id }]));
+  });
+
+  it('shows a dead link as dead, with nothing to copy', async () => {
+    mockApi(RESPONSE, [share({ status: 'revoked', url: null })]);
+    renderView();
+    await screen.findByText(/onerror=alert/);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Shared links' }));
+    const list = await screen.findByRole('list', { name: 'Shared links' });
+
+    expect(list).toHaveTextContent('revoked');
+    expect(screen.queryByRole('button', { name: 'Copy link' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Revoke' })).toBeNull();
+  });
+
+  it('lets a mod revoke only their own links', async () => {
+    mockApi({ ...RESPONSE, canDelete: false }, [share({ mine: true }), share({ id: 'other', mine: false })]);
+    renderView();
+    await screen.findByText(/onerror=alert/);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Shared links' }));
+    await screen.findByRole('list', { name: 'Shared links' });
+
+    expect(screen.getAllByRole('button', { name: 'Revoke' })).toHaveLength(1);
+  });
+
+  it('lets the streamer revoke anyone\'s link, and says whose it is', async () => {
+    mockApi(RESPONSE, [share({ mine: false, created_by_login: 'themod' })]);
+    renderView();
+    await screen.findByText(/onerror=alert/);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Shared links' }));
+    const list = await screen.findByRole('list', { name: 'Shared links' });
+
+    expect(list).toHaveTextContent('by themod');
+    expect(screen.getByRole('button', { name: 'Revoke' })).toBeInTheDocument();
   });
 });

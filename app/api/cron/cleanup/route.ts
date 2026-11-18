@@ -94,5 +94,6 @@ export async function GET(req: NextRequest) {
     orphanArchivesDeleted: archivesDeleted,
     suspiciousMessagesDeleted: suspiciousLog.messagesDeleted,
     suspiciousStatusChangesDeleted: suspiciousLog.statusChangesDeleted,
+    suspiciousSharesDeleted: suspiciousLog.sharesDeleted,
   });
 }
