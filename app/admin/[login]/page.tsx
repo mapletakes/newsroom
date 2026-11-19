@@ -6,6 +6,7 @@ import { isAdmin, estimateCost, CHANNEL_MODULES, type ChannelModuleKey } from '@
 import { listSubscriptions } from '@/lib/twitch-eventsub';
 import { AppHeader } from '@/components/AppHeader';
 import { AdminChannelDetail, type ChannelDetail, type ActivityEntry } from './AdminChannelDetail';
+import { AdminChannelFlags } from './AdminChannelFlags';
 
 export const dynamic = 'force-dynamic';
 
@@ -93,6 +94,7 @@ export default async function AdminChannelPage({ params }: { params: Promise<{ l
         }
       />
       <AdminChannelDetail initial={initial} recent={recent.data ?? []} activity={activity} />
+      <AdminChannelFlags streamId={stream.id} />
     </div>
   );
 }

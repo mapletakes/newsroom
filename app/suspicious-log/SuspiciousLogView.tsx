@@ -30,6 +30,9 @@ import {
 import { formatDateTime } from '@/lib/url';
 import { ChatterPicker, type PickedChatter } from './ChatterPicker';
 import { ShareDialog, SharedLinksDialog, copyText, type ShareTarget } from './ShareDialogs';
+import { FlagDialog, FlagsDialog } from './FlagDialogs';
+import { NetworkFlagsView } from './NetworkFlagsView';
+import type { FlagTarget } from '@/lib/chatter-flag-types';
 import { StatusDot } from './StatusDot';
 
 const controlClass =
@@ -173,6 +176,10 @@ export function SuspiciousLogView({
   const [shareTarget, setShareTarget] = useState<ShareTarget | null>(null);
   const [shareKey, setShareKey] = useState(0);
   const [linksOpen, setLinksOpen] = useState(false);
+  const [flagTarget, setFlagTarget] = useState<FlagTarget | null>(null);
+  const [flagKey, setFlagKey] = useState(0);
+  const [flagsOpen, setFlagsOpen] = useState(false);
+  const [tab, setTab] = useState<'log' | 'network'>('log');
 
   // Searching as you type, without a request per keystroke.
   const debouncedQ = useDebouncedValue(ui.q, 300);
@@ -267,6 +274,19 @@ export function SuspiciousLogView({
     setShareTarget(target);
   };
 
+  // A flag is about one chatter, so a selection can only become one when every
+  // message in it is theirs.
+  const selectedItems = items.filter((m) => selected.has(m.id));
+  const selectedChatter =
+    selectedItems.length > 0 && selectedItems.every((m) => m.chatter_user_id === selectedItems[0].chatter_user_id)
+      ? selectedItems[0]
+      : null;
+  const canFlag = data?.logEnabled === true;
+  const openFlag = (target: FlagTarget) => {
+    setFlagKey((key) => key + 1);
+    setFlagTarget(target);
+  };
+
   // Copied in the order they were said, whichever way the page is sorted.
   const copySelected = () => {
     const picked = items.filter((m) => selected.has(m.id));
@@ -312,6 +332,15 @@ export function SuspiciousLogView({
       {confirmDialog}
       {shareTarget && <ShareDialog key={shareKey} target={shareTarget} onClose={() => setShareTarget(null)} />}
       <SharedLinksDialog open={linksOpen} onOpenChange={setLinksOpen} isStreamer={canDelete} />
+      {flagTarget && <FlagDialog key={flagKey} target={flagTarget} onClose={() => setFlagTarget(null)} />}
+      <FlagsDialog
+        open={flagsOpen}
+        onOpenChange={setFlagsOpen}
+        onEdit={(flag) => {
+          setFlagsOpen(false);
+          openFlag({ kind: 'chatter', chatterId: flag.chatter_user_id, chatterName: flag.chatter_name, messageIds: [] });
+        }}
+      />
       <AppHeader
         className="border-b-2 border-ink px-6 py-3 gap-6"
         section="suspicious log"
@@ -330,10 +359,41 @@ export function SuspiciousLogView({
         <div className="flex flex-wrap items-baseline gap-x-4 gap-y-0.5 py-3">
           <h1 className="font-display text-xl font-bold">Suspicious log</h1>
           <p className="text-xs text-ink/60">
-            Messages Twitch reports from flagged users. Streamer and current mods only; deleted after one year.
+            {tab === 'log'
+              ? 'Messages Twitch reports from flagged users. Streamer and current mods only; deleted after one year.'
+              : 'Chatters other channels have flagged, for your team to review.'}
           </p>
         </div>
 
+        <div role="tablist" aria-label="Suspicious log views" className="mb-2 flex gap-1 border-b-2 border-ink font-mono text-xs">
+          {(
+            [
+              ['log', 'Log'],
+              ['network', 'Network flags'],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={tab === value}
+              onClick={() => setTab(value)}
+              className={`-mb-0.5 border-2 border-b-0 px-3 py-1 ${tab === value ? 'border-ink bg-ink text-paper' : 'border-transparent hover:text-rust'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'network' ? (
+          <NetworkFlagsView
+            onOpenInLog={(picked) => {
+              setTab('log');
+              pickChatter(picked);
+            }}
+          />
+        ) : (
+        <>
         {data && <CaptureNotice data={data} />}
 
         <div className="sticky top-0 z-10 -mx-3 border-b border-ink/20 bg-paper px-3 py-2 sm:-mx-6 sm:px-6">
@@ -441,6 +501,25 @@ export function SuspiciousLogView({
               >
                 Share {selected.size}
               </Button>
+              {canFlag && (
+                <Button
+                  variant="outline"
+                  size="xs"
+                  disabled={!selectedChatter}
+                  title={selectedChatter ? `Flag ${selectedChatter.chatter_name} with these messages` : 'Select messages from one chatter to flag them'}
+                  onClick={() =>
+                    selectedChatter &&
+                    openFlag({
+                      kind: 'chatter',
+                      chatterId: selectedChatter.chatter_user_id,
+                      chatterName: selectedChatter.chatter_name,
+                      messageIds: selectedItems.map((m) => m.id),
+                    })
+                  }
+                >
+                  Flag {selected.size}
+                </Button>
+              )}
               {canDelete && (
                 <Button
                   variant="destructive"
@@ -463,6 +542,16 @@ export function SuspiciousLogView({
               Share all
             </Button>
           )}
+          {chatter && canFlag && selected.size === 0 && (
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={() => openFlag({ kind: 'chatter', chatterId: chatter.id, chatterName: chatter.name, messageIds: [] })}
+              title={`Flag ${chatter.name} for other channels to review`}
+            >
+              Flag chatter
+            </Button>
+          )}
           {items.length > 0 && (
             <>
               <a
@@ -480,6 +569,14 @@ export function SuspiciousLogView({
           <button type="button" onClick={() => setLinksOpen(true)} className="underline hover:text-ink">
             Shared links
           </button>
+          <button type="button" onClick={() => setFlagsOpen(true)} className="underline hover:text-ink">
+            Flags
+          </button>
+          {canFlag && (
+            <button type="button" onClick={() => openFlag({ kind: 'login' })} className="underline hover:text-ink">
+              Flag by username
+            </button>
+          )}
           <div className="ml-auto">{pager('top')}</div>
         </div>
 
@@ -532,6 +629,8 @@ export function SuspiciousLogView({
             </ul>
             <div className="mt-2 font-mono text-[11px] text-ink/60">{pager('bottom')}</div>
           </>
+        )}
+        </>
         )}
       </main>
     </div>

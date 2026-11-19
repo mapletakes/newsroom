@@ -20,4 +20,10 @@ export const queryKeys = {
   // reaches the other by prefix.
   suspiciousChatters: (q?: string) =>
     q === undefined ? (['suspicious-chatters'] as const) : (['suspicious-chatters', q] as const),
+  // The channel's chatter flags; with a chatter id, just that chatter's live one.
+  chatterFlags: (chatterId?: string) =>
+    chatterId === undefined ? (['chatter-flags'] as const) : (['chatter-flags', chatterId] as const),
+  // Other channels' flags as this channel receives them, per review filter.
+  networkFlags: (filter?: string) =>
+    filter === undefined ? (['network-flags'] as const) : (['network-flags', filter] as const),
 };
