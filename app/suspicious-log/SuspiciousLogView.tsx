@@ -31,6 +31,7 @@ import { formatDateTime } from '@/lib/url';
 import { ChatterPicker, type PickedChatter } from './ChatterPicker';
 import { ShareDialog, SharedLinksDialog, copyText, type ShareTarget } from './ShareDialogs';
 import { FlagDialog, FlagsDialog } from './FlagDialogs';
+import { NetworkFlagsView } from './NetworkFlagsView';
 import type { FlagTarget } from '@/lib/chatter-flag-types';
 import { StatusDot } from './StatusDot';
 
@@ -178,6 +179,7 @@ export function SuspiciousLogView({
   const [flagTarget, setFlagTarget] = useState<FlagTarget | null>(null);
   const [flagKey, setFlagKey] = useState(0);
   const [flagsOpen, setFlagsOpen] = useState(false);
+  const [tab, setTab] = useState<'log' | 'network'>('log');
 
   // Searching as you type, without a request per keystroke.
   const debouncedQ = useDebouncedValue(ui.q, 300);
@@ -357,10 +359,41 @@ export function SuspiciousLogView({
         <div className="flex flex-wrap items-baseline gap-x-4 gap-y-0.5 py-3">
           <h1 className="font-display text-xl font-bold">Suspicious log</h1>
           <p className="text-xs text-ink/60">
-            Messages Twitch reports from flagged users. Streamer and current mods only; deleted after one year.
+            {tab === 'log'
+              ? 'Messages Twitch reports from flagged users. Streamer and current mods only; deleted after one year.'
+              : 'Chatters other channels have flagged, for your team to review.'}
           </p>
         </div>
 
+        <div role="tablist" aria-label="Suspicious log views" className="mb-2 flex gap-1 border-b-2 border-ink font-mono text-xs">
+          {(
+            [
+              ['log', 'Log'],
+              ['network', 'Network flags'],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={tab === value}
+              onClick={() => setTab(value)}
+              className={`-mb-0.5 border-2 border-b-0 px-3 py-1 ${tab === value ? 'border-ink bg-ink text-paper' : 'border-transparent hover:text-rust'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'network' ? (
+          <NetworkFlagsView
+            onOpenInLog={(picked) => {
+              setTab('log');
+              pickChatter(picked);
+            }}
+          />
+        ) : (
+        <>
         {data && <CaptureNotice data={data} />}
 
         <div className="sticky top-0 z-10 -mx-3 border-b border-ink/20 bg-paper px-3 py-2 sm:-mx-6 sm:px-6">
@@ -596,6 +629,8 @@ export function SuspiciousLogView({
             </ul>
             <div className="mt-2 font-mono text-[11px] text-ink/60">{pager('bottom')}</div>
           </>
+        )}
+        </>
         )}
       </main>
     </div>

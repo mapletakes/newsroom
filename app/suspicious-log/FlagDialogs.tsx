@@ -315,6 +315,7 @@ const STATUS_TEXT: Record<ChannelFlag['status'], string> = {
   active: 'live',
   withdrawn: 'withdrawn',
   expired: 'expired',
+  removed: 'removed by an admin',
 };
 
 function FlagRow({
@@ -360,6 +361,9 @@ function FlagRow({
           )}
         </span>
       </div>
+      {flag.status === 'removed' && flag.removed_reason && (
+        <p className="mt-1 pl-2 text-[11px] text-rust">Reason: {flag.removed_reason}</p>
+      )}
       {open && (
         <div className="mt-2 grid gap-2 pl-2">
           {flag.context && (

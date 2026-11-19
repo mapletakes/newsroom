@@ -53,6 +53,10 @@ function describeActivity(entry: ActivityEntry): string {
       return 're-subscribed to chat events';
     case 'clear_pending':
       return `cleared ${p.count} pending item${p.count === 1 ? '' : 's'}`;
+    case 'remove_flag':
+      return `removed this channel's flag on ${p.chatter}: ${p.reason}`;
+    case 'restore_flag':
+      return `restored this channel's flag on ${p.chatter}`;
     default:
       return entry.action;
   }

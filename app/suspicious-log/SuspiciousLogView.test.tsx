@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SuspiciousLogView } from './SuspiciousLogView';
 import type { ChattersResponse, LogResponse, ShareSummary } from '@/lib/suspicious-log-query';
+import type { NetworkResponse } from '@/lib/chatter-flag-types';
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
@@ -55,7 +56,10 @@ const share = (over: Partial<ShareSummary> = {}): ShareSummary => ({
 
 const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status }));
 
-function mockApi(response: LogResponse = RESPONSE, shareList: ShareSummary[] = []) {
+const NOT_RECEIVING: NetworkResponse = { logEnabled: true, subscribed: false, canSubscribe: true, chatters: [], truncated: false };
+
+function mockApi(response: LogResponse = RESPONSE, shareList: ShareSummary[] = [], network: NetworkResponse = NOT_RECEIVING) {
+  const networkCalls: [string, unknown][] = [];
   const urls: string[] = [];
   const deletes: unknown[] = [];
   const created: unknown[] = [];
@@ -68,6 +72,13 @@ function mockApi(response: LogResponse = RESPONSE, shareList: ShareSummary[] = [
       const method = init?.method ?? 'GET';
       const body = init?.body ? JSON.parse(String(init.body)) : null;
 
+      if (url.startsWith('/api/suspicious-log/network')) {
+        if (method !== 'GET') {
+          networkCalls.push([`${method} ${url}`, body]);
+          return json({ ok: true });
+        }
+        return json(network);
+      }
       if (url.startsWith('/api/suspicious-log/flags')) {
         if (method === 'POST') {
           flagged.push(body);
@@ -94,7 +105,7 @@ function mockApi(response: LogResponse = RESPONSE, shareList: ShareSummary[] = [
       return json(url.startsWith('/api/suspicious-log/chatters') ? CHATTERS : response);
     }),
   );
-  return { urls, deletes, created, revoked, flagged };
+  return { urls, deletes, created, revoked, flagged, networkCalls };
 }
 
 function stubClipboard() {
@@ -409,5 +420,66 @@ describe('SuspiciousLogView sharing', () => {
     await userEvent.click(await screen.findByRole('checkbox', { name: /select message from viewer/i }));
     expect(screen.queryByRole('button', { name: /^Flag (\d|chatter|by username)/ })).toBeNull();
     expect(screen.getByRole('button', { name: 'Flags' })).toBeInTheDocument();
+  });
+
+  it('lets the streamer start receiving network flags', async () => {
+    const api = mockApi();
+    renderView();
+    await userEvent.click(await screen.findByRole('tab', { name: 'Network flags' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Receive network flags' }));
+    await waitFor(() =>
+      expect(api.networkCalls).toEqual([['POST /api/suspicious-log/network/subscription', { subscribed: true }]]),
+    );
+  });
+
+  it('tells a mod only the streamer can turn receiving on', async () => {
+    mockApi(RESPONSE, [], { ...NOT_RECEIVING, canSubscribe: false });
+    renderView();
+    await userEvent.click(await screen.findByRole('tab', { name: 'Network flags' }));
+    expect(await screen.findByText('Only the streamer can turn this on.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Receive network flags' })).toBeNull();
+  });
+
+  it('shows other channels’ flags apart from their evidence, and records a decision', async () => {
+    const api = mockApi(RESPONSE, [], {
+      logEnabled: true,
+      subscribed: true,
+      canSubscribe: false,
+      truncated: false,
+      chatters: [
+        {
+          chatter_user_id: '900',
+          chatter_login: 'troll',
+          chatter_name: 'Troll',
+          latest_at: '2026-11-18T00:00:00Z',
+          review: null,
+          isNew: true,
+          inMyLog: false,
+          flags: [
+            {
+              id: 'f1',
+              channelName: 'OtherChannel',
+              category: 'hate',
+              context: 'Banned for slurs.',
+              created_at: '2026-11-18T00:00:00Z',
+              updated_at: null,
+              messages: [{ id: 'm1', sent_at: '2026-11-17T00:00:00Z', message_text: 'awful thing', low_trust_status: 'restricted' }],
+            },
+          ],
+        },
+      ],
+    });
+    renderView();
+    await userEvent.click(await screen.findByRole('tab', { name: 'Network flags' }));
+    expect(await screen.findByText('Troll')).toBeInTheDocument();
+    expect(screen.getByText(/OtherChannel.s account/)).toBeInTheDocument();
+    expect(screen.getByText(/captured by Twitch in OtherChannel/)).toBeInTheDocument();
+    expect(screen.getByText('awful thing')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Stop receiving' })).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Banned' }));
+    await waitFor(() =>
+      expect(api.networkCalls).toEqual([['POST /api/suspicious-log/network/review', { chatterId: '900', decision: 'banned' }]]),
+    );
   });
 });

@@ -22,7 +22,7 @@ const LIST_LIMIT = 100;
 type Granted = Extract<LogAccess, { ok: true }>;
 
 const FLAG_COLUMNS =
-  'id, chatter_user_id, chatter_login, chatter_name, category, context, created_by_id, created_by_login, created_at, updated_at, withdrawn_at, expires_at';
+  'id, chatter_user_id, chatter_login, chatter_name, category, context, created_by_id, created_by_login, created_at, updated_at, withdrawn_at, expires_at, removed_at, removed_reason';
 
 type FlagRow = {
   id: string;
@@ -37,6 +37,8 @@ type FlagRow = {
   updated_at: string | null;
   withdrawn_at: string | null;
   expires_at: string;
+  removed_at: string | null;
+  removed_reason: string | null;
 };
 
 const canEdit = (access: Granted, flag: { created_by_id: string }) =>
@@ -60,8 +62,10 @@ async function liveFlagFor(sb: ReturnType<typeof supabaseAdmin>, streamId: strin
 
 // This channel's flags, newest first, with the log entries each one points at.
 // Everyone on the channel's team sees all of them, including who made each:
-// that stays inside the channel. `?chatterId=` narrows to one chatter's live
-// flag, which the flag dialog checks before offering to make a new one.
+// that stays inside the channel. A flag an admin removed stays listed with the
+// reason, so the channel isn't left wondering where it went. `?chatterId=`
+// narrows to one chatter's live flag, which the flag dialog checks before
+// offering to make a new one.
 export async function GET(req: NextRequest) {
   const access = await getSuspiciousLogAccess();
   if (!access.ok) return denied(access.reason);
@@ -72,9 +76,8 @@ export async function GET(req: NextRequest) {
   let query = supabaseAdmin()
     .from('chatter_flags')
     .select(`${FLAG_COLUMNS}, chatter_flag_messages(suspicious_messages(id, sent_at, message_text, low_trust_status))`)
-    .eq('stream_id', access.streamId)
-    .is('removed_at', null);
-  if (chatterId) query = query.eq('chatter_user_id', chatterId).is('withdrawn_at', null);
+    .eq('stream_id', access.streamId);
+  if (chatterId) query = query.eq('chatter_user_id', chatterId).is('withdrawn_at', null).is('removed_at', null);
 
   const { data, error } = await query.order('created_at', { ascending: false }).limit(LIST_LIMIT);
   if (error) {
@@ -101,6 +104,7 @@ export async function GET(req: NextRequest) {
       status: flagStatus(row, now),
       mine: row.created_by_id === access.userId,
       canEdit: canEdit(access, row),
+      removed_reason: row.removed_at ? row.removed_reason : null,
       messages: (row.chatter_flag_messages ?? [])
         .map((link) => link.suspicious_messages)
         .filter((m): m is FlagMessage => !!m)
