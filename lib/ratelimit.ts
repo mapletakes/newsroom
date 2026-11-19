@@ -35,13 +35,14 @@ export function hashKey(raw: string): string {
   return crypto.createHash('sha256').update(raw).digest('hex').slice(0, 32);
 }
 
-type Kind = 'write' | 'read' | 'poll' | 'question' | 'raffle' | 'auth-email' | 'auth-ip';
+type Kind = 'write' | 'read' | 'poll' | 'question' | 'raffle' | 'flag' | 'auth-email' | 'auth-ip';
 
 let writeLimiter: Ratelimit | undefined;
 let readLimiter: Ratelimit | undefined;
 let pollLimiter: Ratelimit | undefined;
 let questionLimiter: Ratelimit | undefined;
 let raffleLimiter: Ratelimit | undefined;
+let flagLimiter: Ratelimit | undefined;
 let authEmailLimiter: Ratelimit | undefined;
 let authIpLimiter: Ratelimit | undefined;
 
@@ -96,6 +97,16 @@ function limiterFor(kind: Kind): Ratelimit | null {
       redis: r,
       limiter: Ratelimit.slidingWindow(15, '10 m'),
       prefix: 'rl:auth-ip',
+    }));
+  }
+  if (kind === 'flag') {
+    // Network chatter flags, per mod: other channels review every flag, so one
+    // person shouldn't be able to bury them. A bad night with a raid still
+    // leaves room to flag the handful who earned it.
+    return (flagLimiter ??= new Ratelimit({
+      redis: r,
+      limiter: Ratelimit.slidingWindow(15, '10 m'),
+      prefix: 'rl:flag',
     }));
   }
   if (kind === 'raffle') {

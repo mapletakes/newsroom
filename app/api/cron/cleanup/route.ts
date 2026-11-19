@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { STATUS_RESET_AFTER_MS } from '@/lib/mod-status';
 import { ARCHIVE_BUCKET } from '@/lib/archive';
 import { purgeExpiredSuspiciousLog } from '@/lib/suspicious-log';
+import { purgeExpiredChatterFlags } from '@/lib/chatter-flags';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -23,7 +24,7 @@ export const maxDuration = 60;
 //    Played submissions are never deleted, so a snapshot linked from show
 //    notes is never swept.
 //  - Suspicious-user log entries past their retention period are deleted, as
-//    the privacy policy promises.
+//    the privacy policy promises, and so are chatter flags past their expiry.
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
   const auth = req.headers.get('authorization');
@@ -79,15 +80,17 @@ export async function GET(req: NextRequest) {
   }
 
   const suspiciousLog = await purgeExpiredSuspiciousLog(sb, now);
+  const chatterFlags = await purgeExpiredChatterFlags(sb, now);
 
   if (eventsErr) console.error('cleanup: processed_events failed:', eventsErr.message);
   if (rejectedErr) console.error('cleanup: rejected submissions failed:', rejectedErr.message);
   if (modStatusErr) console.error('cleanup: mod status reset failed:', modStatusErr.message);
   if (archivesErr) console.error('cleanup: orphan archives failed:', archivesErr);
   if (suspiciousLog.error) console.error('cleanup: suspicious log failed:', suspiciousLog.error);
+  if (chatterFlags.error) console.error('cleanup: chatter flags failed:', chatterFlags.error);
 
   return NextResponse.json({
-    ok: !eventsErr && !rejectedErr && !modStatusErr && !archivesErr && !suspiciousLog.error,
+    ok: !eventsErr && !rejectedErr && !modStatusErr && !archivesErr && !suspiciousLog.error && !chatterFlags.error,
     processedEventsDeleted: eventsDeleted ?? 0,
     rejectedSubmissionsDeleted: rejectedDeleted ?? 0,
     modStatusesReset: modStatusesReset ?? 0,
@@ -95,5 +98,6 @@ export async function GET(req: NextRequest) {
     suspiciousMessagesDeleted: suspiciousLog.messagesDeleted,
     suspiciousStatusChangesDeleted: suspiciousLog.statusChangesDeleted,
     suspiciousSharesDeleted: suspiciousLog.sharesDeleted,
+    chatterFlagsDeleted: chatterFlags.flagsDeleted,
   });
 }

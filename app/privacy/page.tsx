@@ -67,6 +67,15 @@ export default function PrivacyPage() {
             and the username without signing in, until the link expires after 30 days or is
             revoked. Expired links are removed a week later.
           </li>
+          <li>
+            <strong>Chatter flags, on the same channels:</strong> the streamer or a moderator can flag
+            a chatter as a problem. A flag stores the chatter&apos;s Twitch ID and username, a
+            category, a written account from the channel, links to that channel&apos;s log messages
+            from the chatter, and which team member made it. Flags are meant to be shared with
+            other channels that use the suspicious-user log, so they can decide whether to ban the
+            chatter too. Those channels see which channel made the flag, never which person.
+            Flags can be withdrawn at any time and are deleted after one year.
+          </li>
         </ul>
         <p><strong>From the links themselves:</strong></p>
         <ul>

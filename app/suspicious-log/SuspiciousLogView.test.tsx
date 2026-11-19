@@ -60,6 +60,7 @@ function mockApi(response: LogResponse = RESPONSE, shareList: ShareSummary[] = [
   const deletes: unknown[] = [];
   const created: unknown[] = [];
   const revoked: unknown[] = [];
+  const flagged: unknown[] = [];
   vi.stubGlobal(
     'fetch',
     vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -67,6 +68,13 @@ function mockApi(response: LogResponse = RESPONSE, shareList: ShareSummary[] = [
       const method = init?.method ?? 'GET';
       const body = init?.body ? JSON.parse(String(init.body)) : null;
 
+      if (url.startsWith('/api/suspicious-log/flags')) {
+        if (method === 'POST') {
+          flagged.push(body);
+          return json({ flag: { id: 'f1', chatterName: 'Viewer' } }, 201);
+        }
+        return json({ flags: [] });
+      }
       if (url.startsWith('/api/suspicious-log/share')) {
         if (method === 'POST') {
           created.push(body);
@@ -86,7 +94,7 @@ function mockApi(response: LogResponse = RESPONSE, shareList: ShareSummary[] = [
       return json(url.startsWith('/api/suspicious-log/chatters') ? CHATTERS : response);
     }),
   );
-  return { urls, deletes, created, revoked };
+  return { urls, deletes, created, revoked, flagged };
 }
 
 function stubClipboard() {
@@ -357,5 +365,49 @@ describe('SuspiciousLogView sharing', () => {
 
     expect(list).toHaveTextContent('by themod');
     expect(screen.getByRole('button', { name: 'Revoke' })).toBeInTheDocument();
+  });
+
+  it('flags a chatter with the selected messages, context optional', async () => {
+    const api = mockApi();
+    renderView();
+    await userEvent.click(await screen.findByRole('checkbox', { name: /select message from viewer/i }));
+    await userEvent.click(screen.getByRole('button', { name: 'Flag 1' }));
+
+    expect(await screen.findByRole('heading', { name: 'Flag Viewer' })).toBeInTheDocument();
+    expect(screen.getByText(/never|won.t see who on your team/i)).toBeInTheDocument();
+    const submit = screen.getByRole('button', { name: 'Flag chatter' });
+    expect(submit).toBeDisabled();
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Category' }), 'spam');
+    await userEvent.click(submit);
+
+    await waitFor(() =>
+      expect(api.flagged).toEqual([{ chatterId: '200', messageIds: [RESPONSE.items[0].id], category: 'spam', context: '' }]),
+    );
+  });
+
+  it('requires context to flag someone by username', async () => {
+    const api = mockApi();
+    renderView();
+    await userEvent.click(await screen.findByRole('button', { name: 'Flag by username' }));
+    await userEvent.type(screen.getByRole('textbox', { name: 'Twitch username' }), 'troll');
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Category' }), 'ban_evasion');
+    const submit = screen.getByRole('button', { name: 'Flag chatter' });
+    expect(submit).toBeDisabled();
+
+    await userEvent.type(screen.getByRole('textbox', { name: /context/i }), 'Banned for slurs before Twitch flagged them.');
+    await userEvent.click(submit);
+    await waitFor(() =>
+      expect(api.flagged).toEqual([
+        { login: 'troll', category: 'ban_evasion', context: 'Banned for slurs before Twitch flagged them.' },
+      ]),
+    );
+  });
+
+  it('offers no flagging while the module is off', async () => {
+    mockApi({ ...RESPONSE, logEnabled: false, logStatus: 'off' });
+    renderView();
+    await userEvent.click(await screen.findByRole('checkbox', { name: /select message from viewer/i }));
+    expect(screen.queryByRole('button', { name: /^Flag (\d|chatter|by username)/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Flags' })).toBeInTheDocument();
   });
 });
