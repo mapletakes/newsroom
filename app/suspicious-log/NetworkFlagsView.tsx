@@ -55,6 +55,18 @@ function FlagCard({ flag }: { flag: NetworkFlag }) {
     <li className="border-l-2 border-ink/20 pl-3">
       <div className="flex flex-wrap items-baseline gap-x-3 text-xs">
         <span className="font-bold">{flag.channelName}</span>
+        <span className="text-ink/70">
+          flagged by{' '}
+          <a
+            href={`https://www.twitch.tv/${encodeURIComponent(flag.flaggedBy)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Who made this flag, to ask for details"
+            className="underline hover:text-ink"
+          >
+            {flag.flaggedBy}
+          </a>
+        </span>
         <span>{FLAG_CATEGORIES[flag.category]}</span>
         <span className="text-ink/60" title={formatDateTime(flag.created_at)}>
           {relativeTime(flag.created_at)}

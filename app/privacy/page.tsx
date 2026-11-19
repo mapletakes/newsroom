@@ -73,8 +73,9 @@ export default function PrivacyPage() {
             category, a written account from the channel, links to that channel&apos;s log messages
             from the chatter, and which team member made it. Other channels that use the
             suspicious-user log can choose to receive flags, so their streamer and moderators can
-            decide whether to ban the chatter too. They see the flag, the linked messages, and
-            which channel made it, never which person. A receiving channel can record what it
+            decide whether to ban the chatter too. They see the flag, the linked messages, which
+            channel made it, and the Twitch username of the person who made it, so they can ask for
+            details. A receiving channel can record what it
             decided (banned, watching, or dismissed) and who recorded it; that record is visible
             only to that channel. Flags can be withdrawn by their channel or removed by an admin at
             any time, and are deleted after one year.

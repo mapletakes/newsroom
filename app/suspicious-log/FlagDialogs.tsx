@@ -48,7 +48,8 @@ function SharingNote() {
   return (
     <p className="border-l-2 border-ochre pl-2 font-mono text-[11px] text-ink/70">
       Flags are shared with other channels in the network under this channel&apos;s name, so they can decide whether
-      to ban this chatter too. They won&apos;t see who on your team made the flag. Flags expire after a year.
+      to ban this chatter too. They also see the Twitch username of whoever made the flag, so they can reach out
+      for details. Flags expire after a year.
     </p>
   );
 }

@@ -73,10 +73,12 @@ export function isReviewDecision(value: unknown): value is ReviewDecision {
   return typeof value === 'string' && Object.hasOwn(REVIEW_DECISIONS, value);
 }
 
-/** Another channel's flag. Names the channel and never the person who made it. */
+/** Another channel's flag. Names the channel and the Twitch login of the
+ *  person who made it, so the receiving team knows who to ask for details. */
 export type NetworkFlag = {
   id: string;
   channelName: string;
+  flaggedBy: string;
   category: FlagCategory;
   context: string;
   created_at: string;

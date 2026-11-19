@@ -119,6 +119,7 @@ describe('groupNetworkFlags', () => {
     chatter_name: 'Troll',
     category: 'harassment',
     context: '',
+    created_by_login: 'moda',
     created_at: '2026-11-10T00:00:00Z',
     updated_at: null,
     streams: { display_name: 'ChannelA', twitch_login: 'channela', approved: true },
@@ -126,20 +127,20 @@ describe('groupNetworkFlags', () => {
     ...over,
   });
 
-  it('groups by chatter, newest first, naming only the channel', () => {
+  it('groups by chatter, newest first, naming the channel and the flagger', () => {
     const chatters = groupNetworkFlags(
       [
         row({ id: 'f1' }),
-        row({ id: 'f2', created_at: '2026-11-12T00:00:00Z', chatter_name: 'Troll2', streams: { display_name: null, twitch_login: 'channelb', approved: null } }),
+        row({ id: 'f2', created_at: '2026-11-12T00:00:00Z', chatter_name: 'Troll2', created_by_login: 'modb', streams: { display_name: null, twitch_login: 'channelb', approved: null } }),
         row({ id: 'f3', chatter_user_id: '901', created_at: '2026-11-11T00:00:00Z' }),
       ],
       [],
       new Set(['901']),
     );
     expect(chatters.map((c) => c.chatter_user_id)).toEqual(['900', '901']);
-    expect(chatters[0].flags.map((f) => [f.id, f.channelName])).toEqual([
-      ['f2', 'channelb'],
-      ['f1', 'ChannelA'],
+    expect(chatters[0].flags.map((f) => [f.id, f.channelName, f.flaggedBy])).toEqual([
+      ['f2', 'channelb', 'modb'],
+      ['f1', 'ChannelA', 'moda'],
     ]);
     expect(chatters[0].chatter_name).toBe('Troll2');
     expect(chatters[0].isNew).toBe(true);

@@ -21,10 +21,10 @@ const NETWORK_LIMIT = 500;
  *  but that only drops the "in your log" hint, never a flag. */
 const IN_LOG_ROWS = 1000;
 
-// Never asks for created_by_*: who on a channel's team made a flag doesn't
-// leave that channel, and the safest way to keep that true is to never load it.
+// Receiving channels see who made a flag (by Twitch login) so they can reach
+// out for details. Only the login: the flagger's Twitch ID isn't loaded.
 const NETWORK_COLUMNS =
-  'id, chatter_user_id, chatter_login, chatter_name, category, context, created_at, updated_at, ' +
+  'id, chatter_user_id, chatter_login, chatter_name, category, context, created_by_login, created_at, updated_at, ' +
   'streams(display_name, twitch_login, approved), ' +
   'chatter_flag_messages(suspicious_messages(id, sent_at, message_text, low_trust_status))';
 

@@ -69,7 +69,7 @@ describe('GET /api/suspicious-log/network', () => {
     expect(called('from')).toEqual([['streams']]);
   });
 
-  it('lists other channels’ live flags without ever asking who made them', async () => {
+  it('lists other channels’ live flags with the flagger’s login but not their Twitch ID', async () => {
     state.queue = [
       { data: { flag_network_subscribed: true } },
       {
@@ -81,6 +81,7 @@ describe('GET /api/suspicious-log/network', () => {
             chatter_name: 'Troll',
             category: 'hate',
             context: 'slurs',
+            created_by_login: 'othermod',
             created_at: '2026-11-10T00:00:00Z',
             updated_at: null,
             streams: { display_name: 'Other', twitch_login: 'other', approved: true },
@@ -96,10 +97,10 @@ describe('GET /api/suspicious-log/network', () => {
     expect(body.subscribed).toBe(true);
     expect(body.chatters).toHaveLength(1);
     expect(body.chatters[0]).toMatchObject({ chatter_user_id: '900', inMyLog: true, isNew: true });
-    expect(body.chatters[0].flags[0].channelName).toBe('Other');
+    expect(body.chatters[0].flags[0]).toMatchObject({ channelName: 'Other', flaggedBy: 'othermod' });
 
     const selects = called('select').map(([cols]) => String(cols));
-    expect(selects.some((cols) => cols.includes('created_by'))).toBe(false);
+    expect(selects.some((cols) => cols.includes('created_by_id'))).toBe(false);
     expect(called('neq')).toContainEqual(['stream_id', 's1']);
     expect(called('is')).toContainEqual(['withdrawn_at', null]);
     expect(called('is')).toContainEqual(['removed_at', null]);

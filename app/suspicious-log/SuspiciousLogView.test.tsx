@@ -385,7 +385,7 @@ describe('SuspiciousLogView sharing', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Flag 1' }));
 
     expect(await screen.findByRole('heading', { name: 'Flag Viewer' })).toBeInTheDocument();
-    expect(screen.getByText(/never|won.t see who on your team/i)).toBeInTheDocument();
+    expect(screen.getByText(/see the Twitch username of whoever made the flag/i)).toBeInTheDocument();
     const submit = screen.getByRole('button', { name: 'Flag chatter' });
     expect(submit).toBeDisabled();
     await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Category' }), 'spam');
@@ -459,6 +459,7 @@ describe('SuspiciousLogView sharing', () => {
             {
               id: 'f1',
               channelName: 'OtherChannel',
+              flaggedBy: 'othermod',
               category: 'hate',
               context: 'Banned for slurs.',
               created_at: '2026-11-18T00:00:00Z',
@@ -473,6 +474,7 @@ describe('SuspiciousLogView sharing', () => {
     await userEvent.click(await screen.findByRole('tab', { name: 'Network flags' }));
     expect(await screen.findByText('Troll')).toBeInTheDocument();
     expect(screen.getByText(/OtherChannel.s account/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'othermod' })).toHaveAttribute('href', 'https://www.twitch.tv/othermod');
     expect(screen.getByText(/captured by Twitch in OtherChannel/)).toBeInTheDocument();
     expect(screen.getByText('awful thing')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Stop receiving' })).toBeNull();

@@ -153,8 +153,8 @@ export async function lookupTwitchUser(login: string): Promise<TwitchUser | null
   return user?.id ? { id: user.id, login: user.login, display_name: user.display_name || user.login } : null;
 }
 
-/** A live flag from another channel, as the network query returns it. Has no
- *  created_by_* columns: the query never asks for them. */
+/** A live flag from another channel, as the network query returns it. Carries
+ *  the flagger's login but never their Twitch ID. */
 export type NetworkFlagRow = {
   id: string;
   chatter_user_id: string;
@@ -162,6 +162,7 @@ export type NetworkFlagRow = {
   chatter_name: string;
   category: FlagCategory;
   context: string;
+  created_by_login: string;
   created_at: string;
   updated_at: string | null;
   streams: { display_name: string | null; twitch_login: string | null; approved: boolean | null } | null;
@@ -199,6 +200,7 @@ export function groupNetworkFlags(
     const flag: NetworkFlag = {
       id: row.id,
       channelName: row.streams.display_name || row.streams.twitch_login || 'A channel',
+      flaggedBy: row.created_by_login,
       category: row.category,
       context: row.context,
       created_at: row.created_at,
