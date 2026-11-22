@@ -13,6 +13,7 @@ export default async function Login({
     state: 'OAuth state mismatch — please try again.',
     oauth: 'Sign-in failed.',
     link: 'That sign-in link has expired or was already used. Request a new one.',
+    blocked: 'This account can’t sign in to The Broadside.',
   };
   const errMsg = sp.error && (errorMap[sp.error] || sp.error);
   const detail = sp.detail;
