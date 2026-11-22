@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import crypto from 'crypto';
 import { supabaseAdmin } from './supabase';
+import { sessionStillAllowed } from './session-guard';
 
 const COOKIE = 'newsroom_session';
 
@@ -69,9 +70,16 @@ export function parseSessionCookie(value: string | undefined): Session | null {
   } catch { return null; }
 }
 
+/**
+ * The signed-in person, or null. A valid signature isn't enough on its own: the
+ * cookie lasts 30 days, so it is also checked against the block list, and a mod
+ * session against whether they still moderate the channel (lib/session-guard).
+ */
 export async function getSession(): Promise<Session | null> {
   const cookieStore = await cookies();
-  return parseSessionCookie(cookieStore.get(COOKIE)?.value);
+  const session = parseSessionCookie(cookieStore.get(COOKIE)?.value);
+  if (!session) return null;
+  return (await sessionStillAllowed(session)) ? session : null;
 }
 
 /**

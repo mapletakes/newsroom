@@ -6,6 +6,7 @@ import { buildSessionCookie, getSession, isLinkState, verifyOAuthStateDetailed }
 import { linkTwitchToStream, syncModeratorRows } from '@/lib/twitch-link';
 import { requireApproval } from '@/lib/admin';
 import { encryptSecret } from '@/lib/crypto';
+import { isBlocked } from '@/lib/blocked-users';
 import { connectSuspiciousLog } from '@/lib/suspicious-log';
 
 // Auth callback must never be cached.
@@ -42,6 +43,15 @@ export async function GET(req: NextRequest) {
   try {
     const tokens = await exchangeCode(code);
     const user = await fetchTwitchUser(tokens.access_token);
+
+    // A blocked person gets no session at all, and no stream row or stored
+    // tokens either, so there is nothing left of them to keep using.
+    if (await isBlocked(user.id, { fresh: true })) {
+      return new NextResponse(null, {
+        status: 302,
+        headers: { Location: new URL('/login?error=blocked', req.url).toString() },
+      });
+    }
 
     const sb = supabaseAdmin();
 

@@ -5,7 +5,9 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { isAdmin, estimateCost, CHANNEL_MODULES } from '@/lib/admin';
 import { listSubscriptions } from '@/lib/twitch-eventsub';
 import { AppHeader } from '@/components/AppHeader';
+import { listBlockedUsers } from '@/lib/blocked-users';
 import { AdminChannels, type ChannelRow } from './AdminChannels';
+import { BlockedUsers } from './BlockedUsers';
 
 export const dynamic = 'force-dynamic';
 
@@ -76,6 +78,7 @@ export default async function AdminPage({
     };
   });
 
+  const blocked = await listBlockedUsers(sb);
   const activeChannels = rows.filter((r) => r.eventsub === 'enabled').length;
   const totalCost = rows.reduce((sum, r) => sum + r.estCost, 0);
 
@@ -113,6 +116,15 @@ export default async function AdminPage({
       <div className="rule-double mb-8" />
 
       <AdminChannels initial={rows} />
+
+      <h2 className="font-display text-2xl font-bold mt-12 mb-2">Blocked users</h2>
+      <p className="font-mono text-xs text-ink/50 mb-4 max-w-2xl">
+        A blocked person can&apos;t sign in or use a session they already hold, and is removed as a moderator
+        from every channel here. Removing someone as a moderator on Twitch already ends their access within
+        minutes; this is for someone who should be kept out regardless.
+      </p>
+      <div className="rule-double mb-6" />
+      <BlockedUsers initial={blocked} />
     </div>
   );
 }
