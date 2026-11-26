@@ -74,6 +74,7 @@ export function DeckView({
   modStatusEnabled = false,
   raffleEnabled = false,
   suspiciousLogEnabled = false,
+  streamControlEnabled = false,
   discordWebhookConfigured = false,
   markerOnOpen = false,
 }: {
@@ -93,6 +94,9 @@ export function DeckView({
   modStatusEnabled?: boolean;
   raffleEnabled?: boolean;
   suspiciousLogEnabled?: boolean;
+  /** Show the Stream Control link: the module is on and this person may use
+   *  the panel. The Relay link is the streamer's alone (never curateOnly). */
+  streamControlEnabled?: boolean;
   discordWebhookConfigured?: boolean;
   /** Streamer's "marker when I open a source" setting (always false for mods). */
   markerOnOpen?: boolean;
@@ -1266,6 +1270,7 @@ export function DeckView({
         modStatusEnabled={modStatusEnabled}
         raffleEnabled={raffleEnabled}
         suspiciousLogEnabled={suspiciousLogEnabled}
+        streamControlEnabled={streamControlEnabled}
         discordWebhookConfigured={discordWebhookConfigured}
         onSelect={activateItem}
         onPlayed={markPlayed}
@@ -1321,6 +1326,16 @@ export function DeckView({
             {suspiciousLogEnabled && (
               <Link href="/suspicious-log" className="underline hover:text-rust">
                 Suspicious Log
+              </Link>
+            )}
+            {streamControlEnabled && (
+              <Link href="/stream-control" className="underline hover:text-rust">
+                Stream Control
+              </Link>
+            )}
+            {streamControlEnabled && !curateOnly && (
+              <Link href="/stream-control/relay" className="underline hover:text-rust">
+                Relay
               </Link>
             )}
             {!curateOnly && (

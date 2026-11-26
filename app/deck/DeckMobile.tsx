@@ -228,6 +228,7 @@ export function DeckMobile({
   modStatusEnabled,
   raffleEnabled = false,
   suspiciousLogEnabled = false,
+  streamControlEnabled = false,
   discordWebhookConfigured = false,
   canSetNowPlaying = false,
   onSelect,
@@ -260,6 +261,9 @@ export function DeckMobile({
   modStatusEnabled: boolean;
   raffleEnabled?: boolean;
   suspiciousLogEnabled?: boolean;
+  /** Show the Stream Control link: the module is on and this person may use
+   *  the panel. The Relay link is the streamer's alone (never curateOnly). */
+  streamControlEnabled?: boolean;
   discordWebhookConfigured?: boolean;
   onSelect: (id: string) => void;
   onPlayed: () => void;
@@ -354,6 +358,12 @@ export function DeckMobile({
               <DropdownMenuItem asChild><Link href="/archives">Archives</Link></DropdownMenuItem>
               {suspiciousLogEnabled && (
                 <DropdownMenuItem asChild><Link href="/suspicious-log">Suspicious Log</Link></DropdownMenuItem>
+              )}
+              {streamControlEnabled && (
+                <DropdownMenuItem asChild><Link href="/stream-control">Stream Control</Link></DropdownMenuItem>
+              )}
+              {streamControlEnabled && !curateOnly && (
+                <DropdownMenuItem asChild><Link href="/stream-control/relay">Relay</Link></DropdownMenuItem>
               )}
               {!curateOnly && (
                 <DropdownMenuItem asChild><Link href="/setup">Settings</Link></DropdownMenuItem>

@@ -3,6 +3,7 @@ import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase';
 import { isAdmin } from '@/lib/admin';
 import { canMemberCurate, canMemberSetNowPlaying } from '@/lib/curate';
+import { getStreamControlAccess } from '@/lib/stream-control';
 import { StreamTheme } from '@/components/StreamTheme';
 import { DeckView } from './DeckView';
 
@@ -15,7 +16,7 @@ export default async function DeckPage() {
   const sb = supabaseAdmin();
   const { data: stream } = await sb
     .from('streams')
-    .select('approved, twitch_user_id, questions_enabled, questions_open, mod_status_enabled, raffle_enabled, suspicious_log_enabled, discord_webhook_url, marker_on_open')
+    .select('approved, twitch_user_id, questions_enabled, questions_open, mod_status_enabled, raffle_enabled, suspicious_log_enabled, stream_control_enabled, discord_webhook_url, marker_on_open')
     .eq('id', session.streamId)
     .maybeSingle();
   if (stream?.approved === false) redirect('/blocked');
@@ -36,6 +37,10 @@ export default async function DeckPage() {
   // features (and the admin-gated modules built on them) are off entirely.
   const chatEnabled = !!stream?.twitch_user_id;
 
+  // Only worth the grant lookup while the module is on.
+  const control =
+    chatEnabled && stream?.stream_control_enabled === true ? await getStreamControlAccess(session) : null;
+
   return (
     <>
       <StreamTheme />
@@ -51,6 +56,7 @@ export default async function DeckPage() {
         modStatusEnabled={chatEnabled && stream?.mod_status_enabled === true}
         raffleEnabled={chatEnabled && stream?.raffle_enabled === true}
         suspiciousLogEnabled={chatEnabled && stream?.suspicious_log_enabled === true}
+        streamControlEnabled={!!control && (control.canSwitchScenes || control.canToggleSources)}
         discordWebhookConfigured={!!stream?.discord_webhook_url}
         markerOnOpen={chatEnabled && !curateOnly && stream?.marker_on_open === true}
       />

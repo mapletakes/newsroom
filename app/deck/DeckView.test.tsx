@@ -116,7 +116,7 @@ function installMockBackend() {
   };
 }
 
-function renderDeck(props: { chatEnabled?: boolean } = {}) {
+function renderDeck(props: { chatEnabled?: boolean; curateOnly?: boolean; streamControlEnabled?: boolean } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const view = render(
     <QueryClientProvider client={client}>
@@ -475,5 +475,47 @@ describe('DeckView — no linked Twitch channel', () => {
 
     await screen.findAllByText(SUB.title);
     expect(await screen.findByText('Post to chat')).toBeInTheDocument();
+  });
+});
+
+describe('DeckView — stream control links', () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  function install() {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/queue')) {
+        return jsonResponse({ submissions: [], nowPlaying: null, counts: { pending: 0, approved: 0, played: 0, rejected: 0, total: 0 } });
+      }
+      if (url.startsWith('/api/segments')) return jsonResponse({ segments: [], ungroupedPosition: 0 });
+      if (url.startsWith('/api/quick-links')) return jsonResponse({ links: [] });
+      return jsonResponse({});
+    });
+    vi.stubGlobal('fetch', fetchMock);
+  }
+
+  it('shows no links while the module is off', async () => {
+    install();
+    renderDeck();
+    await screen.findAllByText('Shelf');
+    expect(screen.queryByText('Stream Control')).not.toBeInTheDocument();
+    expect(screen.queryByText('Relay')).not.toBeInTheDocument();
+  });
+
+  it('gives the streamer the panel and the relay', async () => {
+    install();
+    renderDeck({ streamControlEnabled: true });
+    expect((await screen.findAllByText('Stream Control'))[0].closest('a')).toHaveAttribute('href', '/stream-control');
+    expect(screen.getAllByText('Relay')[0].closest('a')).toHaveAttribute('href', '/stream-control/relay');
+  });
+
+  it('gives a curating mod the panel but never the relay', async () => {
+    install();
+    renderDeck({ streamControlEnabled: true, curateOnly: true });
+    await screen.findAllByText('Stream Control');
+    expect(screen.queryByText('Relay')).not.toBeInTheDocument();
   });
 });
