@@ -45,12 +45,19 @@ export function parseSnapshot(raw: unknown): ControlSnapshot | null {
   const activeSceneId = r.activeSceneId === null || r.activeSceneId === undefined ? null : r.activeSceneId;
   if (activeSceneId !== null && !isId(activeSceneId)) return null;
 
+  // Repeated ids are dropped, keeping the first: commands target ids, and the
+  // panel keys its buttons on them, so a repeat would render twice and pile up
+  // on every refetch.
   const scenes: ControlScene[] = [];
+  const sceneIds = new Set<string>();
   for (const s of r.scenes) {
     if (!s || typeof s !== 'object') return null;
     const scene = s as Record<string, unknown>;
     if (!isId(scene.id) || !Array.isArray(scene.items) || scene.items.length > MAX_ITEMS_PER_SCENE) return null;
+    if (sceneIds.has(scene.id)) continue;
+    sceneIds.add(scene.id);
     const items: ControlItem[] = [];
+    const itemIds = new Set<string>();
     for (const i of scene.items) {
       if (!i || typeof i !== 'object') return null;
       const item = i as Record<string, unknown>;
@@ -59,6 +66,8 @@ export function parseSnapshot(raw: unknown): ControlSnapshot | null {
       if (typeof item.visible !== 'boolean') return null;
       const parentId = item.parentId === null || item.parentId === undefined ? null : item.parentId;
       if (parentId !== null && !isId(parentId)) return null;
+      if (itemIds.has(item.id)) continue;
+      itemIds.add(item.id);
       items.push({ id: item.id, name: cleanName(item.name), type: item.type, visible: item.visible, parentId });
     }
     scenes.push({ id: scene.id, name: cleanName(scene.name), items });

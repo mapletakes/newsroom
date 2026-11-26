@@ -68,6 +68,15 @@ describe('parseSnapshot', () => {
     expect(out?.scenes[0].items.map((i) => i.id)).toEqual(['a', 'b']);
   });
 
+  it('drops repeated scene and item ids, keeping the first', () => {
+    const out = parseSnapshot({
+      activeSceneId: 's1',
+      scenes: [scene('s1', [item('a'), item('a', { name: 'again' })]), scene('s2'), { ...scene('s1'), name: 'dup' }],
+    });
+    expect(out?.scenes.map((s) => s.name)).toEqual(['Scene s1', 'Scene s2']);
+    expect(out?.scenes[0].items.map((i) => i.name)).toEqual(['Item a']);
+  });
+
   it('allows no active scene', () => {
     expect(parseSnapshot({ scenes: [] })).toEqual({ activeSceneId: null, scenes: [] });
   });
