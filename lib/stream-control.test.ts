@@ -3,12 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const state = vi.hoisted(() => ({
   stream: null as Record<string, unknown> | null,
   mod: null as Record<string, unknown> | null,
-  modCheck: true as true | string,
 }));
 
-vi.mock('./suspicious-log-access', () => ({
-  checkCurrentMod: vi.fn(async () => state.modCheck),
-}));
 vi.mock('./supabase', () => ({
   supabaseAdmin: () => ({
     from: (table: string) => {
@@ -21,7 +17,6 @@ vi.mock('./supabase', () => ({
   }),
 }));
 
-import { checkCurrentMod } from './suspicious-log-access';
 import {
   MAX_ITEMS_PER_SCENE,
   MAX_NAME_LENGTH,
@@ -143,7 +138,6 @@ describe('getStreamControlAccess', () => {
     vi.clearAllMocks();
     state.stream = { stream_control_enabled: true, twitch_user_id: '100' };
     state.mod = { can_switch_scenes: true, can_toggle_sources: false };
-    state.modCheck = true;
   });
 
   it('gives nobody anything with the module off', async () => {
@@ -168,23 +162,16 @@ describe('getStreamControlAccess', () => {
       canToggleSources: false,
       canRunRelay: false,
     });
-    expect(checkCurrentMod).toHaveBeenCalledWith('200', '100');
   });
 
-  it('gives a mod with no grants nothing, without asking Twitch', async () => {
+  it('gives a mod with no grants nothing', async () => {
     state.mod = { can_switch_scenes: false, can_toggle_sources: false };
     expect(await getStreamControlAccess(mod)).toMatchObject({ enabled: true, canSwitchScenes: false, canToggleSources: false });
-    expect(checkCurrentMod).not.toHaveBeenCalled();
   });
 
-  it('strips the grants of someone Twitch no longer lists as a mod', async () => {
-    state.modCheck = 'forbidden';
+  it('gives a mod with no row nothing', async () => {
+    state.mod = null;
     expect(await getStreamControlAccess(mod)).toMatchObject({ canSwitchScenes: false, canToggleSources: false });
-  });
-
-  it('denies when Twitch cannot confirm', async () => {
-    state.modCheck = 'twitch';
-    expect(await getStreamControlAccess(mod)).toMatchObject({ canSwitchScenes: false });
   });
 
   it('denies a mod session with no Twitch identity', async () => {

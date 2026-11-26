@@ -114,3 +114,69 @@ export function isRelayOnline(relaySeenAt: string | null | undefined, now = Date
 
 /** How long finished commands are kept as the record of who did what. */
 export const STREAM_CONTROL_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
+// ---------------------------------------------------------------------------
+// What the panels read.
+
+export type ControlCommandStatus = 'pending' | 'running' | 'done' | 'failed' | 'expired';
+
+/** One queued or finished command, as panels and the streamer's log show it. */
+export type ControlRecord = {
+  id: string;
+  kind: ControlCommandKind;
+  args: Record<string, unknown>;
+  actorLogin: string;
+  /** The scene or source name when the command was made. */
+  targetName: string | null;
+  status: ControlCommandStatus;
+  error: string | null;
+  createdAt: string;
+};
+
+export type ControlView = {
+  snapshot: ControlSnapshot;
+  /** The relay tab has checked in recently. */
+  relayOnline: boolean;
+  /** …and it has a working connection to Streamlabs. */
+  streamlabsConnected: boolean;
+  updatedAt: string | null;
+  access: { canSwitchScenes: boolean; canToggleSources: boolean };
+  recent: ControlRecord[];
+};
+
+export const COMMAND_COLUMNS = 'id, kind, args, actor_login, target_name, status, error, created_at';
+
+export function toControlRecord(row: {
+  id: string;
+  kind: string;
+  args: unknown;
+  actor_login: string;
+  target_name?: string | null;
+  status: string;
+  error: string | null;
+  created_at: string;
+}): ControlRecord {
+  return {
+    id: row.id,
+    kind: row.kind as ControlCommandKind,
+    args: (row.args && typeof row.args === 'object' ? row.args : {}) as Record<string, unknown>,
+    actorLogin: row.actor_login,
+    targetName: row.target_name ?? null,
+    status: row.status as ControlCommandStatus,
+    error: row.error,
+    createdAt: row.created_at,
+  };
+}
+
+/** A short phrase for a command ("switch to BRB", "hide Cam"). Names come
+ *  from the current snapshot when the target still exists, else from the name
+ *  recorded with the command. */
+export function describeCommand(
+  rec: Pick<ControlRecord, 'kind' | 'args' | 'targetName'>,
+  snapshot: ControlSnapshot | null,
+): string {
+  const scene = snapshot?.scenes.find((s) => s.id === rec.args.sceneId);
+  if (rec.kind === 'switch_scene') return `switch to ${scene?.name || rec.targetName || 'a scene'}`;
+  const item = scene?.items.find((i) => i.id === rec.args.itemId);
+  return `${rec.args.visible ? 'show' : 'hide'} ${item?.name || rec.targetName || 'a source'}`;
+}

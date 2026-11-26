@@ -26,4 +26,8 @@ export const queryKeys = {
   // Other channels' flags as this channel receives them, per review filter.
   networkFlags: (filter?: string) =>
     filter === undefined ? (['network-flags'] as const) : (['network-flags', filter] as const),
+  // The stream-control panel (scene list, relay status, recent commands) and
+  // the streamer's full command log in settings.
+  streamControl: () => ['stream-control'] as const,
+  streamControlLog: () => ['stream-control-log'] as const,
 };

@@ -80,6 +80,15 @@ export default function PrivacyPage() {
             only to that channel. Flags can be withdrawn by their channel or removed by an admin at
             any time, and are deleted after one year.
           </li>
+          <li>
+            <strong>Stream control, only on channels where it&apos;s turned on:</strong> when a streamer
+            lets moderators switch their Streamlabs scenes or show and hide sources, we store the names
+            of the streamer&apos;s scenes and sources and which one is live, as reported by a page the
+            streamer keeps open on their own computer. We record each change made through it: who
+            asked for it, what it was, when, and whether it worked. The streamer and their permitted
+            moderators can see recent changes, and the streamer can see the full record. The
+            Streamlabs access token stays in the streamer&apos;s own browser and is never sent to us.
+          </li>
         </ul>
         <p><strong>From the links themselves:</strong></p>
         <ul>
@@ -128,7 +137,8 @@ export default function PrivacyPage() {
           them or an admin removes your access. Signing out only ends your browser session — it
           doesn&apos;t delete anything from our database. If you want your data removed, see
           &ldquo;Contact&rdquo; below; there&apos;s no automated self-service deletion yet.
-          Suspicious-user log entries are deleted automatically after one year.
+          Suspicious-user log entries are deleted automatically after one year. The record of
+          stream-control changes is deleted automatically after 30 days.
         </p>
 
         <h2>Stopping chat capture</h2>

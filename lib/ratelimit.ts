@@ -35,7 +35,7 @@ export function hashKey(raw: string): string {
   return crypto.createHash('sha256').update(raw).digest('hex').slice(0, 32);
 }
 
-type Kind = 'write' | 'read' | 'poll' | 'question' | 'raffle' | 'flag' | 'auth-email' | 'auth-ip';
+type Kind = 'write' | 'read' | 'poll' | 'question' | 'raffle' | 'flag' | 'control' | 'auth-email' | 'auth-ip';
 
 let writeLimiter: Ratelimit | undefined;
 let readLimiter: Ratelimit | undefined;
@@ -43,6 +43,7 @@ let pollLimiter: Ratelimit | undefined;
 let questionLimiter: Ratelimit | undefined;
 let raffleLimiter: Ratelimit | undefined;
 let flagLimiter: Ratelimit | undefined;
+let controlLimiter: Ratelimit | undefined;
 let authEmailLimiter: Ratelimit | undefined;
 let authIpLimiter: Ratelimit | undefined;
 
@@ -107,6 +108,17 @@ function limiterFor(kind: Kind): Ratelimit | null {
       redis: r,
       limiter: Ratelimit.slidingWindow(15, '10 m'),
       prefix: 'rl:flag',
+    }));
+  }
+  if (kind === 'control') {
+    // Stream control, per person: each request changes what's on the
+    // streamer's broadcast. A mod working a busy segment toggles a handful of
+    // sources a minute; this cuts off a stuck client or someone mashing the
+    // panel before the stream turns into a strobe light.
+    return (controlLimiter ??= new Ratelimit({
+      redis: r,
+      limiter: Ratelimit.slidingWindow(20, '1 m'),
+      prefix: 'rl:control',
     }));
   }
   if (kind === 'raffle') {

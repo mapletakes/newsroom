@@ -10,6 +10,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { AppThemeSettings, OverlayThemeSettings } from './ThemeSettings';
 import type { AppTheme, OverlayTheme } from '@/lib/theme';
 import { Curators } from './Curators';
+import { StreamControlSettings } from './StreamControlSettings';
 import { QuickAdd } from './QuickAdd';
 import { DiscordExport } from './DiscordExport';
 import { OverlaySource } from './OverlaySource';
@@ -68,6 +69,7 @@ export function SetupForm({
   chatEnabled = true,
   twitchLinkStatus,
   moderators,
+  streamControlEnabled = false,
 }: {
   streamId: string;
   displayName: string;
@@ -91,7 +93,16 @@ export function SetupForm({
   chatEnabled?: boolean;
   /** Outcome of a just-finished Connect Twitch round trip (?twitch=...). */
   twitchLinkStatus?: string;
-  moderators: { twitchUserId: string; login: string; canCurate: boolean; canSetNowPlaying: boolean }[];
+  moderators: {
+    twitchUserId: string;
+    login: string;
+    canCurate: boolean;
+    canSetNowPlaying: boolean;
+    canSwitchScenes?: boolean;
+    canToggleSources?: boolean;
+  }[];
+  /** The stream control module is on (lib/admin.ts CHANNEL_MODULES). */
+  streamControlEnabled?: boolean;
 }) {
   const [cmd, setCmd] = useState(submitCommand);
   const [videoCmd, setVideoCmd] = useState(videoCommand);
@@ -446,6 +457,20 @@ export function SetupForm({
       <section className="mb-10">
         <h2 className="font-display text-2xl font-bold mb-4">Deck curators</h2>
         <Curators initial={moderators} />
+      </section>
+      )}
+
+      {chatEnabled && streamControlEnabled && (
+      <section className="mb-10">
+        <h2 className="font-display text-2xl font-bold mb-4">Stream control</h2>
+        <StreamControlSettings
+          initial={moderators.map((m) => ({
+            twitchUserId: m.twitchUserId,
+            login: m.login,
+            canSwitchScenes: m.canSwitchScenes === true,
+            canToggleSources: m.canToggleSources === true,
+          }))}
+        />
       </section>
       )}
 

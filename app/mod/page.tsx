@@ -3,6 +3,7 @@ import { getSession, sessionLogin } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase';
 import { isAdmin } from '@/lib/admin';
 import { canMemberCurate } from '@/lib/curate';
+import { getStreamControlAccess } from '@/lib/stream-control';
 import { StreamTheme } from '@/components/StreamTheme';
 import { ModView } from './ModView';
 
@@ -27,6 +28,7 @@ export default async function ModPage() {
   const isModRole = session.role === 'mod';
   // Streamers always reach the deck; mods only if authorized to curate.
   const canCurate = isModRole ? await canMemberCurate(session.streamId, session.twitchUserId) : true;
+  const control = stream?.stream_control_enabled === true ? await getStreamControlAccess(session) : null;
 
   return (
     <>
@@ -45,6 +47,7 @@ export default async function ModPage() {
         modStatusEnabled={stream?.mod_status_enabled === true}
         raffleEnabled={stream?.raffle_enabled === true}
         suspiciousLogEnabled={stream?.suspicious_log_enabled === true}
+        streamControl={!!control && (control.canSwitchScenes || control.canToggleSources)}
       />
     </>
   );

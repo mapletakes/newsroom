@@ -35,7 +35,7 @@ export default async function SetupPage({
 
   const { data: mods } = await sb
     .from('moderators')
-    .select('twitch_user_id, twitch_login, can_curate, can_set_now_playing')
+    .select('twitch_user_id, twitch_login, can_curate, can_set_now_playing, can_switch_scenes, can_toggle_sources')
     .eq('stream_id', session.streamId)
     .order('twitch_login', { ascending: true });
 
@@ -67,7 +67,10 @@ export default async function SetupPage({
           login: m.twitch_login,
           canCurate: m.can_curate === true,
           canSetNowPlaying: m.can_set_now_playing === true,
+          canSwitchScenes: m.can_switch_scenes === true,
+          canToggleSources: m.can_toggle_sources === true,
         }))}
+        streamControlEnabled={!!stream?.twitch_user_id && stream?.stream_control_enabled === true}
       />
     </>
   );

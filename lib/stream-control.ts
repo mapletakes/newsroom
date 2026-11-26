@@ -1,6 +1,5 @@
 import { supabaseAdmin } from './supabase';
 import type { Session } from './session';
-import { checkCurrentMod } from './suspicious-log-access';
 import type { ControlCommandKind } from './stream-control-shared';
 
 export * from './stream-control-shared';
@@ -37,7 +36,7 @@ export async function getStreamControlAccess(session: Session): Promise<StreamCo
   const sb = supabaseAdmin();
   const { data: stream } = await sb
     .from('streams')
-    .select('stream_control_enabled, twitch_user_id')
+    .select('stream_control_enabled')
     .eq('id', session.streamId)
     .maybeSingle();
   if (stream?.stream_control_enabled !== true) return NO_ACCESS;
@@ -45,8 +44,10 @@ export async function getStreamControlAccess(session: Session): Promise<StreamCo
   if (session.role === 'streamer') {
     return { enabled: true, canSwitchScenes: true, canToggleSources: true, canRunRelay: true };
   }
-  const none = { ...NO_ACCESS, enabled: true };
-  if (!session.twitchUserId || !stream.twitch_user_id) return none;
+  // Whether this person still moderates the channel is settled before this
+  // runs: getSession() re-checks every mod session against Twitch
+  // (lib/session-guard.ts), so a removed mod never gets this far.
+  if (!session.twitchUserId) return { ...NO_ACCESS, enabled: true };
   const { data: mod } = await sb
     .from('moderators')
     .select('can_switch_scenes, can_toggle_sources')
@@ -55,14 +56,6 @@ export async function getStreamControlAccess(session: Session): Promise<StreamCo
     .maybeSingle();
   const canSwitchScenes = mod?.can_switch_scenes === true;
   const canToggleSources = mod?.can_toggle_sources === true;
-  if (!canSwitchScenes && !canToggleSources) return none;
-
-  // Grants outlive mod status: rows in moderators are never removed and a
-  // mod's cookie lasts 30 days. Someone the streamer has since unmodded must
-  // not keep control of their scenes, so ask Twitch (cached for a few
-  // minutes) — and any doubt, including Twitch being down, denies.
-  if ((await checkCurrentMod(session.twitchUserId, stream.twitch_user_id)) !== true) return none;
-
   return { enabled: true, canSwitchScenes, canToggleSources, canRunRelay: false };
 }
 

@@ -64,6 +64,7 @@ export function ModView({
   modStatusEnabled = false,
   raffleEnabled = false,
   suspiciousLogEnabled = false,
+  streamControl = false,
 }: {
   channel: string;
   displayName: string;
@@ -78,6 +79,9 @@ export function ModView({
   modStatusEnabled?: boolean;
   raffleEnabled?: boolean;
   suspiciousLogEnabled?: boolean;
+  /** Stream control is on and this person may use it (any grant, or the
+   *  streamer). */
+  streamControl?: boolean;
 }) {
   const queryClient = useQueryClient();
   const headerRef = useRef<HTMLElement>(null);
@@ -382,6 +386,7 @@ export function ModView({
             <Link href="/shelf" className="underline hover:text-rust">Shelf</Link>
             <Link href="/archives" className="underline hover:text-rust">Archives</Link>
             {suspiciousLogEnabled && <Link href="/suspicious-log" className="underline hover:text-rust">Suspicious Log</Link>}
+            {streamControl && <Link href="/stream-control" className="underline hover:text-rust">Stream Control</Link>}
             {/* Questions and Mod status are reached via the rail above, not a
                 header link — see the DeckRail block's comment. */}
             {/* Two different pages, deliberately: /setup is the channel and is

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { AppHeader } from '@/components/AppHeader';
 import { Button } from '@/components/ui/button';
@@ -107,7 +108,20 @@ export function RelayView({ streamId }: { streamId: string }) {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <AppHeader className="border-b-2 border-ink px-6 py-3 gap-6" section="stream control relay" />
+      <AppHeader
+        className="border-b-2 border-ink px-6 py-3 gap-6"
+        section="stream control relay"
+        right={
+          <>
+            <Link href="/stream-control" className="underline hover:text-rust">
+              Control Panel
+            </Link>
+            <Link href="/setup" className="underline hover:text-rust">
+              Settings
+            </Link>
+          </>
+        }
+      />
       <main className="px-6 py-8 max-w-2xl w-full mx-auto space-y-8">
         <section>
           <h1 className="font-display text-3xl font-bold mb-2">Stream control relay</h1>
