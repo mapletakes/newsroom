@@ -76,3 +76,18 @@ export function broadcastModStatusChange(streamId: string): Promise<void> {
 export function broadcastRaffleChange(streamId: string): Promise<void> {
   return broadcastChange(`raffle:${streamId}`, streamId);
 }
+
+/** Pings `stream-control:${streamId}` — open mod control panels refetch the
+ *  scene list and recent actions. Sent when the relay reports a change in
+ *  Streamlabs and when a command finishes. */
+export function broadcastStreamControlChange(streamId: string): Promise<void> {
+  return broadcastChange(`stream-control:${streamId}`, streamId);
+}
+
+/** Pings `stream-control-relay:${streamId}` — the streamer's relay page claims
+ *  pending commands. Separate from the panels' topic so a relay reporting
+ *  state doesn't wake itself up, and panels don't refetch on every queued
+ *  command before it has done anything. */
+export function broadcastStreamControlCommand(streamId: string): Promise<void> {
+  return broadcastChange(`stream-control-relay:${streamId}`, streamId);
+}

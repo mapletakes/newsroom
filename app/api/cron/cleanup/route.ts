@@ -4,6 +4,7 @@ import { STATUS_RESET_AFTER_MS } from '@/lib/mod-status';
 import { ARCHIVE_BUCKET } from '@/lib/archive';
 import { purgeExpiredSuspiciousLog } from '@/lib/suspicious-log';
 import { purgeExpiredChatterFlags } from '@/lib/chatter-flags';
+import { STREAM_CONTROL_RETENTION_MS } from '@/lib/stream-control';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -25,6 +26,9 @@ export const maxDuration = 60;
 //    notes is never swept.
 //  - Suspicious-user log entries past their retention period are deleted, as
 //    the privacy policy promises, and so are chatter flags past their expiry.
+//  - Stream-control commands (who switched which scene) are kept as a record
+//    for STREAM_CONTROL_RETENTION_MS, long enough to answer "who did that last
+//    week", then deleted.
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
   const auth = req.headers.get('authorization');
@@ -82,15 +86,22 @@ export async function GET(req: NextRequest) {
   const suspiciousLog = await purgeExpiredSuspiciousLog(sb, now);
   const chatterFlags = await purgeExpiredChatterFlags(sb, now);
 
+  const controlCutoff = new Date(now - STREAM_CONTROL_RETENTION_MS).toISOString();
+  const { error: controlErr, count: controlDeleted } = await sb
+    .from('stream_control_commands')
+    .delete({ count: 'exact' })
+    .lt('created_at', controlCutoff);
+
   if (eventsErr) console.error('cleanup: processed_events failed:', eventsErr.message);
   if (rejectedErr) console.error('cleanup: rejected submissions failed:', rejectedErr.message);
   if (modStatusErr) console.error('cleanup: mod status reset failed:', modStatusErr.message);
   if (archivesErr) console.error('cleanup: orphan archives failed:', archivesErr);
   if (suspiciousLog.error) console.error('cleanup: suspicious log failed:', suspiciousLog.error);
   if (chatterFlags.error) console.error('cleanup: chatter flags failed:', chatterFlags.error);
+  if (controlErr) console.error('cleanup: stream control commands failed:', controlErr.message);
 
   return NextResponse.json({
-    ok: !eventsErr && !rejectedErr && !modStatusErr && !archivesErr && !suspiciousLog.error && !chatterFlags.error,
+    ok: !eventsErr && !rejectedErr && !modStatusErr && !archivesErr && !suspiciousLog.error && !chatterFlags.error && !controlErr,
     processedEventsDeleted: eventsDeleted ?? 0,
     rejectedSubmissionsDeleted: rejectedDeleted ?? 0,
     modStatusesReset: modStatusesReset ?? 0,
@@ -99,5 +110,6 @@ export async function GET(req: NextRequest) {
     suspiciousStatusChangesDeleted: suspiciousLog.statusChangesDeleted,
     suspiciousSharesDeleted: suspiciousLog.sharesDeleted,
     chatterFlagsDeleted: chatterFlags.flagsDeleted,
+    streamControlCommandsDeleted: controlDeleted ?? 0,
   });
 }

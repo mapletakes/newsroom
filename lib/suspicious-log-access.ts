@@ -37,7 +37,9 @@ export function clearModCheckCache(): void {
   confirmedMods.clear();
 }
 
-async function checkCurrentMod(modUserId: string, broadcasterId: string): Promise<true | LogDenied> {
+// Also used by lib/stream-control.ts, for the same reason: a demoted mod keeps
+// their moderators row, their grants and their cookie.
+export async function checkCurrentMod(modUserId: string, broadcasterId: string): Promise<true | LogDenied> {
   const key = `${broadcasterId}:${modUserId}`;
   if ((confirmedMods.get(key) ?? 0) > Date.now()) return true;
   confirmedMods.delete(key);

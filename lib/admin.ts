@@ -33,6 +33,7 @@ export const CHANNEL_MODULES = [
   { key: 'mod_status_enabled', label: 'Mod status', blurb: 'Mod availability board (green/yellow/red)' },
   { key: 'raffle_enabled', label: 'Raffle', blurb: 'Chat raffles — !enter, timed, random draw' },
   { key: 'suspicious_log_enabled', label: 'Suspicious log', blurb: 'Keeps messages from users flagged as suspicious' },
+  { key: 'stream_control_enabled', label: 'Stream control', blurb: 'Permitted mods switch Streamlabs scenes and show/hide sources' },
 ] as const;
 
 export type ChannelModuleKey = (typeof CHANNEL_MODULES)[number]['key'];
